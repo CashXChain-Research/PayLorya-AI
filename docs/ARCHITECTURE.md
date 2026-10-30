@@ -55,9 +55,15 @@ CREATED -> EXTRACTED -> PRECHECKED -> PAYING -> PAID -> DRAFT_READY
   Requests carry `Idempotency-Key` (the run id); the same key returns the cached report.
 - **Duplicates:** a different key for the same supplier + invoice id + currency + amount is
   flagged `duplicate` and the verdict is `blocked`.
+- **In-flight hold:** `SpendLedger.reserve()` checks and holds budget + invoice in one step
+  before signing, so concurrent runs (double click, client retry) cannot both pay. The hold is
+  released only if signing itself threw; otherwise it becomes paid or unknown.
 - **SETTLEMENT_UNKNOWN:** if anything fails after the buyer signed a transaction, the tx may
   already be on-chain. The run moves to `SETTLEMENT_UNKNOWN`, the amount counts against the
-  budget, and the invoice is locked against re-payment until resolved.
+  budget, and the invoice is locked against re-payment until resolved. This includes verify
+  rejections (the seller holds the signed tx) and a settle "success" without a tx hash.
+- **Offer filter:** only `exact` / `cardano:preprod` / `lovelace`, allowlisted `payTo`, price
+  cap, and the plain `default` transfer method (no Masumi or script locks).
 - The facilitator broadcasts a given Cardano tx at most once (`@x402/cardano` duplicate
   settlement guard).
 
@@ -75,10 +81,21 @@ CREATED -> EXTRACTED -> PRECHECKED -> PAYING -> PAID -> DRAFT_READY
 Verdict: `blocked` (corridor, duplicate, amount), `needs_info` (fields, account, warnings),
 otherwise `ready_for_review`.
 
+## Verified offline
+
+- Seller ordering verify -> handler -> settle; body withheld and HTTP 402 on failed settle
+  (`@x402/express` source + `tests/agent-x402.test.ts`).
+- `@x402/core` retries settle exactly once, only on `settlement_pending` with a tx.
+- The middleware fetches the facilitator's `/supported` at startup in the background and
+  retries on the first paid request (502 if still unreachable); the server does not crash.
+
 ## Not verified yet
 
-- Hosted facilitator URL is taken from developers.cardano.org and has not been exercised by us.
+- Hosted facilitator URL is taken from developers.cardano.org and has not been exercised by us
+  (`npm run preflight` checks its `/supported`).
 - No live preprod payment has run yet: that is milestone 1 (`npm run smoke:x402`).
+- With `LOCAL_FACILITATOR=true`, verify also calls Blockfrost `POST /utils/txs/evaluate/utxos`;
+  untested against real Blockfrost for a script-free tx.
 - Cloudflare Containers deploy is written against `@cloudflare/containers@0.3.7` and the
   wrangler 4.156 schema but not deployed yet.
 - `EXPLORER_TX_URL` default (Cardanoscan preprod) to be confirmed with the first real tx.

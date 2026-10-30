@@ -25,7 +25,10 @@ const EnvSchema = z.object({
   BUYER_MNEMONIC: optional,
   FACILITATOR_URL: z.string().default("https://x402.preprod.dev.ecosyseng.cf-deployments.org"),
   LOCAL_FACILITATOR: bool,
-  CARDANO_L1_CONFIRMATIONS: optional,
+  CARDANO_L1_CONFIRMATIONS: optional.refine(
+    v => v === undefined || (/^-?\d+$/.test(v) && Number(v) >= -1 && Number(v) <= 20),
+    "integer from -1 to 20",
+  ),
   EXPLORER_TX_URL: z.string().default("https://preprod.cardanoscan.io/transaction/"),
 
   // Pricing and buyer spend policy (lovelace, 1 tADA = 1_000_000)

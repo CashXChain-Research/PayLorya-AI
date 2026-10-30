@@ -20,6 +20,8 @@ export function filterOffers(reqs: PaymentRequirements[], policy: SpendPolicy): 
       r.scheme === "exact" &&
       r.network === CARDANO_NETWORK &&
       r.asset === "lovelace" &&
+      // Plain transfer only: masumi/script methods lock funds in a contract instead of paying payTo.
+      (r.extra?.assetTransferMethod ?? "default") === "default" &&
       policy.allowedPayTo.includes(r.payTo) &&
       /^\d+$/.test(r.amount) &&
       BigInt(r.amount) <= policy.maxPriceLovelace,

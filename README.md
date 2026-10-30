@@ -34,12 +34,25 @@ npm run wallet:new -- buyer      # put BUYER_MNEMONIC into .env, fund the printe
 3. Set `ANTHROPIC_API_KEY` (optional; structured JSON invoices work without it).
 
 ```bash
-npm run dev                      # http://localhost:8787
+npm run dev                      # http://localhost:8787 (keep running)
+npm run preflight                # second terminal: every check PASS or WARN, no FAIL
 npm run smoke:x402               # milestone 1: 402 -> preprod payment -> 200 + tx hash
 ```
 
-If the hosted facilitator is unreachable, set `LOCAL_FACILITATOR=true` to verify and broadcast
-in-process via Blockfrost.
+### Milestone 1 runbook
+
+1. `npm run preflight` checks env, both addresses, the Blockfrost key, the buyer balance
+   (price + max fee + change min-UTxO, about 3.9 tADA for a 2 tADA price), the seller output
+   min-UTxO, the facilitator's `/supported`, and the running server's live 402 offer. Fix every
+   FAIL line; restart `npm run dev` after editing `.env`.
+2. If the hosted facilitator FAILs, set `LOCAL_FACILITATOR=true` to verify and broadcast
+   in-process via Blockfrost, restart, re-run preflight.
+3. `npm run smoke:x402` validates the 402 against `.env`, signs through the same policy as the
+   agent, prints the signed tx hash before sending, and waits for settlement (up to ~4 min).
+   On success it writes `evidence/milestone1-<timestamp>.json` (public data only): commit it.
+4. If it prints **PAYMENT STATE UNKNOWN**, do not re-run. Open the printed explorer link first:
+   if the tx is there, the payment happened; if it is still absent after the printed validity
+   window, a re-run is safe.
 
 ## API
 
@@ -76,6 +89,10 @@ Run state is in memory, so the Worker routes everything to a single container in
 npm test
 npm run typecheck
 ```
+
+`tests/agent-x402.test.ts` runs the real x402 seller middleware, resource server and buyer client
+on localhost with only the chain side stubbed (signer and facilitator). It proves the agent's
+state machine (`SETTLEMENT_UNKNOWN`, invoice locks, budget, allowlist), not a live payment.
 
 ## Limitations
 

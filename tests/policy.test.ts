@@ -27,6 +27,9 @@ describe("x402 offer filter", () => {
     expect(filterOffers([offer({ amount: "3000001" })], policy)).toHaveLength(0);
     expect(filterOffers([offer({ network: "cardano:mainnet" })], policy)).toHaveLength(0);
     expect(filterOffers([offer({ asset: "c48c.0014df105553444d" })], policy)).toHaveLength(0);
+    expect(filterOffers([offer({ extra: { assetTransferMethod: "default" } })], policy)).toHaveLength(1);
+    expect(filterOffers([offer({ extra: { assetTransferMethod: "script" } })], policy)).toHaveLength(0);
+    expect(filterOffers([offer({ extra: { assetTransferMethod: "masumi" } })], policy)).toHaveLength(0);
   });
 });
 
