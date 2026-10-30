@@ -3,144 +3,121 @@
 | | |
 | --- | --- |
 | Owner | Korbi |
-| Tool | Claude Code (on the laptop, with network access to Cardano hosts) |
-| Branch | `feat/x402-live` |
-| Read first | `docs/plan/00-end-result.md`, `README.md` (milestone 1 runbook), `docs/ARCHITECTURE.md` |
-| Delivers to | C (wallets, keys, facilitator decision), B (`run.settlement`), D (evidence, safety outputs) |
+| Tool | Claude Code |
+| Branch | `feat/x402-live` (cloud sessions push to their session branch) |
+| Read first | `docs/plan/00-end-result.md`, `docs/ARCHITECTURE.md`, `docs/DEPLOY.md` |
+| Depends on | C: live URL with the keys set as Cloudflare secrets |
+| Delivers to | C (buyer-cloud wallet, seller address, facilitator mode), B (`run.settlement`), D (evidence, safety outputs) |
+
+## Team decision: API keys live only on Cloudflare (2026-10-30)
+
+The Blockfrost and Anthropic keys exist only as Cloudflare secrets, never in a laptop `.env`.
+
+Consequences:
+- **No local payments.** `npm run smoke:x402` and the secret-dependent checks of
+  `npm run preflight` sign and query Blockfrost locally, so they cannot run on the laptop.
+- **Live payments go through the deployment.** Every real payment is driven over HTTP against the
+  deployed instance with the remote tooling (`remote:check`, `remote:run`, `remote:safety`). The
+  server's buyer wallet (`buyer-cloud`) pays.
+- **Milestone 1 waits for C.** The first real payment needs Valentin's deploy (CP1 for C).
 
 ## Goal
 
-Real tADA payments buyer -> seller on Cardano Preprod through the x402 cycle, first via
-`npm run smoke:x402`, then through the full agent. Then harden the payment path for the live demo:
-no UTxO conflicts, a visible unknown-settlement state, and live proof of the safety scenarios.
+Real tADA payments buyer -> seller on Cardano Preprod through the x402 cycle, proven on the live
+deployment with committed evidence. The payment path is hardened for the live demo: no UTxO
+conflicts, a visible unknown-settlement state, and live proof of the safety scenarios.
 
-This is the critical path. CP1 depends on A1-A2.
+## Status
 
-## Start
-
-```bash
-git checkout main && git pull && git checkout -b feat/x402-live && npm ci
-```
-
-Prompt for Claude Code:
-
-> Read `docs/plan/00-end-result.md` and `docs/plan/korbi-claude-code.md`. Work through tasks
-> A1-A9 in order. Before any command that spends tADA, broadcasts a transaction or touches
-> secrets, tell me what you will run and wait for my OK. Commit after each task.
+| Task | Status |
+| --- | --- |
+| A1 Wallets | Done: seller, buyer-local and buyer-cloud created locally. Mnemonics are in the password manager, never in chat or git |
+| A2 First real payment | Waiting for C's live URL |
+| A3 Reconcile with live services | Done: hosted facilitator `/supported` and Blockfrost error codes verified live (see ARCHITECTURE "Verified live") |
+| A4 Full agent run | Waiting for C's live URL |
+| A5 Wallet queue | Done (merged in #3) |
+| A6 `run.settlement` | Done (merged in #3) |
+| A7 Safety scenarios | Tooling ready (`remote:safety`); the run waits for C |
+| A8 Demo settings | Waiting for A2 timings |
+| A9 Hand-off | buyer-cloud mnemonic and seller address to Valentin |
 
 ## Tasks
 
-### A1. Wallets, faucet, Blockfrost
+### A2. First real payment (milestone 1, AT2)
 
-1. Generate three wallets:
-   ```bash
-   npm run wallet:new -- seller
-   npm run wallet:new -- buyer      # buyer-local (this laptop)
-   npm run wallet:new -- buyer      # buyer-cloud (for Valentin / Cloudflare)
-   ```
-   Store all mnemonics in the password manager. Only the seller **address** goes onto servers.
-2. Fund **both** buyer addresses from the [Cardano testnets faucet](https://docs.cardano.org/cardano-testnets/tools/faucet/).
-   Each paid call costs about 2 tADA plus fee. Preflight computes the exact minimum.
-3. Create a Blockfrost **preprod** project. Ideally create a second one for the cloud, to avoid
-   shared rate limits.
-4. `cp .env.example .env` and fill in `SELLER_ADDRESS`, `BUYER_MNEMONIC` (buyer-local),
-   `BLOCKFROST_PROJECT_ID`, `ANTHROPIC_API_KEY`.
+Once Valentin posts the live URL and has set the secrets:
 
-**Done when** `npm run preflight` shows no FAIL except the server checks (server not started yet).
+```bash
+npm run remote:check -- --url https://<live-url>
+```
 
-### A2. Milestone 1: first real payment
+This is read-only and needs no keys. It checks health (`x402Ready`, `aiReady`, network), the
+facilitator's `/supported`, and the live 402 offer against the server's seller and price. The buyer
+balance cannot be checked without a key, so look up the buyer-cloud address on the explorer and
+check it has more than about 4 tADA.
 
-1. `npm run dev`, then in a second terminal `npm run preflight`: everything must be PASS or WARN.
-2. Hosted facilitator first. If the `facilitator` check FAILs, set `LOCAL_FACILITATOR=true`, restart,
-   and re-run preflight.
-3. `npm run smoke:x402`.
-   - On **PAYMENT STATE UNKNOWN**, do not re-run. Check the printed explorer link first.
-4. Commit `evidence/milestone1-*.json`.
-5. Write down: which facilitator worked, the settle duration (`timingsMs.paid`), the fee, and
-   whether the explorer link format is right (`EXPLORER_TX_URL`).
+```bash
+npm run remote:run -- --url https://<live-url> --yes
+```
 
-**Done when** the smoke run exits 0, the tx is visible on the explorer, and the evidence is
-committed. That is **CP1** for A (AT2). Tell Valentin immediately.
+This spends about 2 tADA from the server's buyer wallet. The run must end `DRAFT_READY`; then commit
+`evidence/live-run-*.json`. On **SETTLEMENT_UNKNOWN**, do not re-run: open the printed explorer
+link first.
 
-### A3. Reconcile live behaviour with the offline assumptions
+Record the facilitator in use (hosted or local), the settle duration, the fee, and whether the
+explorer link format is right. Check the link in a browser: Cardanoscan blocks scripts.
 
-The tooling was built against a Blockfrost mock and stubs. Compare it with reality:
+### A4. Full agent run with a text invoice
 
-- Real Blockfrost field types and status codes, including the 403 for a key from the wrong network.
-- What the hosted facilitator's `/supported` actually advertises.
-- With `LOCAL_FACILITATOR=true`, whether Blockfrost `POST /utils/txs/evaluate/utxos` answers
-  cleanly for a script-free tx.
+```bash
+npm run remote:run -- --url https://<live-url> --sample sepa_ok --yes
+```
 
-Fix code and tests where reality differs. Move items in `docs/ARCHITECTURE.md` from
-"Not verified yet" to a "Verified live" section, with dates and tx hashes.
+This runs Claude extraction on the server. Then run `us_ok`.
 
-### A4. Full agent run locally
+### A7. Safety scenarios (AT5, AT6)
 
-Run the `sepa_ok` sample through the UI (`http://localhost:8787`) or with
-`POST /api/runs`. It must end `DRAFT_READY` with tx hash and explorer link. Then run `us_ok`.
+```bash
+npm run remote:safety -- --url https://<live-url> --yes
+```
 
-### A5. UTxO contention (AT7)
+It spends up to about 4 tADA and runs three scenarios:
+- the same invoice twice
+- an invoice without bank details
+- a prompt-injection invoice
 
-Cardano UTxO model: two payments signed from the same wallet before the first one confirms can pick
-the same input, and the second then fails.
-
-1. Measure: run two different invoices back to back, then two concurrently.
-2. Recommended even if nothing fails: **serialize payments per buyer wallet** in `BuyerAgent`, so
-   only one sign -> settle is in flight and the others wait. A promise-chain mutex around the pay
-   step is enough.
-   - Keep `SpendLedger.reserve()` as is.
-   - Add a test to `tests/agent-x402.test.ts`: two concurrent runs for different invoices both
-     settle, and the signer calls do not overlap.
-
-### A6. Make `SETTLEMENT_UNKNOWN` visible (contract with B)
-
-Add `run.settlement = { transactionHash?, explorerUrl?, reason }` when a run ends
-`SETTLEMENT_UNKNOWN`. Use the tx hash from the settle response, or the signed tx hash if known.
-Add tests for each unknown path. Tell B when the field lands.
-
-Stretch: `POST /api/runs/:id/resolve` looks the tx up on Blockfrost.
-- If on-chain: the run becomes `PAID`, and the ledger moves the amount from unknown to paid.
-- If absent after the validity window: the invoice is unlocked.
-
-Keep it conservative and tested.
-
-### A7. Safety scenarios on the live chain (AT5, AT6)
-
-Run each scenario and save the terminal and UI output for Valentin's pitch:
-
-- **Same invoice twice:** the second run is refused before signing. There is no second tx and
-  `spentLovelace` is unchanged.
-- **Budget:** set `SESSION_BUDGET_LOVELACE` to allow N payments. Payment N+1 is refused before
-  signing.
-- **Injection invoice** (sample from B): only the allowlisted seller is paid, at the configured price.
+Commit `evidence/safety-*.json` and hand the output to Valentin for the pitch. Budget exhaustion is
+manual: set `SESSION_BUDGET_LOVELACE` low on the server, run until refused, then restore it.
 
 ### A8. Demo settings decision
 
-1. Measure settle time with `CARDANO_L1_CONFIRMATIONS` unset (spec default 1) and with `0`
-   (block inclusion).
-2. Decide which to use for the demo, and record the trade-off in ARCHITECTURE. Mempool (`-1`)
-   stays off.
+1. Compare the settle time with `CARDANO_L1_CONFIRMATIONS` unset (spec default 1) and with `0`
+   (block inclusion), using the `remote:run` timings. Each value is a Cloudflare var, so each
+   change needs a redeploy.
+2. Decide which to use for the demo, and record the trade-off in ARCHITECTURE. Mempool (`-1`) is
+   out of range on the hosted facilitator.
 
 ### A9. Hand-off to Valentin (Cloudflare)
 
 Send these via password manager or Signal only:
-- the buyer-cloud mnemonic
+- the **buyer-cloud** mnemonic
 - the seller address
-- the Blockfrost key (or the cloud project)
 - the facilitator mode
 - `CARDANO_L1_CONFIRMATIONS`
-- the final list of env vars
 
-Check that the buyer-cloud address is funded.
+The Blockfrost and Anthropic keys go straight from their dashboards into `wrangler secret put`. Fund
+the buyer-cloud address from the [faucet](https://docs.cardano.org/cardano-testnets/tools/faucet/)
+first.
 
 ## Files
 
 - **You own:** `src/agent.ts`, `src/policy.ts`, `src/seller.ts`, `src/facilitator.ts`,
-  `src/config.ts`, `src/runs.ts`, `src/types.ts`, `scripts/` (existing), `evidence/`,
-  `.env.example`, `docs/ARCHITECTURE.md`, `tests/agent-x402.test.ts`, `tests/policy.test.ts`,
-  `tests/milestone.test.ts`.
+  `src/config.ts`, `src/runs.ts`, `src/types.ts`, `scripts/`, `evidence/`, `.env.example`,
+  `docs/ARCHITECTURE.md`, `tests/agent-x402.test.ts`, `tests/policy.test.ts`,
+  `tests/milestone.test.ts`, the remote tooling tests.
 - **Do not edit:** `public/`, `src/extract.ts`, `src/fixtures.ts`, `src/readiness.ts`,
-  `src/server.ts` (B); `cloudflare/`, `wrangler.jsonc`, `Dockerfile` (C); `README.md` (D).
+  `src/server.ts` (B); `cloudflare/`, `wrangler.jsonc`, `Dockerfile`, `docs/DEPLOY.md` (C);
+  `README.md` (D).
 
 ## Verification before every PR
 
@@ -149,18 +126,20 @@ npm run typecheck
 npm test
 ```
 
-Plus, for payment changes: one `npm run smoke:x402` against preprod, and the result recorded in
-the PR.
+Plus, for payment changes once the URL is live: one `npm run remote:run -- --url <live> --yes`,
+with the result recorded in the PR.
 
 ## Definition of done
 
-- [ ] Evidence of a real preprod payment committed (AT2).
-- [ ] A full local agent run ends `DRAFT_READY` with a tx.
-- [ ] Back-to-back and concurrent runs all settle (AT7). Payment serialization is tested.
-- [ ] `run.settlement` is shipped and tested, and B is informed.
-- [ ] Safety scenarios run live, outputs handed to D (AT5, AT6).
-- [ ] ARCHITECTURE "Verified live" is updated. The demo confirmation setting is decided.
-- [ ] Wallets and keys handed to C securely.
+- [ ] Evidence of a real preprod payment from the live URL committed (AT2).
+- [ ] A text-invoice agent run on the live URL ends `DRAFT_READY` with a tx (AT3, with C).
+- [x] Back-to-back and concurrent runs are serialized per wallet and tested (AT7). Still to be
+      observed live.
+- [x] `run.settlement` is shipped and tested.
+- [ ] Safety scenarios run live, with evidence handed to D (AT5, AT6).
+- [ ] ARCHITECTURE "Verified live" covers the first payment. The demo confirmation setting is
+      decided.
+- [ ] Wallet hand-off to C done.
 
 ## Stretch (only after CP2)
 

@@ -13,6 +13,9 @@
     "wallet:new": "tsx scripts/new-wallet.ts",
     "preflight": "tsx --env-file-if-exists=.env scripts/preflight.ts",
     "smoke:x402": "tsx --env-file-if-exists=.env scripts/smoke-x402.ts",
+    "remote:check": "tsx --env-file-if-exists=.env scripts/remote-check.ts",
+    "remote:run": "tsx --env-file-if-exists=.env scripts/remote-run.ts",
+    "remote:safety": "tsx --env-file-if-exists=.env scripts/safety-scenarios.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },

@@ -74,9 +74,10 @@ curl -s localhost:8787/health
 
 ### C4. Secrets and variables
 
-- **Secrets:** add each with `npx wrangler secret put <NAME>`.
+- **Secrets:** add each with `npx wrangler secret put <NAME>`. Team decision: API keys exist
+  **only** here. Paste them from the dashboards straight into wrangler, never into a laptop `.env`.
   - `ANTHROPIC_API_KEY`
-  - `BLOCKFROST_PROJECT_ID` (cloud project)
+  - `BLOCKFROST_PROJECT_ID` (preprod project)
   - `BUYER_MNEMONIC` (**buyer-cloud** wallet from A)
   - `SELLER_ADDRESS`
 - **Non-secret variables** (`PUBLIC_BASE_URL`, `FACILITATOR_URL`, `LOCAL_FACILITATOR`,
@@ -91,29 +92,32 @@ curl -s localhost:8787/health
    - `GET <live>/api/health` shows `x402Ready: true`, `aiReady: true`, and the expected buyer and
      seller addresses.
    - **AT1:** an unpaid `POST <live>/v1/payment-readiness` returns 402 with the expected offer.
-3. Verify from the laptop with the repo's own tooling. A shell environment variable overrides
-   `.env`:
+3. Verify from the laptop with the repo's remote tooling. It needs no local keys:
    ```bash
-   PUBLIC_BASE_URL=https://<live-url> npm run preflight
+   npm run remote:check -- --url https://<live-url>
    ```
-   - The `seller health` check FAILs on `buyerAddress` if your local `.env` holds a different
-     buyer wallet than the cloud. That is expected; everything else must pass.
-   - To avoid the mismatch, run with a copy of `.env` that holds the cloud values.
+   All checks must be PASS or WARN. The buyer balance is always WARN, because it cannot be checked
+   without a key: check the buyer-cloud address on the explorer instead. `npm run preflight` and
+   `npm run smoke:x402` need local Blockfrost access, so they do not apply under the keys-only-on-
+   Cloudflare decision.
 
-Post the URL to Korbi: this is **CP1** for C.
+Post the URL to Korbi: this is **CP1** for C. Korbi then runs the first real payment (A2).
 
 ### C6. Long paid requests (AT8)
 
 A paid request blocks while the facilitator settles. It waits for confirmation and the SDK retries
-settle once, so it can take 1-4 minutes. Verify that the Worker -> Durable Object -> Container path
-does not cut it:
+settle once, so it can take 1-4 minutes. The agent reaches the seller through the public URL, so
+one agent run proves that the Worker -> Durable Object -> Container path does not cut it:
 
 ```bash
-PUBLIC_BASE_URL=https://<live-url> npm run smoke:x402
+npm run remote:run -- --url https://<live-url> --yes
 ```
 
-This pays from the laptop's buyer wallet to the deployed seller. It must exit 0. If it cuts off,
-find the limit in the Cloudflare docs and fix it, or document the workaround.
+This pays about 2 tADA from the buyer-cloud wallet. The run must end `DRAFT_READY`. If the paid
+request is cut off, the run ends `SETTLEMENT_UNKNOWN`. Then find the limit in the Cloudflare docs
+and fix it, or document the workaround. Coordinate with Korbi so this run doubles as A2.
+
+Also update `docs/DEPLOY.md`, which still verifies with `preflight` and `smoke:x402`.
 
 ### C7. Full agent run on the live URL (AT3)
 
@@ -185,7 +189,7 @@ npm run typecheck
 npm test
 ```
 
-Plus, for deploy changes: `PUBLIC_BASE_URL=<live> npm run preflight`, with the result in the PR.
+Plus, for deploy changes: `npm run remote:check -- --url <live>`, with the result in the PR.
 
 ## Definition of done
 

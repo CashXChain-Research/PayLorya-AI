@@ -132,13 +132,13 @@ sequenceDiagram
 | ID | Test | Owner |
 | --- | --- | --- |
 | AT1 | Unpaid `POST <live>/v1/payment-readiness` returns 402 with `exact` / `cardano:preprod` / `lovelace` / payTo = seller / amount `2000000` | C |
-| AT2 | `npm run smoke:x402` exits 0 locally. The evidence JSON is committed and the tx is visible on the explorer | A |
+| AT2 | `npm run remote:run -- --url <live> --yes` ends `DRAFT_READY`. `evidence/live-run-*.json` is committed and the tx is visible on the explorer (keys exist only on Cloudflare, so there is no local smoke run) | A, after C |
 | AT3 | An agent run via the live UI ends `DRAFT_READY` with a real tx hash | C with A |
 | AT4 | Claude extraction is correct for every sample invoice. Results are recorded in the PR | B |
-| AT5 | The injection invoice pays only the allowlisted seller, the configured price. The injected address and amount appear nowhere in the payment | B, live check by A |
-| AT6 | The same invoice twice: the second run is refused before signing. `spentLovelace` is unchanged and there is no second tx | A |
+| AT5 | The injection invoice pays only the allowlisted seller, the configured price. The injected address and amount appear nowhere in the payment (`npm run remote:safety`) | B, live check by A |
+| AT6 | The same invoice twice: the second run is refused before signing. `spentLovelace` is unchanged and there is no second tx (`npm run remote:safety`) | A |
 | AT7 | Two runs back to back, and two concurrent runs for different invoices, all settle. No UTxO conflict | A |
-| AT8 | A paid request that takes 1-4 min survives the Worker -> Container path | C |
+| AT8 | A paid request that takes 1-4 min survives the Worker -> Container path. Covered by `remote:run`, since the agent reaches the seller through the public URL | C |
 | AT9 | `npm run typecheck` and `npm test` pass in CI on `main` | C |
 | AT10 | The repo is public, history is secret-free, and all README and Devfolio links work in an incognito window | D |
 
@@ -167,7 +167,8 @@ write it into your PR description). Additive changes to shared files are fine af
 | Run JSON (`GET /api/runs/:id`) | A | B | Existing fields stay stable. A adds `settlement?: { transactionHash?: string; explorerUrl?: string; reason: string }` for `SETTLEMENT_UNKNOWN`. Additive only |
 | `/api/health` | B (`server.ts`) | B (UI), C (checks) | Existing fields stay. B adds `maxPriceLovelace` and `sessionBudgetLovelace` |
 | Environment variables | A (`src/config.ts` is the source of truth) | C | Every key in the config schema except `PORT` must be forwarded by `cloudflare/worker.ts`. A new variable means telling C |
-| Wallets and keys | A | C | Seller address, a **separate buyer wallet for the cloud** (`buyer-cloud`), and the Blockfrost key, shared via password manager or Signal only. Never in git, Slack or docs |
+| Wallets | A | C | Seller address and a **separate buyer wallet for the cloud** (`buyer-cloud`), shared via password manager or Signal only. Never in git, Slack or docs |
+| API keys | C | – | Blockfrost and Anthropic keys exist **only** as Cloudflare secrets (team decision 2026-10-30): straight from the dashboards into `wrangler secret put`, never in a laptop `.env` |
 | Facilitator mode and confirmations | A | C | Hosted vs `LOCAL_FACILITATOR=true`, and `CARDANO_L1_CONFIRMATIONS`, decided after milestone 1 |
 | Live URL | C | all | `https://...workers.dev` (or a custom domain). Also set as `PUBLIC_BASE_URL` |
 | Evidence and safety outputs | A | D | `evidence/milestone1-*.json`, tx links, terminal output of the safety scenarios |
@@ -180,7 +181,7 @@ The exact submission deadline is on Devfolio (tum.devfolio.co). **Fill it in her
 | CP | When | Exit criteria |
 | --- | --- | --- |
 | CP0 | Now | PR #1 merged, everyone on fresh `main`, branches created |
-| CP1 "first proof" | ASAP | A: a real preprod tx via `npm run smoke:x402`, evidence committed. C: the live URL returns the correct 402 (AT1) |
+| CP1 "first proof" | ASAP | C: the live URL returns the correct 402 (AT1, `npm run remote:check`). Then A: the first real preprod tx via `npm run remote:run -- --yes` on the live URL, evidence committed |
 | CP2 "integrated" | Mid-way | An agent run on the live URL ends `DRAFT_READY` with a real tx (AT3). Live extraction works (AT4). UI shows every state |
 | CP3 "feature freeze" | Deadline - 4 h | Bug fixes and docs only. Record the demo video on the live URL |
 | CP4 "submit" | Deadline - 1 h | Repo public, Devfolio submitted, links checked in incognito (AT10) |
@@ -189,9 +190,9 @@ The exact submission deadline is on Devfolio (tum.devfolio.co). **Fill it in her
 
 | Workstream | Status | Blocker |
 | --- | --- | --- |
-| A Live x402 payment | A5 (wallet queue) and A6 (`run.settlement`, available to B) done offline. A1-A4, A7-A9 need the laptop | Cardano hosts unreachable from cloud sessions |
+| A Live x402 payment | Done: A1 (wallets), A3 (live recon), A5 (wallet queue), A6 (`run.settlement`). Remote tooling ready (`remote:check`/`remote:run`/`remote:safety`, tested offline). A2, A4, A7 and A8 run against the live URL | C's deploy (keys only on Cloudflare) |
 | B Agent experience and UI | not started | |
-| C Cloudflare | not started | needs wallets and keys from A |
+| C Cloudflare | #4 merged: env forwarding, CI, `docs/DEPLOY.md`. Not deployed yet. `DEPLOY.md` still verifies with local `preflight`/`smoke:x402`; switch to `remote:check`/`remote:run` | buyer-cloud wallet from A; keys from the dashboards |
 | D Submission | not started | needs live URL, evidence, UI |
 
 ## 10. Rules for everyone (humans and agents)
@@ -201,7 +202,8 @@ The exact submission deadline is on Devfolio (tum.devfolio.co). **Fill it in her
   small, rebase often, and merge only when `npm run typecheck && npm test` are green. The other
   founder skims every PR. At hackathon speed, self-merge is fine when CI is green.
 - **Secrets:** `.env` is never committed. Mnemonics are test-only (preprod), but still never go
-  into git, Slack, docs or screenshots. Cloudflare secrets go in via `wrangler secret put`.
+  into git, Slack, docs or screenshots. API keys (Blockfrost, Anthropic) exist only as Cloudflare
+  secrets, set via `wrangler secret put`.
 - **Wallets:** use one buyer wallet per environment (`buyer-local` on the laptop, `buyer-cloud` on
   Cloudflare). Two processes signing from the same wallet can pick the same UTxO, and one of the
   payments then fails.
@@ -224,7 +226,9 @@ The exact submission deadline is on Devfolio (tum.devfolio.co). **Fill it in her
 | UTxO conflict between concurrent payments | Separate buyer wallets per environment. Serialize payments per wallet in the agent | A |
 | Cloudflare Containers blocked (plan, Docker, limits) for more than ~2 h | Run on the laptop and expose it with `cloudflared tunnel` (still Cloudflare) | C |
 | Claude API unavailable during the demo | Structured JSON samples skip the model entirely | B |
-| Blockfrost rate limits | Separate Blockfrost projects for laptop and cloud | A, C |
+| Blockfrost rate limits | Keep demo volume low. A second Blockfrost project for the cloud if needed | C |
+| Public `POST /api/runs` lets anyone spend the server's buyer wallet (testnet, capped by `SESSION_BUDGET_LOVELACE`) | Keep the budget small and the wallet lightly funded. Top up before judging | C, A |
+| Milestone 1 depends on the deploy (keys only on Cloudflare) | C deploys first. The remote tooling is ready before the URL is | C, A |
 | Container sleeps or redeploys: in-memory runs and spend ledger reset | Warm up before judging. Document it as a known limitation | C |
 
 ## 12. Decisions already made (do not reopen without both founders)
@@ -234,6 +238,8 @@ The exact submission deadline is on Devfolio (tum.devfolio.co). **Fill it in her
 - No Masumi.
 - `SETTLEMENT_UNKNOWN` and idempotency are mandatory and stay conservative.
 - No automatic Claude model fallback (removed in PR #1).
+- API keys (Blockfrost, Anthropic) live only on Cloudflare. Live payments run against the
+  deployment (2026-10-30).
 - Tracks: Cardano is primary. API3 and BSV: no. Adevar Labs: only if it needs no extra build.
 
 ## 13. Non-goals
