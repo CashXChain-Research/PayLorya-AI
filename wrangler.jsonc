@@ -1,0 +1,18 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "cxc-agentpay",
+  "main": "cloudflare/worker.ts",
+  "compatibility_date": "2026-10-01",
+  "containers": [
+    {
+      "class_name": "AgentPayContainer",
+      "image": "./Dockerfile",
+      "max_instances": 1
+    }
+  ],
+  "durable_objects": {
+    "bindings": [{ "class_name": "AgentPayContainer", "name": "AGENTPAY" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["AgentPayContainer"] }]
+  // Secrets: npx wrangler secret put ANTHROPIC_API_KEY (and BLOCKFROST_PROJECT_ID, BUYER_MNEMONIC, ...)
+}

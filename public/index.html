@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CxC AgentPay</title>
+<style>
+  :root { --navy:#000066; --teal:#005577; --ink:#111; --grey:#6b6b6b; --line:#e3e3e3; --bg:#fafafa; --ok:#005577; --bad:#8a1c1c; --warn:#8a6d00; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; color:var(--ink); background:var(--bg); }
+  header { background:var(--navy); color:#fff; padding:20px 16px; }
+  header h1 { margin:0; font-size:20px; letter-spacing:.2px; }
+  header p { margin:4px 0 0; opacity:.8; font-size:13px; }
+  main { max-width:960px; margin:0 auto; padding:16px; display:grid; gap:16px; }
+  section { background:#fff; border:1px solid var(--line); border-radius:8px; padding:16px; }
+  h2 { margin:0 0 12px; font-size:13px; text-transform:uppercase; letter-spacing:.08em; color:var(--teal); }
+  textarea { width:100%; min-height:150px; font:13px/1.4 ui-monospace,monospace; border:1px solid var(--line); border-radius:6px; padding:10px; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:8px; }
+  button { border:1px solid var(--navy); background:#fff; color:var(--navy); padding:7px 12px; border-radius:6px; cursor:pointer; font-size:13px; }
+  button.primary { background:var(--navy); color:#fff; }
+  button:disabled { opacity:.5; cursor:default; }
+  .muted { color:var(--grey); font-size:13px; }
+  .timeline { display:flex; flex-wrap:wrap; gap:6px; }
+  .step { font:12px ui-monospace,monospace; padding:3px 8px; border-radius:4px; background:#eef3f6; color:var(--teal); }
+  .step.end-bad { background:#f6e9e9; color:var(--bad); }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  td { padding:6px 4px; border-top:1px solid var(--line); vertical-align:top; }
+  .pass { color:var(--ok); font-weight:600; } .fail { color:var(--bad); font-weight:600; } .warn { color:var(--warn); font-weight:600; } .skip { color:var(--grey); }
+  .tag { font-size:11px; color:var(--grey); border:1px solid var(--line); border-radius:3px; padding:0 4px; }
+  .kv { display:grid; grid-template-columns:140px 1fr; gap:4px 12px; font-size:13px; word-break:break-all; }
+  .kv b { color:var(--grey); font-weight:500; }
+  a { color:var(--teal); }
+  .verdict { font-size:18px; font-weight:700; color:var(--navy); }
+  .hidden { display:none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>CxC Payment Readiness API</h1>
+  <p>Pay-per-request validation for autonomous payment agents · x402 on Cardano Preprod · CashXChain</p>
+</header>
+<main>
+  <section>
+    <h2>1 · Invoice</h2>
+    <div class="row" id="samples"></div>
+    <textarea id="input" placeholder="Paste invoice text or a structured invoice JSON"></textarea>
+    <div class="row">
+      <button class="primary" id="run">Run agent</button>
+      <span class="muted" id="health"></span>
+    </div>
+  </section>
+
+  <section id="runbox" class="hidden">
+    <h2>2 · Agent run</h2>
+    <div class="timeline" id="timeline"></div>
+    <p class="muted" id="error"></p>
+  </section>
+
+  <section id="paybox" class="hidden">
+    <h2>3 · x402 payment proof</h2>
+    <div class="kv" id="payment"></div>
+  </section>
+
+  <section id="reportbox" class="hidden">
+    <h2>4 · Paid readiness report</h2>
+    <p class="verdict" id="verdict"></p>
+    <table id="checks"></table>
+    <p class="muted" id="quote"></p>
+    <p class="muted" id="disclaimer"></p>
+  </section>
+
+  <section id="draftbox" class="hidden">
+    <h2>5 · Payment draft (human approval required)</h2>
+    <div class="kv" id="draft"></div>
+  </section>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const BAD = ["FAILED", "BLOCKED", "SETTLEMENT_UNKNOWN", "NEEDS_INFO"];
+const DONE = ["DRAFT_READY", ...BAD];
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const kv = obj => Object.entries(obj).map(([k, v]) => `<b>${esc(k)}</b><span>${v}</span>`).join("");
+
+fetch("/api/health").then(r => r.json()).then(h => {
+  $("health").textContent = `x402 ${h.x402Ready ? "ready" : "not configured"} · AI ${h.aiReady ? "ready" : "off"} · price ${Number(h.priceLovelace) / 1e6} tADA`;
+});
+fetch("/api/samples").then(r => r.json()).then(samples => {
+  for (const [name, text] of Object.entries(samples)) {
+    const b = document.createElement("button");
+    b.textContent = name;
+    b.onclick = () => { $("input").value = text; };
+    $("samples").appendChild(b);
+  }
+});
+
+$("run").onclick = async () => {
+  $("run").disabled = true;
+  ["paybox", "reportbox", "draftbox"].forEach(id => $(id).classList.add("hidden"));
+  $("runbox").classList.remove("hidden");
+  $("timeline").innerHTML = ""; $("error").textContent = "";
+  const res = await fetch("/api/runs", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ input: $("input").value }) });
+  const body = await res.json();
+  if (!res.ok) { $("error").textContent = body.error; $("run").disabled = false; return; }
+  poll(body.id);
+};
+
+async function poll(id) {
+  const run = await (await fetch(`/api/runs/${id}`)).json();
+  render(run);
+  if (DONE.includes(run.state)) { $("run").disabled = false; return; }
+  setTimeout(() => poll(id), 1200);
+}
+
+function render(run) {
+  $("timeline").innerHTML = run.timeline.map(t => `<span class="step ${BAD.includes(t.state) ? "end-bad" : ""}" title="${esc(t.note)}">${esc(t.state)}</span>`).join("");
+  $("error").textContent = run.error ?? "";
+  if (run.payment) {
+    const p = run.payment;
+    $("paybox").classList.remove("hidden");
+    $("payment").innerHTML = kv({
+      network: esc(p.network), amount: `${Number(p.amount) / 1e6} tADA`, buyer: esc(p.buyerAddress), seller: esc(p.sellerAddress),
+      "tx hash": `<a href="${esc(p.explorerUrl)}" target="_blank" rel="noopener">${esc(p.transactionHash)}</a>`, settled: esc(p.settledAt),
+    });
+  }
+  if (run.report) {
+    const r = run.report;
+    $("reportbox").classList.remove("hidden");
+    $("verdict").textContent = r.verdict.replaceAll("_", " ");
+    $("checks").innerHTML = r.checks.map(c => `<tr><td class="${c.status}">${c.status}</td><td>${esc(c.id)}</td><td>${esc(c.message)}</td><td><span class="tag">${esc(c.source)}</span></td></tr>`).join("");
+    $("quote").textContent = r.routeQuote ? `${r.routeQuote.label}: ${r.routeQuote.rail}, fee ${r.routeQuote.feeUsd} USD, ${r.routeQuote.fxRate}, ETA ${r.routeQuote.etaHours} h` : "";
+    $("disclaimer").textContent = r.disclaimer;
+  }
+  if (run.draft) {
+    const d = run.draft;
+    $("draftbox").classList.remove("hidden");
+    $("draft").innerHTML = kv({ status: esc(d.status), executable: String(d.executable), invoice: esc(d.invoiceId), supplier: esc(d.supplier), amount: `${esc(d.amountMinor)} minor ${esc(d.currency)}`, note: esc(d.note) });
+  }
+}
+</script>
+</body>
+</html>
