@@ -21,13 +21,16 @@ export class BuyerAgent {
   constructor(
     private readonly config: Config,
     private readonly runs: RunStore,
+    signer?: ClientCardanoSigner, // tests inject a stub; production derives it from BUYER_MNEMONIC
   ) {
-    if (!config.BUYER_MNEMONIC || !config.SELLER_ADDRESS) throw new Error("BUYER_MNEMONIC and SELLER_ADDRESS required");
-    this.signer = toClientCardanoSigner({
-      mnemonic: config.BUYER_MNEMONIC,
-      network: CARDANO_NETWORK,
-      provider: blockfrostProvider(config),
-    });
+    if (!(signer || config.BUYER_MNEMONIC) || !config.SELLER_ADDRESS) throw new Error("BUYER_MNEMONIC and SELLER_ADDRESS required");
+    this.signer =
+      signer ??
+      toClientCardanoSigner({
+        mnemonic: config.BUYER_MNEMONIC!,
+        network: CARDANO_NETWORK,
+        provider: blockfrostProvider(config),
+      });
     this.policy = {
       allowedPayTo: [config.SELLER_ADDRESS],
       maxPriceLovelace: config.MAX_PRICE_LOVELACE,
@@ -98,12 +101,17 @@ export class BuyerAgent {
       .registerPolicy((_v, reqs) => filterOffers(reqs, this.policy))
       .onBeforePaymentCreation(async ({ selectedRequirements }) => {
         if (payments >= this.policy.maxPaymentsPerRun) return { abort: true, reason: "max payments per run reached" };
-        const allowed = this.ledger.canPay(fingerprint, BigInt(selectedRequirements.amount));
+        // Check and hold atomically: a concurrent run must not pass for the same invoice or budget.
+        const allowed = this.ledger.reserve(fingerprint, BigInt(selectedRequirements.amount));
         if (!allowed.ok) return { abort: true, reason: allowed.reason };
       })
       .onAfterPaymentCreation(async ({ selectedRequirements }) => {
         payments += 1;
         signedAmount = BigInt(selectedRequirements.amount);
+      })
+      // Core runs this only after our hold was taken and signing threw: nothing was sent.
+      .onPaymentCreationFailure(async () => {
+        this.ledger.release(fingerprint);
       });
     client.register("cardano:*", new ExactCardanoScheme(this.signer));
 
@@ -131,6 +139,10 @@ export class BuyerAgent {
     if (!response.ok || !settle?.success) {
       const detail = `HTTP ${response.status}${settle?.errorReason ? `, ${settle.errorReason}` : ""}`;
       return this.failPayment(run, fingerprint, signedAmount, new Error(detail), settle?.transaction);
+    }
+    // A proof needs an on-chain tx hash for a payment we actually signed.
+    if (!settle.transaction || signedAmount === undefined) {
+      return this.failPayment(run, fingerprint, signedAmount, new Error("settle reported success without a transaction hash"));
     }
 
     this.ledger.markPaid(fingerprint, signedAmount!);

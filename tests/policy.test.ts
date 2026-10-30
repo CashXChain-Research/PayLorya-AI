@@ -44,4 +44,16 @@ describe("spend ledger", () => {
     expect(l.canPay("other", 2_000_000n).ok).toBe(true);
     expect(l.canPay("other", 4_000_000n).ok).toBe(false);
   });
+
+  it("holds an in-flight payment against invoice and budget until marked or released", () => {
+    const l = new SpendLedger(policy);
+    expect(l.reserve("inv", 2_000_000n).ok).toBe(true);
+    expect(l.reserve("inv", 2_000_000n)).toMatchObject({ ok: false });
+    expect(l.canPay("other", 4_000_000n).ok).toBe(false);
+    l.release("inv");
+    expect(l.reserve("inv", 2_000_000n).ok).toBe(true);
+    l.markPaid("inv", 2_000_000n);
+    expect(l.spentLovelace).toBe(2_000_000n);
+    expect(l.canPay("other", 3_000_000n).ok).toBe(true);
+  });
 });
