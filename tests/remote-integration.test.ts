@@ -116,6 +116,7 @@ async function startModel(): Promise<string> {
       bic: field(/BIC\s+([A-Z0-9]+)/),
       routingNumber: null,
       accountNumber: null,
+      accountType: null,
     };
     res.json({
       id: "msg_stub",

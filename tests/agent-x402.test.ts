@@ -9,10 +9,13 @@ import { ExactCardanoScheme } from "@x402/cardano/exact/client";
 import type { PaymentPayload, PaymentRequirements } from "@x402/core/types";
 import { decodePaymentResponseHeader, wrapFetchWithPayment, x402Client } from "@x402/fetch";
 import { BuyerAgent } from "../src/agent.js";
+import { CashXChainClient } from "../src/cashxchain.js";
 import { CARDANO_NETWORK, loadConfig } from "../src/config.js";
+import { PayoutDesk } from "../src/payout.js";
 import { RunStore, type Run } from "../src/runs.js";
 import { mountSeller, READINESS_PATH } from "../src/seller.js";
 import type { Invoice, ReadinessReport } from "../src/types.js";
+import { createFakeCxc, FAKE_KEY } from "./fake-cashxchain.js";
 
 // Real x402 stack on localhost (paymentMiddleware, x402ResourceServer, HTTPFacilitatorClient,
 // x402Client, wrapFetchWithPayment, ExactCardanoScheme). Only the chain side is stubbed.
@@ -174,7 +177,7 @@ const env = (facilitatorUrl: string, overrides: Env = {}): Env => ({
   ...overrides,
 });
 
-async function startStack(opts: { seller?: Env; buyer?: Env } = {}) {
+async function startStack(opts: { seller?: Env; buyer?: Env; cashxchain?: boolean } = {}) {
   const events: string[] = [];
   const handled: ReadinessReport[] = [];
   const fac = await startFacilitator(events);
@@ -199,13 +202,15 @@ async function startStack(opts: { seller?: Env; buyer?: Env } = {}) {
   const config = loadConfig(env(fac.url, { PUBLIC_BASE_URL: sellerUrl, ...opts.buyer }));
   const runs = new RunStore();
   const signer = stubSigner();
-  const agent = new BuyerAgent(config, runs, signer);
+  const cxc = opts.cashxchain ? createFakeCxc() : undefined;
+  const payouts = cxc ? new PayoutDesk(new CashXChainClient({ apiKey: FAKE_KEY, baseUrl: (await listen(cxc.app)).url }), runs) : undefined;
+  const agent = new BuyerAgent(config, runs, signer, payouts);
   const run = async (inv: Invoice = invoice): Promise<Run> => {
     const r = runs.create(JSON.stringify(inv));
     await agent.process(r);
     return r;
   };
-  return { events, handled, fac, sellerUrl, config, runs, signer, agent, run };
+  return { events, handled, fac, sellerUrl, config, runs, signer, agent, run, cxc, payouts };
 }
 
 const states = (run: Run) => run.timeline.map(t => t.state);
@@ -233,7 +238,12 @@ describe("buyer agent over real x402 (stub signer + stub facilitator)", () => {
     expect(run.report?.payoutExecuted).toBe(false);
     // The paid retry kept our Idempotency-Key (requestId is derived from it).
     expect(run.report?.requestId).toBe(createHash("sha256").update(run.id).digest("hex").slice(0, 16));
-    expect(run.draft).toMatchObject({ status: "awaiting_human_approval", executable: false, invoiceId: invoice.id });
+    expect(run.draft).toMatchObject({
+      status: "awaiting_human_approval",
+      executable: false,
+      invoiceId: invoice.id,
+      blockedReason: "CashXChain payouts not configured (CXC_API_KEY)",
+    });
     expect(s.agent.spentLovelace).toBe(PRICE);
 
     expect(s.signer.calls).toHaveLength(1);
@@ -493,6 +503,49 @@ describe("buyer agent over real x402 (stub signer + stub facilitator)", () => {
     expect(duplicateCheck(run.report)).toBe("fail");
     expect(run.draft).toBeUndefined();
     expect(other.spentLovelace).toBe(PRICE);
+  });
+});
+
+describe("x402 report -> CashXChain sandbox payout", () => {
+  it("prepares an executable draft after the paid report, and pays nobody until approved", async () => {
+    const s = await startStack({ cashxchain: true });
+    const run = await s.run();
+
+    expect(states(run)).toEqual(["CREATED", "EXTRACTED", "PRECHECKED", "PAYING", "PAID", "DRAFT_READY"]);
+    expect(run.draft).toMatchObject({
+      executable: true,
+      cashxchain: { environment: "sandbox", sourceAccountId: "mockacct_fake_eur", amount: "12480.00", currency: "EUR", scheme: "iban" },
+    });
+    expect(run.draft?.blockedReason).toBeUndefined();
+    expect(s.cxc!.payoutCount()).toBe(0);
+
+    expect(s.payouts!.approve(run)).toEqual({ ok: true });
+    for (let i = 0; i < 200 && run.state === "PAYOUT_SENDING"; i++) await new Promise(r => setTimeout(r, 5));
+    expect(run.state).toBe("PAYOUT_SETTLED");
+    expect(s.cxc!.payoutCount()).toBe(1);
+    // The supplier payout and the x402 service fee are separate: one Cardano tx, one CashXChain payout.
+    expect(s.signer.calls).toHaveLength(1);
+  });
+
+  it("a payee the corridor or name check cannot pay ends NEEDS_INFO with the x402 report kept", async () => {
+    const s = await startStack({ cashxchain: true });
+    s.cxc!.state.payee = { outcome: "no_match", may_pay: false, check: "VOP" };
+    const run = await s.run();
+
+    expect(states(run).slice(-2)).toEqual(["PAID", "NEEDS_INFO"]);
+    expect(lastNote(run)).toBe("CashXChain: payee-name check: no_match");
+    expect(run.report?.verdict).toBe("ready_for_review");
+    expect(run.draft).toBeUndefined();
+  });
+
+  it("CashXChain unreachable: draft stays, not executable, with the reason", async () => {
+    const s = await startStack({ cashxchain: true });
+    s.cxc!.state.accounts = [];
+    const run = await s.run();
+
+    expect(run.state).toBe("DRAFT_READY");
+    expect(run.draft).toMatchObject({ executable: false, blockedReason: expect.stringContaining("no active EUR account") });
+    expect(s.payouts!.approve(run)).toMatchObject({ ok: false, status: 409 });
   });
 });
 

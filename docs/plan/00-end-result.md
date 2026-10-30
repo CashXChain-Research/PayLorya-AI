@@ -124,7 +124,7 @@ sequenceDiagram
 | Field extraction | **Real** Claude API call. Amounts are parsed deterministically |
 | IBAN / BIC / ABA checks, duplicate detection | **Real**, deterministic code |
 | Corridors, rails, fees, FX, ETA | **Simulated** (`demo-fixture`, "Simulated route/fees") |
-| Supplier payout | **Not executed**. No CashXChain payout endpoint is called |
+| Supplier payout | **CashXChain sandbox** only, after human approval (`CXC_API_KEY`); not executed without the key |
 | Compliance | The report is a data-quality and routing check, **not** an AML, sanctions or KYB decision |
 
 ## 6. Acceptance tests
@@ -241,8 +241,12 @@ The exact submission deadline is on Devfolio (tum.devfolio.co). **Fill it in her
 - API keys (Blockfrost, Anthropic) live only on Cloudflare. Live payments run against the
   deployment (2026-10-30).
 - Tracks: Cardano is primary. API3 and BSV: no. Adevar Labs: only if it needs no extra build.
+- 2026-10-30 (Korbi, **Valentin to confirm**): supplier payouts through the CashXChain **sandbox**
+  after human approval. Replaces the non-goal "real CashXChain API calls" for the sandbox only;
+  production keys are refused in code. Pitch, demo script and submission still say "no payout"
+  until this is verified live.
 
 ## 13. Non-goals
 
-Mainnet, real payouts, real CashXChain API calls, AML/KYB/sanctions decisions, Masumi, persistence
+Mainnet, real payouts, production CashXChain API calls, AML/KYB/sanctions decisions, Masumi, persistence
 beyond memory, multi-instance scaling, user accounts.

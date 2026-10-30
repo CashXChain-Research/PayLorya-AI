@@ -15,6 +15,7 @@ export const FORWARDED = [
   "SESSION_BUDGET_LOVELACE",
   "MAX_PAYMENTS_PER_RUN",
   "DEMO_AMOUNT_CEILING_MINOR",
+  "CXC_API_KEY",
   "ANTHROPIC_API_KEY",
   "CLAUDE_MODEL",
   // Not in the schema: the Anthropic SDK reads it from env (Cloudflare AI Gateway).

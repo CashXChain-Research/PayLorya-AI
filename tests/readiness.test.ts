@@ -79,12 +79,22 @@ describe("extraction normalization", () => {
   it("derives country from IBAN and rejects incomplete extractions", () => {
     const inv = toInvoice({
       invoiceId: "R-99", supplierName: "Studio Nord GmbH", destinationCountry: null, currency: "eur", amount: "980,00",
-      reference: "R-99", iban: "de89 3704 0044 0532 0130 00", bic: null, routingNumber: null, accountNumber: null,
+      reference: "R-99", iban: "de89 3704 0044 0532 0130 00", bic: null, routingNumber: null, accountNumber: null, accountType: null,
     });
     expect(inv.destinationCountry).toBe("DE");
     expect(inv.iban).toBe("DE89370400440532013000");
     expect(() =>
-      toInvoice({ invoiceId: null, supplierName: "x", destinationCountry: "DE", currency: "EUR", amount: "1", reference: null, iban: null, bic: null, routingNumber: null, accountNumber: null }),
+      toInvoice({ invoiceId: null, supplierName: "x", destinationCountry: "DE", currency: "EUR", amount: "1", reference: null, iban: null, bic: null, routingNumber: null, accountNumber: null, accountType: null }),
     ).toThrow();
+  });
+
+  it("keeps a printed US account type and drops anything else", () => {
+    const base = {
+      invoiceId: "A-5531", supplierName: "Lakeside Robotics Inc.", destinationCountry: "US", currency: "USD", amount: "4,250.00",
+      reference: null, iban: null, bic: null, routingNumber: "021000021", accountNumber: "000123456789",
+    };
+    expect(toInvoice({ ...base, accountType: " Checking " }).accountType).toBe("checking");
+    expect(toInvoice({ ...base, accountType: "brokerage" }).accountType).toBeUndefined();
+    expect(toInvoice({ ...base, accountType: null }).accountType).toBeUndefined();
   });
 });

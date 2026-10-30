@@ -5,8 +5,8 @@
 **CxC Payment Readiness API**: pay-per-request validation for autonomous payment agents.
 Any agent POSTs a structured invoice to `POST /v1/payment-readiness`, pays per response via
 x402 on Cardano Preprod, and gets a readiness report. Our Claude agent is the demo customer.
-The supplier payout itself is never executed: the run ends in a non-executing draft that
-needs human approval.
+With `CXC_API_KEY` set, a ready draft is prepared as a payout on the **CashXChain sandbox**, and
+a human approval sends it there. Without it, the draft does not execute.
 
 ## Roles
 
@@ -15,6 +15,7 @@ needs human approval.
 | Seller (paid API) | `src/seller.ts`, `src/readiness.ts` | `SELLER_ADDRESS` (address only, no key on the server) |
 | Buyer (agent) | `src/agent.ts`, `src/policy.ts`, `src/extract.ts` | `BUYER_MNEMONIC` (test only) |
 | Facilitator | hosted CF preprod facilitator, or `src/facilitator.ts` fallback | none, broadcast only |
+| Supplier payout | `src/payout.ts`, `src/cashxchain.ts` | `CXC_API_KEY`, CashXChain **sandbox** only |
 
 All three run in one Node process for the hackathon. The buyer reaches the seller over HTTP
 (`PUBLIC_BASE_URL`), so they can be split later without code changes.
@@ -25,7 +26,12 @@ All three run in one Node process for the hackathon. The buyer reaches the selle
 CREATED -> EXTRACTED -> PRECHECKED -> PAYING -> PAID -> DRAFT_READY
                      \-> NEEDS_INFO        \-> SETTLEMENT_UNKNOWN
                                             \-> FAILED      PAID -> NEEDS_INFO | BLOCKED
+
+DRAFT_READY --approve--> PAYOUT_SENDING -> PAYOUT_SETTLED | PAYOUT_IN_FLIGHT | PAYOUT_FAILED | PAYOUT_UNKNOWN
+            --reject---> REJECTED
 ```
+
+The second line only happens through `POST /api/runs/:id/approve` (a human in the UI).
 
 1. `POST /api/runs` with invoice text or JSON.
 2. Claude extracts fields (structured output, `effort: low`); JSON input skips the model.
@@ -38,6 +44,8 @@ CREATED -> EXTRACTED -> PRECHECKED -> PAYING -> PAID -> DRAFT_READY
 6. Seller verifies via facilitator, runs the handler, settles; the middleware withholds the
    body if settlement fails.
 7. Run stores tx hash + explorer URL only from a successful settle response.
+8. Ready report and `CXC_API_KEY` set: prepare the CashXChain payout (below). Moves no money.
+9. A human approves: `POST /v1/banking/payouts` on the CashXChain sandbox.
 
 ## Trust boundary
 
@@ -45,7 +53,15 @@ CREATED -> EXTRACTED -> PRECHECKED -> PAYING -> PAID -> DRAFT_READY
   or limit fields, and the invoice text is wrapped as untrusted data.
 - Network, asset, recipient allowlist and caps come from env config only.
 - Seller holds no signing key. Facilitator holds no funds.
-- No CashXChain payout endpoint is called. `payoutExecuted: false`, `executable: false`.
+- The x402 report never pays anyone (`payoutExecuted: false`). The supplier payout is a separate
+  step that only a human approval starts; the agent cannot call it.
+- The payout's payee and amount necessarily come from the invoice (paying an invoice means paying
+  the account printed on it). Protections: the paid report's deterministic checks (IBAN mod-97,
+  duplicates, amount ceiling), CashXChain corridor validation and payee-name check, and a human who
+  sees supplier, account, amount and fee before approving. A crypto address in the invoice text has
+  no field to land in.
+- CashXChain is locked to the sandbox: the base URL is a constant and `CXC_API_KEY` must be a
+  `cxc_sk_sandbox_` / `cxc_rk_sandbox_` key, or the server refuses to start.
 - Route, fees and FX are `demo-fixture` and labeled "Simulated route/fees".
 - The report is a data-quality and routing check, not an AML, sanctions or KYB decision.
 
@@ -74,6 +90,39 @@ CREATED -> EXTRACTED -> PRECHECKED -> PAYING -> PAID -> DRAFT_READY
   cap, and the plain `default` transfer method (no Masumi or script locks).
 - The facilitator broadcasts a given Cardano tx at most once (`@x402/cardano` duplicate
   settlement guard).
+
+## Supplier payout (CashXChain sandbox)
+
+Written against docs.cashxchain.com/docs/api and checked against the backend DTOs and mock rail.
+
+**Prepare** (automatic, after a `ready_for_review` report; no money moves):
+
+| Step | Call | Outcome when it does not work |
+| --- | --- | --- |
+| Source account | `GET /v1/banking/accounts`: active account in the invoice currency | draft not executable (`blockedReason`) |
+| Corridor | `GET /v1/banking/corridors?currency&country&entity_type=business` | `corridor_unsupported` -> `BLOCKED` |
+| Account mapping | invoice IBAN / ABA / BIC onto an `accepted_schemes` entry; required corridor fields (e.g. `account_type` for USD/US) | `NEEDS_INFO`, naming the field |
+| Beneficiary | `POST /v1/banking/beneficiaries`, key `agentpay-ben-<hash of payee>` | `400` -> `NEEDS_INFO` |
+| Payee-name check | `POST …/beneficiaries/{id}/verify`; sandbox always `not_checked` | `may_pay: false` -> `NEEDS_INFO` |
+| Quote, balance | `POST /v1/banking/payouts/quote`, `GET …/accounts/{id}/balance` | shown; low balance is a warning |
+
+Any other API failure (auth, 5xx, network) leaves the draft non-executable with the reason.
+
+**Execute** (human approval only):
+
+- `POST /v1/banking/payouts` with `Idempotency-Key: agentpay-payout-<invoice fingerprint>-<attempt>`.
+  Same key and body returns the payout as it is now, never a second one. The key is bound to the
+  invoice, not the run, so after a restart the same invoice replays the earlier payout.
+- Status mapping: `settled` -> `PAYOUT_SETTLED`; `submitted`/`processing` -> `PAYOUT_IN_FLIGHT`
+  (polled); `failed`/`cancelled`/`returned` -> `PAYOUT_FAILED`; `created` -> `PAYOUT_UNKNOWN`.
+- `4xx` on create: nothing paid -> `PAYOUT_FAILED`. The next approval keeps the same key, except
+  after `insufficient_balance`, `idempotency_key_reuse` or `rate_limited` (documented as recording
+  the key), or a payout that came back `failed`: then `attempt + 1`. Never skipping an unrecorded
+  key means a restart cannot reach a fresh key while an earlier one could still pay.
+- `5xx`, timeout, network: `PAYOUT_UNKNOWN`. Approving again ("Check status") replays the same key.
+- `approve` checks and sets state synchronously: a double click cannot send twice.
+- Not handled (cannot happen in the sandbox): payee-name `accept-verification`, FX quotes for
+  cross-currency payouts. Both would be required before production.
 
 ## Readiness checks
 
@@ -113,6 +162,11 @@ otherwise `ready_for_review`.
   Evidence: `evidence/live-run-2026-10-30T23-32-37-254Z.json`.
 
 ## Not verified yet
+
+- CashXChain payout path: tested offline against a fake that follows the docs
+  (`tests/fake-cashxchain.ts`), not yet against `api.sandbox.cashxchain.com` (this cloud session's
+  network policy blocks the CashXChain hosts). First live check: set `CXC_API_KEY`, run the EUR
+  sample, approve, and confirm the payout id in the sandbox web app.
 
 - With `LOCAL_FACILITATOR=true`, verify also calls Blockfrost `POST /utils/txs/evaluate/utxos`;
   untested against real Blockfrost for a script-free tx.

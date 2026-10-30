@@ -3,6 +3,7 @@ import { ExactCardanoScheme } from "@x402/cardano/exact/client";
 import { wrapFetchWithPayment, x402Client, x402HTTPClient } from "@x402/fetch";
 import { blockfrostProvider, CARDANO_NETWORK, type Config } from "./config.js";
 import { extractInvoice } from "./extract.js";
+import type { PayoutDesk } from "./payout.js";
 import { filterOffers, precheck, SpendLedger, type SpendPolicy } from "./policy.js";
 import { invoiceFingerprint } from "./readiness.js";
 import type { Run, RunStore } from "./runs.js";
@@ -23,6 +24,7 @@ export class BuyerAgent {
     private readonly config: Config,
     private readonly runs: RunStore,
     signer?: ClientCardanoSigner, // tests inject a stub; production derives it from BUYER_MNEMONIC
+    private readonly payouts?: PayoutDesk, // CashXChain sandbox; absent when CXC_API_KEY is unset
   ) {
     if (!(signer || config.BUYER_MNEMONIC) || !config.SELLER_ADDRESS) throw new Error("BUYER_MNEMONIC and SELLER_ADDRESS required");
     this.signer =
@@ -65,7 +67,24 @@ export class BuyerAgent {
       run.report = report;
 
       if (report.verdict === "ready_for_review") {
-        run.draft = draftFrom(invoice, report);
+        const draft = draftFrom(invoice, report);
+        if (this.payouts) {
+          // Prepares the supplier payout so the human approves real numbers. Moves no money.
+          const prepared = await this.payouts.prepare(invoice);
+          if (prepared.kind === "needs_info" || prepared.kind === "blocked") {
+            return this.runs.transition(run, prepared.kind === "blocked" ? "BLOCKED" : "NEEDS_INFO", `CashXChain: ${prepared.reason}`);
+          }
+          if (prepared.kind === "ready") {
+            draft.executable = true;
+            draft.cashxchain = prepared.plan;
+            draft.note = "Approval sends this payout through the CashXChain sandbox (test ledger, no real money).";
+          } else {
+            draft.blockedReason = `CashXChain unavailable: ${prepared.reason}`;
+          }
+        } else {
+          draft.blockedReason = "CashXChain payouts not configured (CXC_API_KEY)";
+        }
+        run.draft = draft;
         this.runs.transition(run, "DRAFT_READY", "Awaiting human approval; nothing executed");
       } else {
         this.runs.transition(run, report.verdict === "blocked" ? "BLOCKED" : "NEEDS_INFO", report.verdict);
@@ -211,6 +230,6 @@ function draftFrom(invoice: Invoice, report: ReadinessReport): PaymentDraft {
     amountMinor: invoice.amountMinor,
     currency: invoice.currency,
     routeQuote: report.routeQuote,
-    note: "Draft only. No CashXChain payout endpoint is called from this demo.",
+    note: "Draft only. No CashXChain payout endpoint is called.",
   };
 }

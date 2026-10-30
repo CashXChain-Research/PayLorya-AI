@@ -62,7 +62,7 @@ Bank: IBAN DE89 3704 0044 0532 0130 00, BIC COBADEFFXXX
 Due: 2026-11-15`,
   us_ok: `Invoice #A-5531 — Lakeside Robotics Inc. (Austin, TX)
 Total: USD 4,250.00
-Please pay by ACH. Routing 021000021, Account 000123456789
+Please pay by ACH. Routing 021000021, Account 000123456789 (checking)
 Reference: CXC-HACK-01`,
   bad_iban: `Rechnung R-99 von Studio Nord GmbH
 Betrag: 980,00 EUR

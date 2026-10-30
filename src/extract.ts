@@ -16,6 +16,7 @@ const ExtractionSchema = z.object({
   bic: z.string().nullable(),
   routingNumber: z.string().nullable(),
   accountNumber: z.string().nullable(),
+  accountType: z.string().nullable().describe("US bank account type if printed: checking or savings"),
 });
 type Extraction = z.infer<typeof ExtractionSchema>;
 
@@ -54,12 +55,18 @@ export function toInvoice(x: Extraction): Invoice {
     bic: x.bic?.replace(/\s+/g, "").toUpperCase() || undefined,
     routingNumber: x.routingNumber?.replace(/\D/g, "") || undefined,
     accountNumber: x.accountNumber?.replace(/\s+/g, "") || undefined,
+    accountType: accountTypeOf(x.accountType),
   };
   const parsed = InvoiceSchema.safeParse(candidate);
   if (!parsed.success) {
     throw new ExtractionError(`invalid fields: ${parsed.error.issues.map(i => i.path.join(".")).join(", ")}`);
   }
   return parsed.data;
+}
+
+function accountTypeOf(raw: string | null): "checking" | "savings" | undefined {
+  const v = raw?.trim().toLowerCase();
+  return v === "checking" || v === "savings" ? v : undefined;
 }
 
 function countryFromIban(iban: string | null): string | undefined {

@@ -81,7 +81,7 @@
 
   .kv { display:grid; grid-template-columns:130px 1fr; gap:3px 12px; font-size:13px; margin-top:6px; color:var(--ink); }
   .kv b { color:var(--grey); font-weight:500; }
-  .kv span { word-break:break-all; }
+  .kv span { overflow-wrap:anywhere; }
   .checks { list-style:none; margin:6px 0 0; padding:0; font-size:13px; }
   .checks li { display:flex; gap:8px; padding:3px 0; color:var(--ink); }
   .checks .ic { width:16px; flex:none; font-weight:700; }
@@ -116,16 +116,17 @@
     <div class="pills">
       <span class="pill" id="p-net">cardano:preprod</span>
       <span class="pill" id="p-wallet">agent wallet …</span>
+      <span class="pill live off" id="p-cxc">CashXChain …</span>
       <span class="pill live" id="p-status">connecting…</span>
     </div>
   </div>
   <div class="hero">
     <h1>Send your invoices. Your AI CFO gets them ready to pay.</h1>
-    <p>It reads each supplier invoice, hires a verification agent and pays it per request on Cardano, then puts the payment on your desk for approval.</p>
+    <p>It reads each supplier invoice, hires a verification agent and pays it per request on Cardano, prepares the supplier payout on CashXChain, and sends it only when you approve.</p>
     <div class="trust">
       <div><b>Claude reads.</b> Fields only, no wallet access.</div>
       <div><b>Code decides.</b> Allow-listed payee, price cap, budget, one payment per invoice.</div>
-      <div><b>You approve.</b> Nothing pays a supplier without you.</div>
+      <div><b>You approve.</b> Nothing pays a supplier without you. Payouts run in the CashXChain sandbox.</div>
     </div>
   </div>
 </header>
@@ -159,7 +160,7 @@
   </div>
 </main>
 <footer>
-  Demo on Cardano Preprod with test funds. Corridors, rails, fees and FX are simulated and labeled as such. The report is a data-quality and routing check, not an AML, sanctions or KYB decision. Supplier payouts are not executed in this demo.
+  Demo on Cardano Preprod with test funds. Report corridors, rails, fees and FX are simulated and labeled as such; the payout quote comes from the CashXChain sandbox. The report is a data-quality and routing check, not an AML, sanctions or KYB decision. Supplier payouts run only in the CashXChain sandbox (test ledger, no real money) and only after your approval.
 </footer>
 
 <script>
@@ -173,7 +174,8 @@ const money = (minor, cur) => {
   const e = EXP[cur] ?? 2;
   return `${cur} ${(minor / 10 ** e).toLocaleString("en-US", { minimumFractionDigits: e, maximumFractionDigits: e })}`;
 };
-const TERMINAL = ["DRAFT_READY", "NEEDS_INFO", "BLOCKED", "SETTLEMENT_UNKNOWN", "FAILED"];
+const TERMINAL = ["DRAFT_READY", "NEEDS_INFO", "BLOCKED", "SETTLEMENT_UNKNOWN", "FAILED", "REJECTED", "PAYOUT_SETTLED", "PAYOUT_FAILED", "PAYOUT_UNKNOWN"];
+const DECIDED = ["REJECTED", "PAYOUT_SENDING", "PAYOUT_IN_FLIGHT", "PAYOUT_SETTLED", "PAYOUT_FAILED", "PAYOUT_UNKNOWN"];
 const POLICY_REASONS = ["already paid", "already in progress", "budget exhausted", "unknown settlement", "max payments"];
 const isPolicyStop = run => run.state === "FAILED" && POLICY_REASONS.some(r => (run.error || "").includes(r));
 
@@ -190,9 +192,6 @@ let health = {};
 let samples = {};
 let selected = null;
 let lastInput = "";
-let approvals = {};
-try { approvals = JSON.parse(localStorage.getItem("cxc-approvals") || "{}"); } catch { approvals = {}; }
-const saveApprovals = () => { try { localStorage.setItem("cxc-approvals", JSON.stringify(approvals)); } catch {} };
 
 async function loadHealth() {
   try {
@@ -207,6 +206,9 @@ async function loadHealth() {
   $("k-spend").textContent = ada(spent);
   $("k-budget").textContent = budget ? `of ${ada(budget)} session budget` : "session budget";
   $("k-meter").style.width = budget ? `${Math.min(100, (spent / budget) * 100)}%` : "0";
+  const cxc = health.cashxchain || {};
+  $("p-cxc").textContent = cxc.ready ? "CashXChain sandbox" : "CashXChain off";
+  $("p-cxc").className = `pill live ${cxc.ready ? "" : "off"}`;
 }
 
 async function loadSamples() {
@@ -223,13 +225,13 @@ async function loadSamples() {
   }
 }
 
-function badge(state, id) {
-  if (state === "DRAFT_READY" && approvals[id] === "approved") return `<span class="badge b-done">Approved</span>`;
-  if (state === "DRAFT_READY" && approvals[id] === "rejected") return `<span class="badge b-bad">Rejected</span>`;
+function badge(state) {
   const map = {
     CREATED: ["Received", "b-run"], EXTRACTED: ["Reading", "b-run"], PRECHECKED: ["Checking", "b-run"], PAYING: ["Paying on Cardano", "b-run"],
     PAID: ["Verified", "b-run"], DRAFT_READY: ["Awaiting you", "b-ok"], NEEDS_INFO: ["Needs info", "b-warn"], BLOCKED: ["Blocked", "b-bad"],
-    SETTLEMENT_UNKNOWN: ["Locked", "b-bad"], FAILED: ["Stopped", "b-bad"],
+    SETTLEMENT_UNKNOWN: ["Locked", "b-bad"], FAILED: ["Stopped", "b-bad"], REJECTED: ["Rejected", "b-bad"],
+    PAYOUT_SENDING: ["Paying supplier", "b-run"], PAYOUT_IN_FLIGHT: ["Payout in flight", "b-run"], PAYOUT_SETTLED: ["Paid out", "b-done"],
+    PAYOUT_FAILED: ["Payout failed", "b-bad"], PAYOUT_UNKNOWN: ["Payout unclear", "b-warn"],
   };
   const [t, c] = map[state] || [state, "b-run"];
   return `<span class="badge ${c}">${t}</span>`;
@@ -240,17 +242,16 @@ async function loadList() {
   try { list = await (await fetch("/api/runs")).json(); } catch { return; }
   if (!Array.isArray(list)) return;
   $("k-total").textContent = list.length;
-  const ready = list.filter(r => r.state === "DRAFT_READY" && !approvals[r.id]);
-  const approved = list.filter(r => approvals[r.id] === "approved").length;
-  $("k-ready").textContent = ready.length;
-  $("k-ready-sub").textContent = approved ? `${approved} approved by you` : "verified and drafted";
-  $("k-held").textContent = list.filter(r => TERMINAL.includes(r.state) && r.state !== "DRAFT_READY").length;
+  const paidOut = list.filter(r => r.state === "PAYOUT_SETTLED").length;
+  $("k-ready").textContent = list.filter(r => r.state === "DRAFT_READY").length;
+  $("k-ready-sub").textContent = paidOut ? `${paidOut} paid out via CashXChain` : "verified and drafted";
+  $("k-held").textContent = list.filter(r => ["NEEDS_INFO", "BLOCKED", "SETTLEMENT_UNKNOWN", "FAILED", "REJECTED", "PAYOUT_FAILED"].includes(r.state)).length;
   $("list").innerHTML = list.length
     ? list.map(r => `<li data-id="${esc(r.id)}" class="${r.id === selected ? "sel" : ""}">
         <span class="who">${esc(r.supplier || "Reading invoice…")}</span>
         <span class="amt">${esc(money(r.amountMinor, r.currency))}</span>
         <span class="meta">${esc(r.invoiceId || r.id.slice(0, 8))} · ${new Date(r.createdAt).toLocaleTimeString()}</span>
-        ${badge(r.state, r.id)}
+        ${badge(r.state)}
       </li>`).join("")
     : `<li class="empty">No invoices yet. Pick a sample above.</li>`;
   for (const li of $("list").querySelectorAll("li[data-id]")) li.onclick = () => select(li.dataset.id);
@@ -372,47 +373,84 @@ function renderDetail(run) {
     steps.push(step("pending", 5, "Verification report", "CxC API", ""));
   }
 
-  // 6 Decision
-  let decision = "";
-  if (run.draft) {
-    const d = run.draft, a = approvals[run.id];
+  // 6 Decision (the only path to a supplier payout)
+  const d = run.draft, plan = d?.cashxchain, last = run.timeline.at(-1)?.note || "";
+  if (d) {
+    const q = plan?.quote;
+    const details = plan ? `
+      <div class="kv">
+        <b>Rail</b><span>CashXChain ${esc(plan.environment)} · ${esc(plan.scheme)} beneficiary</span>
+        <b>From</b><span class="mono">${esc(plan.sourceAccountId)}</span>
+        <b>Payee check</b><span>${esc(plan.payeeCheck.outcome)}${plan.payeeCheck.check ? ` (${esc(plan.payeeCheck.check)})` : ""}</span>
+        <b>You send</b><span>${esc(q.sourceCurrency)} ${esc(q.sourceAmount)} · fee ${esc(q.fee)}${q.simulated ? " (sandbox price)" : ""}</span>
+        ${plan.available !== undefined ? `<b>Available</b><span>${esc(q.sourceCurrency)} ${esc(plan.available)}</span>` : ""}
+      </div>
+      ${plan.sufficientFunds === false ? `<div class="note warn">Not enough test funds. Top up at app.sandbox.cashxchain.com, Accounts, Get test funds, then approve.</div>` : ""}`
+      : `${d.routeQuote ? `<div class="hint">${esc(d.routeQuote.rail)} · fee USD ${esc(d.routeQuote.feeUsd)} (${esc(d.routeQuote.label)})</div>` : ""}
+         <div class="note">${esc(d.blockedReason || d.note)}</div>`;
+    const decided = DECIDED.includes(s);
+    const state = s === "REJECTED" ? `<div class="note bad">Rejected by you. Nothing will be paid.</div>`
+      : decided ? `<div class="note ok">Approved by you at ${esc(new Date(run.payout?.approvedAt || Date.now()).toLocaleTimeString())}.</div>`
+      : `<div class="actions"><button class="go" id="approve" ${d.executable ? "" : `disabled title="${esc(d.blockedReason || "not executable")}"`}>Approve payout</button><button id="reject">Reject</button></div>
+         <div class="hint" id="decide-hint">The AI CFO never pays a supplier on its own.</div>`;
     decision = `<div class="decision">
       <div>Pay <b>${esc(d.supplier)}</b> · invoice ${esc(d.invoiceId)}</div>
       <div class="big">${esc(money(d.amountMinor, d.currency))}</div>
-      ${d.routeQuote ? `<div class="hint">${esc(d.routeQuote.rail)} · fee USD ${esc(d.routeQuote.feeUsd)} (${esc(d.routeQuote.label)})</div>` : ""}
-      ${a === "approved" ? `<div class="note ok">Approved by you at ${esc(approvals[run.id + ":at"] || "")}. In production this goes to CashXChain payout rails. In this demo no supplier payout is executed.</div>`
-        : a === "rejected" ? `<div class="note bad">Rejected by you. Nothing will be paid.</div>`
-        : `<div class="actions"><button class="go" id="approve">Approve payment</button><button id="reject">Reject</button></div>
-           <div class="hint">The AI CFO never pays a supplier on its own.</div>`}
+      ${details}${state}
     </div>`;
-    steps.push(step(a === "rejected" ? "bad" : a ? "done" : "active", 6, "Your decision", "You", decision));
+    steps.push(step(s === "REJECTED" ? "bad" : decided ? "done" : "active", 6, "Your decision", "You", decision));
   } else if (TERMINAL.includes(s)) {
-    const why = s === "NEEDS_INFO" ? "Held: the CFO needs more information from the supplier before anything can be paid."
+    const why = last.startsWith("CashXChain:") ? `Held before any payout. ${last}`
+      : s === "NEEDS_INFO" ? "Held: the CFO needs more information from the supplier before anything can be paid."
       : policyStop ? "Stopped by the spend policy. Nothing was paid twice."
       : s === "SETTLEMENT_UNKNOWN" ? "Locked until the payment is reconciled."
       : "Stopped. Nothing was paid to the supplier.";
     steps.push(step("warn", 6, "Your decision", "You", `<div class="note warn">${esc(why)}</div>`));
   } else {
-    steps.push(step("pending", 6, "Your decision", "You", ""));
+    steps.push(step(s === "PAID" ? "active" : "pending", 6, "Your decision", "You", s === "PAID" ? "Preparing the payout on CashXChain: account, payee, quote. Nothing moves yet." : ""));
   }
+
+  // 7 Supplier payout (CashXChain sandbox)
+  const p = run.payout;
+  let payoutBody = "Runs only after your approval, on the CashXChain sandbox (test ledger, no real money).";
+  let payoutCls = "pending";
+  if (p && DECIDED.includes(s) && s !== "REJECTED") {
+    const facts = `<div class="kv">
+        ${p.id ? `<b>Payout</b><span class="mono">${esc(p.id)}</span>` : ""}
+        ${p.status ? `<b>Status</b><span>${esc(p.status)}${p.settledAt ? ` at ${esc(new Date(p.settledAt).toLocaleTimeString())}` : ""}</span>` : ""}
+        ${p.amount ? `<b>Amount</b><span>${esc(p.currency)} ${esc(p.amount)}</span>` : ""}
+        <b>Idempotency-Key</b><span class="mono">${esc(p.idempotencyKey)}</span>
+      </div>`;
+    if (s === "PAYOUT_SENDING") { payoutCls = "active"; payoutBody = "Sending through the CashXChain sandbox…"; }
+    else if (s === "PAYOUT_SETTLED") { payoutCls = "done"; payoutBody = `${facts}<div class="note ok">Settled on the CashXChain sandbox. The same invoice can never be paid twice: a retry or restart replays this key.</div>`; }
+    else if (s === "PAYOUT_IN_FLIGHT") { payoutCls = "active"; payoutBody = `${facts}<div class="note">Accepted by the rail, not arrived yet.</div><div class="actions"><button id="recheck">Check status</button></div>`; }
+    else if (s === "PAYOUT_UNKNOWN") { payoutCls = "warn"; payoutBody = `${facts}<div class="note warn">Outcome unknown${p.error ? `: ${esc(p.error.message)}` : ""}. Do not pay this invoice elsewhere. Check status replays the same key, which never pays twice.</div><div class="actions"><button id="recheck">Check status</button></div>`; }
+    else if (s === "PAYOUT_FAILED") { payoutCls = "bad"; payoutBody = `${facts}<div class="note bad">Nothing was paid${p.error ? `: ${esc(p.error.message)}` : ""}.${p.retryWithNewKey ? " Approving again uses a new key." : ""}</div><div class="actions"><button class="go" id="approve">Approve again</button><button id="reject">Reject</button></div><div class="hint" id="decide-hint"></div>`; }
+  }
+  steps.push(step(payoutCls, 7, "Pay the supplier", "CashXChain", payoutBody));
 
   $("detail").innerHTML = `
     <div class="detail-head">
       <span class="title">${esc(inv ? inv.supplier : "New invoice")}</span>
-      ${badge(s, run.id)}
+      ${badge(s)}
       <span class="hint mono">${esc(run.id.slice(0, 8))}</span>
     </div>
     <ol class="steps">${steps.join("")}</ol>`;
 
-  const decide = verdict => () => {
-    approvals[run.id] = verdict;
-    approvals[run.id + ":at"] = new Date().toLocaleTimeString();
-    saveApprovals();
-    renderDetail(run);
-    loadList();
+  const decide = decision => async () => {
+    for (const id of ["approve", "reject", "recheck"]) if ($(id)) $(id).disabled = true;
+    try {
+      const res = await fetch(`/api/runs/${run.id}/${decision}`, { method: "POST" });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok && $("decide-hint")) $("decide-hint").textContent = body.error || `HTTP ${res.status}`;
+    } catch (e) {
+      if ($("decide-hint")) $("decide-hint").textContent = String(e);
+    }
+    select(run.id);
   };
-  if ($("approve")) $("approve").onclick = decide("approved");
-  if ($("reject")) $("reject").onclick = decide("rejected");
+  if ($("approve")) $("approve").onclick = decide("approve");
+  if ($("reject")) $("reject").onclick = decide("reject");
+  if ($("recheck")) $("recheck").onclick = decide("approve");
 }
 
 loadHealth();

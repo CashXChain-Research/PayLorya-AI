@@ -23,6 +23,8 @@ export const InvoiceSchema = z.object({
   bic: z.string().max(11).optional(),
   routingNumber: z.string().max(9).optional(),
   accountNumber: z.string().max(34).optional(),
+  // US accounts: the CashXChain USD/US corridor requires it. Only ever copied from the invoice.
+  accountType: z.enum(["checking", "savings"]).optional(),
 });
 export type Invoice = z.infer<typeof InvoiceSchema>;
 
@@ -72,13 +74,54 @@ export interface PaymentProof {
   settledAt: string;
 }
 
+/** A CashXChain sandbox payout prepared before approval. Nothing in here moved money. */
+export interface CxcPayoutPlan {
+  environment: "sandbox";
+  sourceAccountId: string;
+  beneficiaryId: string;
+  scheme: string;
+  /** Decimal string sent to CashXChain, e.g. "12480.00". */
+  amount: string;
+  currency: string;
+  reference: string;
+  payeeCheck: { outcome: string; mayPay: boolean; check?: string };
+  quote: { sourceAmount: string; sourceCurrency: string; fee: string; rate: string; simulated: boolean };
+  available?: string;
+  sufficientFunds?: boolean;
+  preparedAt: string;
+}
+
 export interface PaymentDraft {
   status: "awaiting_human_approval";
-  executable: false;
+  /** True only when a CashXChain sandbox payout was prepared; approval then executes it. */
+  executable: boolean;
   invoiceId: string;
   supplier: string;
   amountMinor: number;
   currency: string;
   routeQuote?: RouteQuote;
+  cashxchain?: CxcPayoutPlan;
+  /** Why the draft cannot be executed (CashXChain not configured or unavailable). */
+  blockedReason?: string;
   note: string;
+}
+
+/** The CashXChain payout of a run, after human approval. */
+export interface PayoutRecord {
+  environment: "sandbox";
+  /** Derived from the invoice fingerprint and attempt, so a retry or restart cannot pay twice. */
+  idempotencyKey: string;
+  attempt: number;
+  /** Set when this key is bound to a payout that will never pay (failed, or refused after recording). */
+  retryWithNewKey?: boolean;
+  approvedAt: string;
+  id?: string;
+  status?: string;
+  amount?: string;
+  currency?: string;
+  createdAt?: string;
+  submittedAt?: string;
+  settledAt?: string;
+  requestId?: string;
+  error?: { httpStatus?: number; code?: string; message: string };
 }

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { Invoice, PaymentDraft, PaymentProof, ReadinessReport } from "./types.js";
+import type { Invoice, PaymentDraft, PaymentProof, PayoutRecord, ReadinessReport } from "./types.js";
 
 export type RunState =
   | "CREATED"
@@ -11,7 +11,14 @@ export type RunState =
   | "NEEDS_INFO"
   | "BLOCKED"
   | "SETTLEMENT_UNKNOWN"
-  | "FAILED";
+  | "FAILED"
+  // After DRAFT_READY, only through human approval (CashXChain sandbox payout).
+  | "REJECTED"
+  | "PAYOUT_SENDING"
+  | "PAYOUT_IN_FLIGHT"
+  | "PAYOUT_SETTLED"
+  | "PAYOUT_FAILED"
+  | "PAYOUT_UNKNOWN";
 
 export interface Run {
   id: string;
@@ -23,6 +30,8 @@ export interface Run {
   report?: ReadinessReport;
   payment?: PaymentProof;
   draft?: PaymentDraft;
+  /** The CashXChain sandbox payout, once a human approved the draft. */
+  payout?: PayoutRecord;
   /** Set on SETTLEMENT_UNKNOWN: what to look up on the explorer before anyone pays again. */
   settlement?: { transactionHash?: string; explorerUrl?: string; reason: string };
   error?: string;

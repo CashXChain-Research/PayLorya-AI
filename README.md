@@ -5,7 +5,9 @@
 An agent sends a supplier invoice to the CxC Payment Readiness API and pays for a report with
 x402, using **tADA on Cardano Preprod (testnet)**. The report checks account details, required
 fields and duplicates, and shows **Simulated route/fees**. Our Claude-powered demo customer
-ends with a draft awaiting human approval; no supplier payout is executed.
+ends with a draft awaiting human approval. With a CashXChain sandbox key configured, the draft is
+prepared as a CashXChain payout, and approving it sends the payout on the **CashXChain sandbox**
+(test ledger, no real money).
 
 Built by [CashXChain](https://cashxchain.com) — **The Infrastructure for the money of tomorrow**.
 
@@ -67,8 +69,13 @@ UTxOs. Separate deployments still need separate buyer wallets.
 
 A signed payment with an unclear outcome becomes `SETTLEMENT_UNKNOWN`: its amount stays counted
 and the invoice stays locked. Do not retry it blindly. State is in memory, so these protections
-do not survive a restart. The final draft has `executable: false`; no CashXChain payout endpoint
-is called.
+do not survive a restart.
+
+The supplier payout is a separate step that only a human starts (`POST /api/runs/:id/approve`).
+It runs on the CashXChain sandbox only: the API base URL is fixed and the server refuses to start
+with anything but a `cxc_sk_sandbox_` / `cxc_rk_sandbox_` key. Its `Idempotency-Key` is derived from
+the invoice, so a retry or a restart replays the earlier payout instead of paying again. Without
+`CXC_API_KEY` the draft has `executable: false`. Details in [ARCHITECTURE](docs/ARCHITECTURE.md#supplier-payout-cashxchain-sandbox).
 
 ## Real vs simulated
 
@@ -80,7 +87,8 @@ is called.
 | Field extraction | Real Claude API integration for text; JSON skips the model; amounts parsed deterministically; live sample validation pending |
 | IBAN / BIC / ABA checks, duplicates | Real deterministic code; BIC is a format/country check, not bank ownership verification |
 | Corridors, rails, fees, FX, ETA | Simulated (`demo-fixture`), labeled **Simulated route/fees** |
-| Supplier payout | Not executed; human approval required for a draft |
+| Supplier payout | CashXChain sandbox API (`/v1/banking/*`), only after human approval; tested offline against a fake, live sandbox check pending. Not executed without `CXC_API_KEY` |
+| Payout quote and fee | CashXChain sandbox quote (`simulated: true`, sandbox pricing) |
 | Compliance | Data-quality and routing check; not an AML, sanctions or KYB decision |
 
 ## Quick start
@@ -95,6 +103,8 @@ npm run wallet:new -- buyer      # put BUYER_MNEMONIC into .env, fund the printe
 1. Fund the buyer address with tADA from the [Cardano testnets faucet](https://docs.cardano.org/cardano-testnets/tools/faucet/).
 2. Create a free Blockfrost **preprod** project and set `BLOCKFROST_PROJECT_ID`.
 3. Set `ANTHROPIC_API_KEY` (optional; structured JSON invoices work without it).
+4. Set `CXC_API_KEY` (optional): a CashXChain **sandbox** key, see
+   [DEPLOY](docs/DEPLOY.md#cashxchain-sandbox-key-supplier-payouts).
 
 ```bash
 npm run dev                      # http://localhost:8787 (keep running)
@@ -128,7 +138,9 @@ Use a separate cloud buyer wallet; keep credentials out of git and screenshots.
 | --- | --- | --- |
 | `POST /v1/payment-readiness` | Seller, x402-paid | Body `{ invoice }`, header `Idempotency-Key`. Returns the readiness report |
 | `POST /api/runs` | Agent | Body `{ input }` (invoice text or JSON). Starts a run |
-| `GET /api/runs/:id` | Agent | State, timeline, payment proof, report, draft |
+| `GET /api/runs/:id` | Agent | State, timeline, payment proof, report, draft, payout |
+| `POST /api/runs/:id/approve` | Human | Sends the prepared CashXChain sandbox payout; on an unclear payout, re-checks it (same key) |
+| `POST /api/runs/:id/reject` | Human | Rejects the draft; nothing is paid |
 | `GET /api/health` | Both | Config status, buyer/seller address, spend |
 
 ## Development and tests
@@ -153,7 +165,12 @@ is recorded in [SUBMISSION.md](docs/SUBMISSION.md); commands above are not a cla
 ## Limitations
 
 - tADA on Cardano Preprod (testnet) only; synthetic invoices only.
-- Simulated route/fees, corridors, FX and ETA; no real CashXChain payout integration.
+- Report route/fees, corridors, FX and ETA are simulated. Supplier payouts use the CashXChain
+  sandbox only; no production key is accepted.
+- CashXChain plan limits apply: the free plan's single-payment limit is USD 2,500, so larger sample
+  invoices are refused with `plan_limit_exceeded` (nothing paid).
+- `/api/runs/:id/approve` is unauthenticated like the rest of the demo API: anyone with the URL can
+  approve a prepared sandbox payout. Fine for test money; production needs real approver auth.
 - No AML, sanctions, KYB or regulatory approval claim.
 - In-memory runs, duplicate detection and spend ledger reset on restart; one container instance.
 - Live settlement, facilitator compatibility, deployment and final demo checks remain release gates.
