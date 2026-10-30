@@ -1,4 +1,4 @@
-import { toClientCardanoSigner, type ClientCardanoSigner } from "@x402/cardano";
+import { decodeCardanoTransaction, toClientCardanoSigner, type ClientCardanoSigner } from "@x402/cardano";
 import { ExactCardanoScheme } from "@x402/cardano/exact/client";
 import { wrapFetchWithPayment, x402Client, x402HTTPClient } from "@x402/fetch";
 import { blockfrostProvider, CARDANO_NETWORK, type Config } from "./config.js";
@@ -17,6 +17,7 @@ export class BuyerAgent {
   private readonly signer: ClientCardanoSigner;
   private readonly policy: SpendPolicy;
   private readonly ledger: SpendLedger;
+  private walletQueue: Promise<void> = Promise.resolve();
 
   constructor(
     private readonly config: Config,
@@ -59,7 +60,7 @@ export class BuyerAgent {
       if (!pre.ok) return this.runs.transition(run, "NEEDS_INFO", pre.reason);
       this.runs.transition(run, "PRECHECKED");
 
-      const report = await this.buyReport(run, invoice);
+      const report = await this.withWallet(() => this.buyReport(run, invoice));
       if (!report) return;
       run.report = report;
 
@@ -87,10 +88,24 @@ export class BuyerAgent {
     return extractInvoice(input, this.config.CLAUDE_MODEL);
   }
 
+  /**
+   * One payment in flight per buyer wallet. Two signers working from the same UTxO set can pick
+   * the same input; both pass verify, and the second broadcast fails after signing.
+   */
+  private withWallet<T>(pay: () => Promise<T>): Promise<T> {
+    const turn = this.walletQueue.then(pay);
+    this.walletQueue = turn.then(
+      () => undefined,
+      () => undefined,
+    );
+    return turn;
+  }
+
   private async buyReport(run: Run, invoice: Invoice): Promise<ReadinessReport | undefined> {
     const fingerprint = run.fingerprint!;
     let payments = 0;
     let signedAmount: bigint | undefined;
+    let signedTx: string | undefined;
 
     const client = new x402Client()
       .setSpendControls({
@@ -105,9 +120,10 @@ export class BuyerAgent {
         const allowed = this.ledger.reserve(fingerprint, BigInt(selectedRequirements.amount));
         if (!allowed.ok) return { abort: true, reason: allowed.reason };
       })
-      .onAfterPaymentCreation(async ({ selectedRequirements }) => {
+      .onAfterPaymentCreation(async ({ selectedRequirements, paymentPayload }) => {
         payments += 1;
         signedAmount = BigInt(selectedRequirements.amount);
+        signedTx = signedTxHash(paymentPayload.payload.transaction);
       })
       // Core runs this only after our hold was taken and signing threw: nothing was sent.
       .onPaymentCreationFailure(async () => {
@@ -126,7 +142,7 @@ export class BuyerAgent {
         body: JSON.stringify({ invoice }),
       });
     } catch (error) {
-      return this.failPayment(run, fingerprint, signedAmount, error);
+      return this.failPayment(run, fingerprint, signedAmount, error, signedTx);
     }
 
     let settle: ReturnType<x402HTTPClient["getPaymentSettleResponse"]> | undefined;
@@ -138,11 +154,11 @@ export class BuyerAgent {
 
     if (!response.ok || !settle?.success) {
       const detail = `HTTP ${response.status}${settle?.errorReason ? `, ${settle.errorReason}` : ""}`;
-      return this.failPayment(run, fingerprint, signedAmount, new Error(detail), settle?.transaction);
+      return this.failPayment(run, fingerprint, signedAmount, new Error(detail), settle?.transaction || signedTx);
     }
     // A proof needs an on-chain tx hash for a payment we actually signed.
     if (!settle.transaction || signedAmount === undefined) {
-      return this.failPayment(run, fingerprint, signedAmount, new Error("settle reported success without a transaction hash"));
+      return this.failPayment(run, fingerprint, signedAmount, new Error("settle reported success without a transaction hash"), signedTx);
     }
 
     this.ledger.markPaid(fingerprint, signedAmount!);
@@ -165,11 +181,24 @@ export class BuyerAgent {
     run.error = error instanceof Error ? error.message : String(error);
     if (signedAmount !== undefined) {
       this.ledger.markUnknown(fingerprint, signedAmount);
+      run.settlement = {
+        ...(tx ? { transactionHash: tx, explorerUrl: `${this.config.EXPLORER_TX_URL}${tx}` } : {}),
+        reason: run.error,
+      };
       this.runs.transition(run, "SETTLEMENT_UNKNOWN", tx ? `tx ${tx}: ${run.error}` : run.error);
     } else {
       this.runs.transition(run, "FAILED", run.error);
     }
     return undefined;
+  }
+}
+
+/** Hash of the tx we signed, so an unknown settlement can still be looked up on the explorer. */
+function signedTxHash(transaction: unknown): string | undefined {
+  try {
+    return typeof transaction === "string" ? decodeCardanoTransaction(transaction).txHash : undefined;
+  } catch {
+    return undefined; // undecodable: rely on the facilitator's settle response
   }
 }
 

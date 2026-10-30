@@ -58,10 +58,18 @@ CREATED -> EXTRACTED -> PRECHECKED -> PAYING -> PAID -> DRAFT_READY
 - **In-flight hold:** `SpendLedger.reserve()` checks and holds budget + invoice in one step
   before signing, so concurrent runs (double click, client retry) cannot both pay. The hold is
   released only if signing itself threw; otherwise it becomes paid or unknown.
+- **One payment per wallet at a time:** `BuyerAgent` queues the pay step (402 -> sign -> settle)
+  per buyer wallet. Two signers reading the same UTxO set could spend the same input; both would
+  pass verify and the second broadcast would fail after signing. Runs wait in `PRECHECKED` for
+  their turn. Settle waits for confirmation, so the next payment sees the updated UTxO set. Use a
+  separate buyer wallet per deployment (laptop vs cloud) for the same reason.
 - **SETTLEMENT_UNKNOWN:** if anything fails after the buyer signed a transaction, the tx may
   already be on-chain. The run moves to `SETTLEMENT_UNKNOWN`, the amount counts against the
   budget, and the invoice is locked against re-payment until resolved. This includes verify
   rejections (the seller holds the signed tx) and a settle "success" without a tx hash.
+  `run.settlement = { transactionHash?, explorerUrl?, reason }` says what to look up before anyone
+  pays again. The hash comes from the settle response, or else from decoding the tx we signed, so
+  a lost response still leaves an explorer link.
 - **Offer filter:** only `exact` / `cardano:preprod` / `lovelace`, allowlisted `payTo`, price
   cap, and the plain `default` transfer method (no Masumi or script locks).
 - The facilitator broadcasts a given Cardano tx at most once (`@x402/cardano` duplicate
@@ -89,13 +97,23 @@ otherwise `ready_for_review`.
 - The middleware fetches the facilitator's `/supported` at startup in the background and
   retries on the first paid request (502 if still unreachable); the server does not crash.
 
+## Verified live
+
+- 2026-10-30: hosted facilitator `GET /supported` returns one kind: x402 v2, `exact`,
+  `cardano:preprod`, `assetTransferMethods` `["default","masumi","script"]`,
+  `areFeesSponsored: false`, `l1Confirmations` `[0, 20]`. So `CARDANO_L1_CONFIRMATIONS=-1`
+  (mempool) is out of range there. `/` and `/health` return 404. Fixture in `tests/milestone.test.ts`.
+- 2026-10-30: Blockfrost preprod answers a missing key with 403 "Missing project token" and any
+  rejected key (including `mainnet…`/`preview…` prefixes) with 403 "Invalid project token.". The
+  preflight hint now treats the prefix as a suggestion only. `/health` needs no key.
+
 ## Not verified yet
 
-- Hosted facilitator URL is taken from developers.cardano.org and has not been exercised by us
-  (`npm run preflight` checks its `/supported`).
+- No hosted-facilitator verify/settle has run yet.
 - No live preprod payment has run yet: that is milestone 1 (`npm run smoke:x402`).
 - With `LOCAL_FACILITATOR=true`, verify also calls Blockfrost `POST /utils/txs/evaluate/utxos`;
   untested against real Blockfrost for a script-free tx.
 - Cloudflare Containers deploy is written against `@cloudflare/containers@0.3.7` and the
   wrangler 4.156 schema but not deployed yet.
-- `EXPLORER_TX_URL` default (Cardanoscan preprod) to be confirmed with the first real tx.
+- `EXPLORER_TX_URL` default (Cardanoscan preprod) to be confirmed with the first real tx, in a
+  browser: Cardanoscan serves a Cloudflare challenge to scripts, so it cannot be checked automatically.

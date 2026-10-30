@@ -17,6 +17,7 @@ import {
   checkSellerAddress,
   checkSellerMinUtxo,
   checkSpendPolicy,
+  blockfrostHint,
   checkSupportedKind,
   classifyPaidResponse,
   describeError,
@@ -119,6 +120,26 @@ describe("facilitator /supported", () => {
     expect(checkSupportedKind(supported!, 20, false).status).toBe("PASS");
   });
 
+  it("accepts the hosted preprod facilitator's live /supported (2026-10-30)", () => {
+    const live = {
+      kinds: [
+        {
+          x402Version: 2,
+          scheme: "exact",
+          network: "cardano:preprod",
+          extra: { assetTransferMethods: ["default", "masumi", "script"], areFeesSponsored: false, l1Confirmations: { minimum: 0, maximum: 20 } },
+        },
+      ],
+      extensions: [],
+      signers: { "cardano:*": [] },
+    };
+    const supported = parseSupportedResponse(live);
+    expect(supported).toBeDefined();
+    expect(checkSupportedKind(supported!, 1, false).status).toBe("PASS");
+    expect(checkSupportedKind(supported!, 0, false).status).toBe("PASS");
+    expect(checkSupportedKind(supported!, -1, false)).toMatchObject({ status: "FAIL", detail: expect.stringContaining("[0, 20]") });
+  });
+
   it("checks l1Confirmations against the advertised range", () => {
     const strict = parseSupportedResponse(localFacilitator(false).getSupported())!;
     const mempool = parseSupportedResponse(localFacilitator(true).getSupported())!;
@@ -148,6 +169,14 @@ describe("facilitator /supported", () => {
     });
     expect(parseSupportedResponse("<html>")).toBeUndefined();
     expect(parseSupportedResponse({ kinds: [{ scheme: "exact" }] })).toBeUndefined();
+  });
+});
+
+describe("blockfrostHint", () => {
+  it("does not claim a network mismatch as fact: live preprod returns the same 403 for any rejected id", () => {
+    expect(blockfrostHint(403, "mainnetINVALID")).toMatch(/^BLOCKFROST_PROJECT_ID was rejected; its prefix suggests a mainnet project/);
+    expect(blockfrostHint(403, "preprodINVALID")).toMatch(/^BLOCKFROST_PROJECT_ID was rejected/);
+    expect(blockfrostHint(402, "preprodX")).toContain("quota");
   });
 });
 

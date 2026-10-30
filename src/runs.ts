@@ -23,6 +23,8 @@ export interface Run {
   report?: ReadinessReport;
   payment?: PaymentProof;
   draft?: PaymentDraft;
+  /** Set on SETTLEMENT_UNKNOWN: what to look up on the explorer before anyone pays again. */
+  settlement?: { transactionHash?: string; explorerUrl?: string; reason: string };
   error?: string;
   timeline: Array<{ state: RunState; at: string; note?: string }>;
 }
