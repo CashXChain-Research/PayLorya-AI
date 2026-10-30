@@ -189,7 +189,7 @@ The exact submission deadline is on Devfolio (tum.devfolio.co). **Fill it in her
 
 | Workstream | Status | Blocker |
 | --- | --- | --- |
-| A Live x402 payment | not started | |
+| A Live x402 payment | A5 (wallet queue) and A6 (`run.settlement`, available to B) done offline. A1-A4, A7-A9 need the laptop | Cardano hosts unreachable from cloud sessions |
 | B Agent experience and UI | not started | |
 | C Cloudflare | not started | needs wallets and keys from A |
 | D Submission | not started | needs live URL, evidence, UI |

@@ -4,7 +4,7 @@ import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import express, { type Express, type Response } from "express";
 import { afterEach, describe, expect, it } from "vitest";
-import type { ClientCardanoSignInput, ClientCardanoSigner } from "@x402/cardano";
+import { decodeCardanoTransaction, type ClientCardanoSignInput, type ClientCardanoSigner } from "@x402/cardano";
 import { ExactCardanoScheme } from "@x402/cardano/exact/client";
 import type { PaymentPayload, PaymentRequirements } from "@x402/core/types";
 import { decodePaymentResponseHeader, wrapFetchWithPayment, x402Client } from "@x402/fetch";
@@ -43,6 +43,8 @@ interface FacilitatorRequest {
 interface StubSigner extends ClientCardanoSigner {
   calls: ClientCardanoSignInput[];
   fail?: Error;
+  /** Base64 tx to return instead of the opaque placeholder (e.g. a decodable one). */
+  transaction?: string;
 }
 
 const servers: Server[] = [];
@@ -76,10 +78,33 @@ function stubSigner(): StubSigner {
       signer.calls.push(input);
       if (signer.fail) throw signer.fail;
       const n = signer.calls.length;
-      return { transaction: Buffer.from(`stub-signed-tx-${n}`).toString("base64"), nonce: `${"ab".repeat(32)}#${n}` };
+      return { transaction: signer.transaction ?? Buffer.from(`stub-signed-tx-${n}`).toString("base64"), nonce: `${"ab".repeat(32)}#${n}` };
     },
   };
   return signer;
+}
+
+// Smallest tx the SDK decoder accepts: [body {0: inputs, 1: outputs, 2: fee}, witnesses {}, valid, no aux].
+function decodableTx(): string {
+  const cbor = (v: unknown): Buffer => {
+    const head = (major: number, n: number) =>
+      n < 24 ? Buffer.from([(major << 5) | n])
+      : n < 256 ? Buffer.from([(major << 5) | 24, n])
+      : Buffer.from([(major << 5) | 26, n >>> 24, (n >>> 16) & 255, (n >>> 8) & 255, n & 255]);
+    if (v === null) return Buffer.from([0xf6]);
+    if (v === true) return Buffer.from([0xf5]);
+    if (typeof v === "number") return head(0, v);
+    if (Buffer.isBuffer(v)) return Buffer.concat([head(2, v.length), v]);
+    if (Array.isArray(v)) return Buffer.concat([head(4, v.length), ...v.map(cbor)]);
+    if (v instanceof Map) return Buffer.concat([head(5, v.size), ...[...v].flatMap(([k, x]) => [cbor(k), cbor(x)])]);
+    throw new Error(`cannot encode ${String(v)}`);
+  };
+  const body = new Map<number, unknown>([
+    [0, [[Buffer.alloc(32, 0xab), 1]]],
+    [1, [[Buffer.concat([Buffer.from([0x60]), Buffer.alloc(28, 0x11)]), 2_000_000]]],
+    [2, 170_000],
+  ]);
+  return cbor([body, new Map(), true, null]).toString("base64");
 }
 
 const verifyOk: Reply = res => void res.json({ isValid: true, payer: BUYER });
@@ -228,6 +253,11 @@ describe("buyer agent over real x402 (stub signer + stub facilitator)", () => {
 
     expect(first.state).toBe("SETTLEMENT_UNKNOWN");
     expect(lastNote(first)).toBe(`tx ${TX}: HTTP 402, exact_cardano_settlement_failed`);
+    expect(first.settlement).toEqual({
+      transactionHash: TX,
+      explorerUrl: `https://preprod.cardanoscan.io/transaction/${TX}`,
+      reason: "HTTP 402, exact_cardano_settlement_failed",
+    });
     expect(first.payment).toBeUndefined();
     expect(first.report).toBeUndefined();
     expect(first.draft).toBeUndefined();
@@ -281,7 +311,7 @@ describe("buyer agent over real x402 (stub signer + stub facilitator)", () => {
     expect(s.signer.calls).toHaveLength(1);
   });
 
-  const breakdowns: Array<{ name: string; breakIt: (fac: StubFacilitator) => void; settles: number; note: string | RegExp }> = [
+  const breakdowns: Array<{ name: string; breakIt: (fac: StubFacilitator) => void; settles: number; note: string | RegExp; tx?: string }> = [
     {
       name: "is unreachable after verify",
       breakIt: fac => {
@@ -306,17 +336,20 @@ describe("buyer agent over real x402 (stub signer + stub facilitator)", () => {
       breakIt: fac => void (fac.settle = settleFailed("exact_cardano_settlement_failed", 400)),
       settles: 1,
       note: `tx ${TX}: HTTP 402, exact_cardano_settlement_failed`,
+      tx: TX,
     },
     { name: "returns a malformed body", breakIt: fac => void (fac.settle = res => void res.json({ ok: true })), settles: 1, note: "HTTP 502" },
   ];
 
-  it.each(breakdowns)("facilitator settle $name -> SETTLEMENT_UNKNOWN", async ({ breakIt, settles, note }) => {
+  it.each(breakdowns)("facilitator settle $name -> SETTLEMENT_UNKNOWN", async ({ breakIt, settles, note, tx }) => {
     const s = await startStack();
     breakIt(s.fac);
     const run = await s.run();
 
     expect(run.state).toBe("SETTLEMENT_UNKNOWN");
     expect(lastNote(run)).toMatch(note);
+    expect(run.settlement?.reason).toBe(run.error);
+    expect(run.settlement?.transactionHash).toBe(tx); // the placeholder signed tx is not decodable
     expect(run.payment).toBeUndefined();
     expect(s.agent.spentLovelace).toBe(PRICE);
     expect(s.signer.calls).toHaveLength(1);
@@ -382,14 +415,46 @@ describe("buyer agent over real x402 (stub signer + stub facilitator)", () => {
     expect(s.agent.spentLovelace).toBe(PRICE);
   });
 
+  it("lost settle response: settlement carries the hash of the tx we signed", async () => {
+    const s = await startStack();
+    s.signer.transaction = decodableTx();
+    s.fac.settle = res => void res.socket?.destroy();
+    const run = await s.run();
+
+    const signed = decodeCardanoTransaction(s.signer.transaction).txHash;
+    expect(signed).toMatch(/^[0-9a-f]{64}$/);
+    expect(run.state).toBe("SETTLEMENT_UNKNOWN");
+    expect(run.settlement).toEqual({
+      transactionHash: signed,
+      explorerUrl: `https://preprod.cardanoscan.io/transaction/${signed}`,
+      reason: "HTTP 402, fetch failed",
+    });
+    expect(lastNote(run)).toBe(`tx ${signed}: HTTP 402, fetch failed`);
+  });
+
   it("two concurrent runs for the same invoice sign only once", async () => {
     const s = await startStack();
     const [a, b] = await Promise.all([s.run(), s.run()]);
 
     expect(s.signer.calls).toHaveLength(1);
     expect([a.state, b.state].sort()).toEqual(["DRAFT_READY", "FAILED"]);
-    expect([a, b].find(r => r.state === "FAILED")?.error).toContain("in progress");
+    // Payments queue per wallet, so the second run only gets its turn after the first one paid.
+    expect([a, b].find(r => r.state === "FAILED")?.error).toContain("already paid");
     expect(s.agent.spentLovelace).toBe(PRICE);
+  });
+
+  it("concurrent runs for different invoices pay one after another (no shared UTxO in flight)", async () => {
+    const s = await startStack();
+    const sign = s.signer.buildAndSignPaymentTransaction.bind(s.signer);
+    s.signer.buildAndSignPaymentTransaction = input => {
+      s.events.push("sign");
+      return sign(input);
+    };
+    const [a, b] = await Promise.all([s.run(), s.run({ ...invoice, id: "INV-2026-1043" })]);
+
+    expect([a.state, b.state]).toEqual(["DRAFT_READY", "DRAFT_READY"]);
+    expect(s.events).toEqual(["sign", "verify", "handler", "settle", "sign", "verify", "handler", "settle"]);
+    expect(s.agent.spentLovelace).toBe(2n * PRICE);
   });
 
   it("concurrent runs cannot overrun the session budget", async () => {
