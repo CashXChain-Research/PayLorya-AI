@@ -7,12 +7,24 @@
     {
       "class_name": "AgentPayContainer",
       "image": "./Dockerfile",
+      // Default is "lite" (256 MiB). The app idles at ~165 MiB before a payment, so use 1 GiB.
+      "instance_type": "basic",
       "max_instances": 1
     }
   ],
   "durable_objects": {
     "bindings": [{ "class_name": "AgentPayContainer", "name": "AGENTPAY" }]
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["AgentPayContainer"] }]
-  // Secrets: npx wrangler secret put ANTHROPIC_API_KEY (and BLOCKFROST_PROJECT_ID, BUYER_MNEMONIC, ...)
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["AgentPayContainer"] }],
+  "observability": { "enabled": true },
+  // Non-secret config. Set PUBLIC_BASE_URL to the deployed URL after the first deploy.
+  // Secrets (never here): ANTHROPIC_API_KEY, BLOCKFROST_PROJECT_ID, BUYER_MNEMONIC, SELLER_ADDRESS
+  // via `npx wrangler secret put <NAME>`. See docs/DEPLOY.md.
+  "vars": {
+    "LOCAL_FACILITATOR": "false",
+    "PRICE_LOVELACE": "2000000",
+    "MAX_PRICE_LOVELACE": "3000000",
+    "SESSION_BUDGET_LOVELACE": "20000000",
+    "MAX_PAYMENTS_PER_RUN": "1"
+  }
 }
