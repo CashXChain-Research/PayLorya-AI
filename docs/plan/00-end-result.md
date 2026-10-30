@@ -190,7 +190,7 @@ The exact submission deadline is on Devfolio (tum.devfolio.co). **Fill it in her
 
 | Workstream | Status | Blocker |
 | --- | --- | --- |
-| A Live x402 payment | Done: A1 (wallets), A3 (live recon), A5 (wallet queue), A6 (`run.settlement`). Building the remote tooling (`remote:check`/`remote:run`/`remote:safety`). A2, A4, A7 and A8 run against the live URL | C's deploy (keys only on Cloudflare) |
+| A Live x402 payment | Done: A1 (wallets), A3 (live recon), A5 (wallet queue), A6 (`run.settlement`). Remote tooling ready (`remote:check`/`remote:run`/`remote:safety`, tested offline). A2, A4, A7 and A8 run against the live URL | C's deploy (keys only on Cloudflare) |
 | B Agent experience and UI | not started | |
 | C Cloudflare | #4 merged: env forwarding, CI, `docs/DEPLOY.md`. Not deployed yet. `DEPLOY.md` still verifies with local `preflight`/`smoke:x402`; switch to `remote:check`/`remote:run` | buyer-cloud wallet from A; keys from the dashboards |
 | D Submission | not started | needs live URL, evidence, UI |

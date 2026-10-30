@@ -37,7 +37,7 @@ conflicts, a visible unknown-settlement state, and live proof of the safety scen
 | A4 Full agent run | Waiting for C's live URL |
 | A5 Wallet queue | Done (merged in #3) |
 | A6 `run.settlement` | Done (merged in #3) |
-| A7 Safety scenarios | Tooling being built; the run waits for C |
+| A7 Safety scenarios | Tooling ready (`remote:safety`); the run waits for C |
 | A8 Demo settings | Waiting for A2 timings |
 | A9 Hand-off | buyer-cloud mnemonic and seller address to Valentin |
 
