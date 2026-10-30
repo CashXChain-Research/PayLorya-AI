@@ -1,3 +1,6 @@
+import { SAMPLE_INVOICES } from "../src/fixtures.js";
+import { precheck } from "../src/policy.js";
+import { buildReadinessReport, ReadinessLedger } from "../src/readiness.js";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createServer, type IncomingMessage, type Server } from "node:http";
@@ -93,5 +96,33 @@ describe("extraction-only command", () => {
     });
     expect(JSON.parse(stdout)).toMatchObject({ invoice: { amountMinor: 1248000 }, precheck: { ok: true }, paymentAttempted: false });
     expect(requests).toHaveLength(1);
+  });
+});
+
+
+// Canned model responses validate downstream behavior, not live model accuracy (AT4).
+const scenarios = [
+  { name: "sepa_ok", fields, expected: "ready_for_review" },
+  { name: "us_ok", fields: { ...fields, invoiceId: "A-5531", supplierName: "Lakeside Robotics Inc.", destinationCountry: "US", currency: "USD", amount: "4,250.00", iban: null, bic: null, routingNumber: "021000021", accountNumber: "000123456789" }, expected: "ready_for_review" },
+  { name: "bad_iban", fields: { ...fields, amount: "980,00", iban: "DE89370400440532013001" }, expected: "needs_info" },
+  { name: "injection", fields: { ...fields, amount: "1,250.00" }, expected: "ready_for_review" },
+  { name: "missing_account", fields: { ...fields, iban: null, bic: null }, expected: "precheck" },
+  { name: "over_ceiling", fields: { ...fields, amount: "60,000.00" }, expected: "blocked" },
+  { name: "no_corridor", fields: { ...fields, destinationCountry: "PL", currency: "PLN", amount: "1,250.00", iban: "PL61109010140000071219812874", bic: null }, expected: "blocked" },
+];
+
+describe("seven demo scenarios with canned extraction", () => {
+  it.each(scenarios)("$name has the documented precheck/report outcome", async scenario => {
+    const requests = await fakeAnthropic(JSON.stringify(scenario.fields));
+    const text = SAMPLE_INVOICES[scenario.name]!;
+    expect(text).toBeTruthy();
+    const invoice = await extractInvoice(text, "test-model");
+    expect(requests[0]!.body.messages[0].content).toContain(text);
+    if (scenario.expected === "precheck") {
+      expect(precheck(invoice)).toMatchObject({ ok: false });
+    } else {
+      expect(precheck(invoice)).toEqual({ ok: true });
+      expect(buildReadinessReport(invoice, "scenario", new ReadinessLedger(), { amountCeilingMinor: 5_000_000 }).verdict).toBe(scenario.expected);
+    }
   });
 });
