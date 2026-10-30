@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { findCorridor, simulatedQuote } from "./fixtures.js";
+import { CORRIDORS, findCorridor, simulatedQuote } from "./fixtures.js";
 import type { Invoice, ReadinessCheck, ReadinessReport, Verdict } from "./types.js";
 
 // IBAN lengths per country (ISO 13616 registry) for the countries we accept.
@@ -90,7 +90,9 @@ export function buildReadinessReport(
   checks.push(
     corridor
       ? { id: "corridor", status: "pass", message: `${invoice.destinationCountry}/${invoice.currency} via ${corridor.rail}`, source: "demo-fixture" }
-      : { id: "corridor", status: "fail", message: `No demo corridor for ${invoice.destinationCountry}/${invoice.currency}`, source: "demo-fixture" },
+      : { id: "corridor", status: "fail", message: CORRIDORS.some(c => c.country === invoice.destinationCountry)
+          ? `Invoice currency ${invoice.currency} does not match demo corridor currency for ${invoice.destinationCountry}: ${CORRIDORS.filter(c => c.country === invoice.destinationCountry).map(c => c.currency).join(", ")}`
+          : `No demo corridor for ${invoice.destinationCountry}/${invoice.currency}`, source: "demo-fixture" },
   );
 
   const missing = (corridor?.requiredFields ?? []).filter(f => !invoice[f]);
@@ -103,6 +105,31 @@ export function buildReadinessReport(
   );
 
   checks.push(accountCheck(invoice));
+  const ibanCountry = invoice.iban ? normalizeIban(invoice.iban).slice(0, 2) : undefined;
+  checks.push({
+    id: "iban_country", source: "deterministic",
+    status: !ibanCountry ? "skip" : ibanCountry === invoice.destinationCountry ? "pass" : "fail",
+    message: !ibanCountry ? "No IBAN to compare" : `IBAN country ${ibanCountry}; destination ${invoice.destinationCountry}`,
+  });
+  const bicCountry = invoice.bic?.toUpperCase().slice(4, 6);
+  checks.push({
+    id: "bic_country", source: "deterministic",
+    status: !bicCountry || !ibanCountry ? "skip" : bicCountry === ibanCountry ? "pass" : "warn",
+    message: !bicCountry || !ibanCountry ? "IBAN and BIC needed for country comparison" : `BIC country ${bicCountry}; IBAN country ${ibanCountry}`,
+  });
+  const corridorCurrencies = [...new Set(CORRIDORS.filter(c => c.country === invoice.destinationCountry).map(c => c.currency))];
+  checks.push({
+    id: "currency", source: "deterministic",
+    status: !corridorCurrencies.length ? "skip" : corridorCurrencies.includes(invoice.currency) ? "pass" : "fail",
+    message: !corridorCurrencies.length ? `No demo currency rules for ${invoice.destinationCountry}`
+      : `Invoice currency ${invoice.currency}; demo corridor currencies for ${invoice.destinationCountry}: ${corridorCurrencies.join(", ")}`,
+  });
+  checks.push({
+    id: "reference", source: "deterministic",
+    status: invoice.reference?.trim() ? "pass" : "warn",
+    message: invoice.reference?.trim() ? "Payment reference supplied"
+      : "Missing payment reference: reconciliation risk; confirm the invoice ID as reference during human review",
+  });
 
   const firstKey = ledger.firstKeyFor(fingerprint);
   checks.push(
@@ -137,11 +164,9 @@ function accountCheck(inv: Invoice): ReadinessCheck {
   if (inv.iban) {
     const r = validateIban(inv.iban);
     if (!r.ok) return { id: "account", status: "fail", message: r.reason!, source: "deterministic" };
-    if (normalizeIban(inv.iban).slice(0, 2) !== inv.destinationCountry) {
-      return { id: "account", status: "warn", message: "IBAN country differs from destination country", source: "deterministic" };
-    }
     if (inv.bic) {
-      const b = validateBic(inv.bic, inv.destinationCountry);
+      // Country disagreement is reported separately as a warning, not a malformed account.
+      const b = validateBic(inv.bic, inv.bic.toUpperCase().slice(4, 6));
       if (!b.ok) return { id: "account", status: "fail", message: b.reason!, source: "deterministic" };
     }
     return { id: "account", status: "pass", message: "IBAN valid (mod-97, length)", source: "deterministic" };
@@ -156,7 +181,8 @@ function accountCheck(inv: Invoice): ReadinessCheck {
 
 function verdictFor(checks: ReadinessCheck[]): Verdict {
   const failed = (id: ReadinessCheck["id"]) => checks.some(c => c.id === id && c.status === "fail");
-  if (failed("corridor") || failed("duplicate") || failed("amount")) return "blocked";
-  if (failed("required_fields") || failed("account") || checks.some(c => c.status === "warn")) return "needs_info";
+  if (failed("corridor") || failed("currency") || failed("duplicate") || failed("amount")) return "blocked";
+  // A missing reference is advisory: the required invoice ID can be confirmed by the human.
+  if (failed("required_fields") || failed("account") || failed("iban_country") || checks.some(c => c.status === "warn" && c.id !== "reference")) return "needs_info";
   return "ready_for_review";
 }

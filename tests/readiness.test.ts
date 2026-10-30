@@ -88,3 +88,57 @@ describe("extraction normalization", () => {
     ).toThrow();
   });
 });
+
+
+describe("deterministic report cross-checks", () => {
+  const report = (overrides: Partial<Invoice>) => buildReadinessReport({ ...sepa, reference: "PO-7781", ...overrides }, "cross-check", new ReadinessLedger(), opts);
+
+  it("fails IBAN/destination disagreement and requests correction", () => {
+    const r = report({ destinationCountry: "FR" });
+    expect(r.checks.find(c => c.id === "iban_country")).toMatchObject({ status: "fail", source: "deterministic", message: "IBAN country DE; destination FR" });
+    expect(r.verdict).toBe("needs_info");
+  });
+
+  it("warns on BIC/IBAN country disagreement while retaining valid IBAN status", () => {
+    const r = report({ bic: "BNPAFRPPXXX" });
+    expect(r.checks.find(c => c.id === "bic_country")).toMatchObject({ status: "warn", source: "deterministic" });
+    expect(r.checks.find(c => c.id === "account")?.status).toBe("pass");
+    expect(r.verdict).toBe("needs_info");
+  });
+
+  it("still fails malformed BICs", () => {
+    expect(report({ bic: "not-a-bic" }).checks.find(c => c.id === "account")?.status).toBe("fail");
+  });
+
+  it("explains a known country's currency mismatch and blocks it", () => {
+    const r = report({ currency: "USD" });
+    expect(r.checks.find(c => c.id === "currency")).toMatchObject({ status: "fail", source: "deterministic" });
+    expect(r.checks.find(c => c.id === "corridor")?.message).toContain("USD does not match demo corridor currency for DE: EUR");
+    expect(r.verdict).toBe("blocked");
+  });
+
+  it("keeps an unknown corridor distinct from currency disagreement", () => {
+    const r = report({ destinationCountry: "PL", currency: "PLN" });
+    expect(r.checks.find(c => c.id === "currency")?.status).toBe("skip");
+    expect(r.checks.find(c => c.id === "corridor")?.message).toBe("No demo corridor for PL/PLN");
+    expect(r.verdict).toBe("blocked");
+  });
+
+  it.each([undefined, "   "])("warns about missing references without preventing a human-review draft", reference => {
+    const r = report({ reference });
+    expect(r.checks.find(c => c.id === "reference")).toMatchObject({ status: "warn", source: "deterministic" });
+    expect(r.checks.find(c => c.id === "reference")?.message).toContain("reconciliation risk");
+    expect(r.verdict).toBe("ready_for_review");
+  });
+
+  it("passes matching countries/currency/reference and skips unavailable comparisons", () => {
+    const r = report({});
+    for (const id of ["iban_country", "bic_country", "currency", "reference"]) {
+      expect(r.checks.find(c => c.id === id)).toMatchObject({ status: "pass", source: "deterministic" });
+    }
+    const us = report({ destinationCountry: "US", currency: "USD", iban: undefined, bic: undefined, routingNumber: "021000021", accountNumber: "12345678" });
+    expect(us.checks.find(c => c.id === "iban_country")?.status).toBe("skip");
+    expect(us.checks.find(c => c.id === "bic_country")?.status).toBe("skip");
+    expect(us.verdict).toBe("ready_for_review");
+  });
+});
