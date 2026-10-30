@@ -5,8 +5,12 @@
 **CxC Payment Readiness API**: pay-per-request validation for autonomous payment agents.
 Any agent POSTs a structured invoice to `POST /v1/payment-readiness`, pays per response via
 x402 on Cardano Preprod, and gets a readiness report. Our Claude agent is the demo customer.
-The supplier payout itself is never executed: the run ends in a non-executing draft that
-needs human approval.
+
+**Payout (after human approval):** the agent then picks a payout rail with deterministic rules
+against a verified payee directory and, once a human approves, executes it: a tADA transfer on
+Cardano Preprod for ADA invoices (real testnet tx), or a CashXChain payout for fiat invoices
+(simulated in this build: no bank transfer, no CashXChain API call). The report fee and the
+invoice payout are separate transactions with separate budgets.
 
 ## Roles
 
@@ -15,6 +19,7 @@ needs human approval.
 | Seller (paid API) | `src/seller.ts`, `src/readiness.ts` | `SELLER_ADDRESS` (address only, no key on the server) |
 | Buyer (agent) | `src/agent.ts`, `src/policy.ts`, `src/extract.ts` | `BUYER_MNEMONIC` (test only) |
 | Facilitator | hosted CF preprod facilitator, or `src/facilitator.ts` fallback | none, broadcast only |
+| Payout rails | `src/routing.ts`, `src/payout.ts`, `BuyerAgent.approve()` | buyer wallet pays tADA payouts; fiat rail simulated |
 
 All three run in one Node process for the hackathon. The buyer reaches the seller over HTTP
 (`PUBLIC_BASE_URL`), so they can be split later without code changes.
@@ -22,10 +27,13 @@ All three run in one Node process for the hackathon. The buyer reaches the selle
 ## Flow
 
 ```
-CREATED -> EXTRACTED -> PRECHECKED -> PAYING -> PAID -> DRAFT_READY
-                     \-> NEEDS_INFO        \-> SETTLEMENT_UNKNOWN
-                                            \-> FAILED      PAID -> NEEDS_INFO | BLOCKED
+CREATED -> EXTRACTED -> PRECHECKED -> PAYING -> PAID -> DRAFT_READY -> EXECUTING -> EXECUTED
+                     \-> NEEDS_INFO        \-> SETTLEMENT_UNKNOWN       \-> REJECTED  \-> PAYOUT_UNKNOWN
+                                            \-> FAILED      PAID -> NEEDS_INFO | BLOCKED  \-> FAILED
 ```
+
+`DRAFT_READY -> EXECUTING` happens only via `POST /api/runs/:id/approve`, and only if the draft is
+executable. `PAID -> BLOCKED` also covers a payout route the policy blocks.
 
 1. `POST /api/runs` with invoice text or JSON.
 2. Claude extracts fields (structured output, `effort: low`); JSON input skips the model.
@@ -38,14 +46,27 @@ CREATED -> EXTRACTED -> PRECHECKED -> PAYING -> PAID -> DRAFT_READY
 6. Seller verifies via facilitator, runs the handler, settles; the middleware withholds the
    body if settlement fails.
 7. Run stores tx hash + explorer URL only from a successful settle response.
+8. Ready report: `decideRoute` picks the rail and the destination from the payee directory
+   (below). Blocked route: `BLOCKED`. Otherwise `DRAFT_READY`, executable only if a route was
+   selected.
+9. Human approves: the route is derived again from the directory. ADA: the buyer wallet signs a
+   plain lovelace transfer to the verified wallet (same `@x402/cardano` signer, `default`
+   method), Blockfrost broadcasts it and waits up to 2 min. Fiat: `FiatPayoutClient`
+   (`simulatedCxcPayouts` today).
 
 ## Trust boundary
 
-- The model returns only invoice fields. The extraction schema has no wallet, endpoint, price
-  or limit fields, and the invoice text is wrapped as untrusted data.
+- The model returns only invoice fields. Payee account fields (IBAN, routing, Cardano address)
+  are invoice data; the agent's own wallet, endpoint, price and limits are not in the schema.
+  The invoice text is wrapped as untrusted data.
+- A payout destination is never taken from the invoice. It comes from the verified payee
+  record; an invoice account that differs from the record blocks the payout.
 - Network, asset, recipient allowlist and caps come from env config only.
 - Seller holds no signing key. Facilitator holds no funds.
-- No CashXChain payout endpoint is called. `payoutExecuted: false`, `executable: false`.
+- No CashXChain payout endpoint is called; the fiat rail is simulated and labeled. The seller's
+  report keeps `payoutExecuted: false`: the report itself never pays anyone.
+- Invoice payouts need a human approval per invoice. The approval endpoint is public on the
+  demo deployment; payouts are capped by `PAYOUT_MAX_LOVELACE` and `PAYOUT_BUDGET_LOVELACE`.
 - Route, fees and FX are `demo-fixture` and labeled "Simulated route/fees".
 - The report is a data-quality and routing check, not an AML, sanctions or KYB decision.
 
@@ -75,13 +96,38 @@ CREATED -> EXTRACTED -> PRECHECKED -> PAYING -> PAID -> DRAFT_READY
 - The facilitator broadcasts a given Cardano tx at most once (`@x402/cardano` duplicate
   settlement guard).
 
+## Route and payout
+
+| Rule | Logic |
+| --- | --- |
+| Payee | Supplier name matched against the verified payee directory (legal forms dropped). Unknown payee: draft not executable |
+| Rail | Currency `ADA` -> `cardano_preprod`; any fiat currency -> `cxc_fiat` |
+| Account | ADA: invoice wallet must equal the record's wallet. Fiat: IBAN, or routing + account, must equal the record. Mismatch: `BLOCKED` (possible invoice redirection) |
+| Wallet on a fiat invoice | Ignored and flagged (`warn`) unless it is the payee's recorded wallet |
+| Limit | ADA payout from 1 tADA (min-UTxO) to `PAYOUT_MAX_LOVELACE` (default 10 tADA) |
+| Budget | `PAYOUT_BUDGET_LOVELACE` (default 30 tADA), separate from the report-fee budget |
+
+The demo directory is synthetic (`payeeDirectory()` in `src/routing.ts`). The crypto payee's wallet
+is `SUPPLIER_CARDANO_ADDRESS`; without it, the Cardano route is unavailable and the crypto samples
+are not offered.
+
+Payout safety mirrors the report payment:
+
+- `approve()` switches to `EXECUTING` synchronously; a second click gets 409.
+- The payout ledger reserves the invoice before signing and releases it only if signing threw.
+- Any error after signing: `PAYOUT_UNKNOWN`, amount counted, invoice locked, `run.payout`
+  carries the signed tx hash for the explorer. Same for an error from a fiat client, which may have
+  accepted the payout before failing.
+- A Blockfrost wait timeout after broadcast is `EXECUTED` with `payout.status: "submitted"`.
+- Payouts go through the same wallet queue as report payments (one tx in flight per wallet).
+
 ## Readiness checks
 
 | Check | Source | Logic |
 | --- | --- | --- |
-| account | deterministic | IBAN mod-97 + country length; BIC format + country; ABA routing checksum |
+| account | deterministic | IBAN mod-97 + country length; BIC format + country; ABA routing checksum; Cardano address bech32 checksum, `addr_test1` prefix, key credential |
 | corridor | demo-fixture | destination country + currency in the demo corridor table |
-| required_fields | demo-fixture | per corridor (SEPA: IBAN; US: routing + account; AE: IBAN + BIC) |
+| required_fields | demo-fixture | per corridor (SEPA: IBAN; US: routing + account; AE: IBAN + BIC; ADA: Cardano address) |
 | duplicate | deterministic | fingerprint ledger keyed by Idempotency-Key |
 | amount | deterministic | demo ceiling |
 | quote | demo-fixture | simulated fee / FX / ETA |
@@ -108,6 +154,14 @@ otherwise `ready_for_review`.
   preflight hint now treats the prefix as a suggestion only. `/health` needs no key.
 
 ## Not verified yet
+
+- No live payout has run. `blockfrostSubmitter` uses `@x402/cardano`'s provider-only
+  `submitTransaction` (Blockfrost `/tx/submit`, then evolution `awaitTx` with a 120 s timeout),
+  read from the installed source and covered offline with a stub only.
+- Whether Claude copies a 100+ character bech32 address exactly. A single wrong character fails
+  the checksum and the run ends `NEEDS_INFO`, so this fails safe.
+- The CashXChain sandbox payout API (`api.sandbox.cashxchain.com` per internal docs) is not wired:
+  its OpenAPI contract and an API key are needed. Implement `FiatPayoutClient` against it.
 
 - No hosted-facilitator verify/settle has run yet.
 - No live preprod payment has run yet: that is milestone 1 (`npm run smoke:x402`).

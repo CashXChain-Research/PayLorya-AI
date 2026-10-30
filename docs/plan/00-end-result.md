@@ -194,6 +194,7 @@ The exact submission deadline is on Devfolio (tum.devfolio.co). **Fill it in her
 | B Agent experience and UI | not started | |
 | C Cloudflare | #4 merged: env forwarding, CI, `docs/DEPLOY.md`. Not deployed yet. `DEPLOY.md` still verifies with local `preflight`/`smoke:x402`; switch to `remote:check`/`remote:run` | buyer-cloud wallet from A; keys from the dashboards |
 | D Submission | not started | needs live URL, evidence, UI |
+| Payout extension | Implemented offline: 122 tests green, UI checked with a local stub harness. Not run live | Valentin's OK; `SUPPLIER_CARDANO_ADDRESS` on Cloudflare; one live payout |
 
 ## 10. Rules for everyone (humans and agents)
 
@@ -242,7 +243,35 @@ The exact submission deadline is on Devfolio (tum.devfolio.co). **Fill it in her
   deployment (2026-10-30).
 - Tracks: Cardano is primary. API3 and BSV: no. Adevar Labs: only if it needs no extra build.
 
+- **Pending Valentin's OK (proposed by Korbi, 2026-10-31):** approval-gated invoice payouts. After
+  the report, deterministic routing against a verified payee directory picks a rail; one human
+  approval executes it. ADA invoices: real tADA transfer on Cardano Preprod. Fiat invoices:
+  CashXChain payout, simulated until the sandbox API is wired. Implemented on
+  `claude/happy-brahmagupta-267ekd`; see section 14.
+
 ## 13. Non-goals
 
-Mainnet, real payouts, real CashXChain API calls, AML/KYB/sanctions decisions, Masumi, persistence
-beyond memory, multi-instance scaling, user accounts.
+Mainnet, real fiat payouts, real CashXChain API calls (until the sandbox contract is wired),
+AML/KYB/sanctions decisions, Masumi, persistence beyond memory, multi-instance scaling, user accounts.
+
+## 14. Payout extension: what changed and who needs to act
+
+What it adds: routing (`src/routing.ts`), payout rails (`src/payout.ts`), `BuyerAgent.approve()` /
+`reject()`, `POST /api/runs/:id/approve|reject`, states `EXECUTING`, `EXECUTED`, `PAYOUT_UNKNOWN`,
+`REJECTED`, UI steps 6 to 8, samples `crypto_ok` and `wallet_swap`. Details:
+[ARCHITECTURE.md](../ARCHITECTURE.md#route-and-payout).
+
+Demo additions (about 60 s):
+
+1. **Crypto invoice (tADA):** pay the report fee via x402, route to Cardano, approve, a second tx
+   pays 3.5 tADA to the verified supplier wallet. Two explorer links, two purposes.
+2. **Wallet swapped:** same supplier, new wallet on the invoice. The report says the address is
+   valid; the route policy blocks it (invoice redirection). Nothing is paid out.
+3. **EUR invoice:** approve, simulated CashXChain payout to the verified IBAN, clearly labeled.
+
+| Owner | Action |
+| --- | --- |
+| A (Korbi) | `npm run wallet:new -- supplier`, give the address to C. Fund buyer-cloud for fees plus payouts (30 tADA payout budget + 20 tADA report budget + network fees). One live payout, then fill in "Verified live" in ARCHITECTURE.md |
+| C (Valentin) | Set `SUPPLIER_CARDANO_ADDRESS` on Cloudflare (an address, not a secret: `vars` in `wrangler.jsonc` or `wrangler secret put`). Optional: `PAYOUT_MAX_LOVELACE`, `PAYOUT_BUDGET_LOVELACE`. Already forwarded by `cloudflare/env.ts` |
+| D (Valentin) | README, PITCH, SUBMISSION and DEMO-SCRIPT still say "no supplier payout is executed" and "`executable: false`". Update the real-vs-simulated table: Cardano payout real (testnet, after approval), CashXChain fiat payout simulated |
+| Both | Fiat via the real CashXChain sandbox needs its OpenAPI contract and an API key; implement `FiatPayoutClient`. Not before the deadline unless the rest is green |

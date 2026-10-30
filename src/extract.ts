@@ -4,18 +4,23 @@ import { z } from "zod";
 import { normalizeIban } from "./readiness.js";
 import { CURRENCY_EXPONENT, InvoiceSchema, type Invoice } from "./types.js";
 
-// What the model may return. Deliberately no wallet, endpoint, price or limit fields.
+// What the model may return. Payee account fields are invoice data, paid only if they equal the
+// verified payee record. Deliberately no agent wallet, endpoint, price or limit fields.
 const ExtractionSchema = z.object({
   invoiceId: z.string().nullable(),
   supplierName: z.string().nullable(),
-  destinationCountry: z.string().nullable().describe("ISO-3166-1 alpha-2 of the supplier's bank account"),
-  currency: z.string().nullable().describe("ISO-4217 code"),
+  destinationCountry: z
+    .string()
+    .nullable()
+    .describe("ISO-3166-1 alpha-2 of the supplier's bank account, or of the supplier's address if there is no bank account"),
+  currency: z.string().nullable().describe("ISO-4217 code, or ADA for Cardano ADA/tADA"),
   amount: z.string().nullable().describe("Total amount due as printed, e.g. '12,480.00'"),
   reference: z.string().nullable(),
   iban: z.string().nullable(),
   bic: z.string().nullable(),
   routingNumber: z.string().nullable(),
   accountNumber: z.string().nullable(),
+  cardanoAddress: z.string().nullable().describe("Cardano wallet address given for payment (addr1... or addr_test1...)"),
 });
 type Extraction = z.infer<typeof ExtractionSchema>;
 
@@ -42,7 +47,8 @@ export async function extractInvoice(text: string, model: string): Promise<Invoi
 
 /** Deterministic normalization and bounds checking of model output. */
 export function toInvoice(x: Extraction): Invoice {
-  const currency = x.currency?.trim().toUpperCase() ?? "";
+  const raw = x.currency?.trim().toUpperCase() ?? "";
+  const currency = raw === "TADA" || raw === "₳" ? "ADA" : raw;
   const candidate = {
     id: x.invoiceId?.trim(),
     supplier: x.supplierName?.trim(),
@@ -54,6 +60,7 @@ export function toInvoice(x: Extraction): Invoice {
     bic: x.bic?.replace(/\s+/g, "").toUpperCase() || undefined,
     routingNumber: x.routingNumber?.replace(/\D/g, "") || undefined,
     accountNumber: x.accountNumber?.replace(/\s+/g, "") || undefined,
+    cardanoAddress: x.cardanoAddress?.replace(/\s+/g, "") || undefined,
   };
   const parsed = InvoiceSchema.safeParse(candidate);
   if (!parsed.success) {
@@ -66,15 +73,17 @@ function countryFromIban(iban: string | null): string | undefined {
   return iban ? normalizeIban(iban).slice(0, 2) : undefined;
 }
 
-/** Parses "12,480.00" / "12.480,00" / "980,00" into integer minor units. */
+/** Parses "12,480.00" / "12.480,00" / "980,00" / "3.50" (ADA) into integer minor units. */
 export function parseAmountMinor(raw: string, currency: string): number | undefined {
   const exp = CURRENCY_EXPONENT[currency];
   if (exp === undefined) return undefined;
   const s = raw.replace(/[^\d.,]/g, "");
   const lastSep = Math.max(s.lastIndexOf("."), s.lastIndexOf(","));
-  const hasDecimals = lastSep !== -1 && s.length - lastSep - 1 === exp && exp > 0;
+  const decimals = s.length - lastSep - 1;
+  // A separator is decimal if it occurs once and is followed by 1..exp digits ("12,480" stays thousands for EUR).
+  const hasDecimals = lastSep !== -1 && exp > 0 && decimals >= 1 && decimals <= exp && s.indexOf(s[lastSep]!) === lastSep;
   const intPart = (hasDecimals ? s.slice(0, lastSep) : s).replace(/[.,]/g, "");
-  const fracPart = hasDecimals ? s.slice(lastSep + 1) : "".padEnd(exp, "0");
+  const fracPart = (hasDecimals ? s.slice(lastSep + 1) : "").padEnd(exp, "0");
   if (!/^\d+$/.test(intPart) || !/^\d*$/.test(fracPart)) return undefined;
   const value = Number(intPart + fracPart);
   return Number.isSafeInteger(value) ? value : undefined;

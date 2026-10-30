@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { Invoice, PaymentDraft, PaymentProof, ReadinessReport } from "./types.js";
+import type { Invoice, PaymentDraft, PaymentProof, PayoutResult, ReadinessReport, RouteDecision } from "./types.js";
 
 export type RunState =
   | "CREATED"
@@ -11,7 +11,12 @@ export type RunState =
   | "NEEDS_INFO"
   | "BLOCKED"
   | "SETTLEMENT_UNKNOWN"
-  | "FAILED";
+  | "FAILED"
+  // After DRAFT_READY, only on human approval or rejection:
+  | "EXECUTING"
+  | "EXECUTED"
+  | "PAYOUT_UNKNOWN"
+  | "REJECTED";
 
 export interface Run {
   id: string;
@@ -22,7 +27,10 @@ export interface Run {
   fingerprint?: string;
   report?: ReadinessReport;
   payment?: PaymentProof;
+  route?: RouteDecision;
   draft?: PaymentDraft;
+  /** The invoice payout after approval (status unknown: signed, outcome unclear, invoice locked). */
+  payout?: PayoutResult;
   /** Set on SETTLEMENT_UNKNOWN: what to look up on the explorer before anyone pays again. */
   settlement?: { transactionHash?: string; explorerUrl?: string; reason: string };
   error?: string;

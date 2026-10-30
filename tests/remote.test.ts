@@ -81,7 +81,7 @@ function paidRun(o: Partial<Run> = {}): Run {
       disclaimer: "d",
       generatedAt: at(80),
     },
-    draft: { status: "awaiting_human_approval", executable: false, invoiceId: "LIVE-1", supplier: "Brenner Maschinenbau GmbH", amountMinor: 1_248_000, currency: "EUR", note: "n" },
+    draft: { status: "awaiting_human_approval", executable: false, invoiceId: "LIVE-1", supplier: "Brenner Maschinenbau GmbH", amountMinor: 1_248_000, currency: "EUR", route: { status: "unavailable", checks: [], reason: "r" }, note: "n" },
     timeline: [
       { state: "CREATED", at: at(0) },
       { state: "EXTRACTED", at: at(0) },

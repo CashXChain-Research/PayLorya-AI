@@ -9,6 +9,8 @@ import { ExactCardanoScheme } from "@x402/cardano/exact/client";
 import type { PaymentPayload, PaymentRequirements } from "@x402/core/types";
 import { decodePaymentResponseHeader, wrapFetchWithPayment, x402Client } from "@x402/fetch";
 import { BuyerAgent } from "../src/agent.js";
+import type { ChainSubmitter } from "../src/payout.js";
+import { CRYPTO_PAYEE } from "../src/routing.js";
 import { CARDANO_NETWORK, loadConfig } from "../src/config.js";
 import { RunStore, type Run } from "../src/runs.js";
 import { mountSeller, READINESS_PATH } from "../src/seller.js";
@@ -21,7 +23,11 @@ const SELLER = "addr_test1vqsellerstub000000000000000000000000000000000000";
 const ATTACKER = "addr_test1vqattackerstub0000000000000000000000000000000000";
 const BUYER = "addr_test1vqbuyerstub0000000000000000000000000000000000000";
 const TX = "7a".repeat(32);
+const PAYOUT_TX = "5c".repeat(32);
 const PRICE = 2_000_000n;
+// Real bech32 Preprod addresses (the seller's readiness check validates the payee wallet).
+const SUPPLIER_WALLET = "addr_test1qrh6ayyhzdj2q464ayvyft9awz46ne46hyzwmjsq6s2frflw7j6laqexupvgqym3smjccxmwu6fc3tyu07kffmh4fkyscvyuvz";
+const SWAPPED_WALLET = "addr_test1qrpz79mnach4j9e8g4cwg9gdtqtmcvdps8ess7tn0p6zjnw7x56p9fpsf5erudw33l64y8ul40f03rgfvv5658dgvrqstj4mdu";
 
 const invoice: Invoice = {
   id: "INV-2026-1042",
@@ -31,6 +37,15 @@ const invoice: Invoice = {
   amountMinor: 1_248_000,
   iban: "DE89370400440532013000",
   bic: "COBADEFFXXX",
+};
+
+const adaInvoice: Invoice = {
+  id: "NNS-2026-118",
+  supplier: CRYPTO_PAYEE,
+  destinationCountry: "EE",
+  currency: "ADA",
+  amountMinor: 3_500_000,
+  cardanoAddress: SUPPLIER_WALLET,
 };
 
 type Env = Record<string, string>;
@@ -82,6 +97,25 @@ function stubSigner(): StubSigner {
     },
   };
   return signer;
+}
+
+interface StubSubmitter extends ChainSubmitter {
+  calls: string[];
+  fail?: Error;
+  status: "confirmed" | "mempool";
+}
+
+function stubSubmitter(): StubSubmitter {
+  const submitter: StubSubmitter = {
+    calls: [],
+    status: "confirmed",
+    async submit(tx) {
+      submitter.calls.push(tx);
+      if (submitter.fail) throw submitter.fail;
+      return { txHash: PAYOUT_TX, status: submitter.status };
+    },
+  };
+  return submitter;
 }
 
 // Smallest tx the SDK decoder accepts: [body {0: inputs, 1: outputs, 2: fee}, witnesses {}, valid, no aux].
@@ -196,16 +230,23 @@ async function startStack(opts: { seller?: Env; buyer?: Env } = {}) {
   const { url: sellerUrl } = await listen(app);
   mountSeller(app, loadConfig(env(fac.url, opts.seller)));
 
-  const config = loadConfig(env(fac.url, { PUBLIC_BASE_URL: sellerUrl, ...opts.buyer }));
+  const config = loadConfig(env(fac.url, { PUBLIC_BASE_URL: sellerUrl, SUPPLIER_CARDANO_ADDRESS: SUPPLIER_WALLET, ...opts.buyer }));
   const runs = new RunStore();
   const signer = stubSigner();
-  const agent = new BuyerAgent(config, runs, signer);
+  const submitter = stubSubmitter();
+  const agent = new BuyerAgent(config, runs, signer, { submitter });
   const run = async (inv: Invoice = invoice): Promise<Run> => {
     const r = runs.create(JSON.stringify(inv));
     await agent.process(r);
     return r;
   };
-  return { events, handled, fac, sellerUrl, config, runs, signer, agent, run };
+  return { events, handled, fac, sellerUrl, config, runs, signer, submitter, agent, run };
+}
+
+async function approve(agent: BuyerAgent, run: Run): Promise<void> {
+  const started = agent.approve(run);
+  if (!started.ok) throw new Error(started.reason);
+  await started.done;
 }
 
 const states = (run: Run) => run.timeline.map(t => t.state);
@@ -233,7 +274,8 @@ describe("buyer agent over real x402 (stub signer + stub facilitator)", () => {
     expect(run.report?.payoutExecuted).toBe(false);
     // The paid retry kept our Idempotency-Key (requestId is derived from it).
     expect(run.report?.requestId).toBe(createHash("sha256").update(run.id).digest("hex").slice(0, 16));
-    expect(run.draft).toMatchObject({ status: "awaiting_human_approval", executable: false, invoiceId: invoice.id });
+    expect(run.draft).toMatchObject({ status: "awaiting_human_approval", executable: true, invoiceId: invoice.id });
+    expect(run.draft?.route).toMatchObject({ status: "selected", rail: "cxc_fiat", destination: invoice.iban });
     expect(s.agent.spentLovelace).toBe(PRICE);
 
     expect(s.signer.calls).toHaveLength(1);
@@ -493,6 +535,145 @@ describe("buyer agent over real x402 (stub signer + stub facilitator)", () => {
     expect(duplicateCheck(run.report)).toBe("fail");
     expect(run.draft).toBeUndefined();
     expect(other.spentLovelace).toBe(PRICE);
+  });
+});
+
+describe("invoice payout after human approval", () => {
+  it("fiat: approval executes the simulated CashXChain payout to the verified account, no extra signing", async () => {
+    const s = await startStack();
+    const run = await s.run();
+    expect(run.state).toBe("DRAFT_READY");
+
+    await approve(s.agent, run);
+    expect(states(run).slice(-3)).toEqual(["DRAFT_READY", "EXECUTING", "EXECUTED"]);
+    expect(run.payout).toMatchObject({
+      rail: "cxc_fiat",
+      status: "simulated",
+      simulated: true,
+      destination: invoice.iban,
+      amountMinor: invoice.amountMinor,
+      currency: "EUR",
+      reference: expect.stringMatching(/^cxc_sim_[0-9a-f]{16}$/),
+    });
+    expect(s.signer.calls).toHaveLength(1); // the report fee only
+    expect(s.submitter.calls).toHaveLength(0);
+    expect(s.agent.paidOutLovelace).toBe(0n);
+  });
+
+  it("crypto: approval pays tADA to the verified wallet with the exact signed tx", async () => {
+    const s = await startStack();
+    const run = await s.run(adaInvoice);
+    expect(run.state).toBe("DRAFT_READY");
+    expect(run.report?.checks.find(c => c.id === "account")?.status).toBe("pass");
+    expect(run.draft).toMatchObject({ executable: true, route: { status: "selected", rail: "cardano_preprod", destination: SUPPLIER_WALLET } });
+
+    await approve(s.agent, run);
+    expect(run.state).toBe("EXECUTED");
+    expect(s.signer.calls).toHaveLength(2);
+    expect(s.signer.calls[1]).toEqual({
+      network: CARDANO_NETWORK,
+      payTo: SUPPLIER_WALLET,
+      asset: "lovelace",
+      amount: "3500000",
+      maxTimeoutSeconds: 600,
+      extra: { assetTransferMethod: "default" },
+    });
+    expect(s.submitter.calls).toEqual([Buffer.from("stub-signed-tx-2").toString("base64")]);
+    expect(run.payout).toMatchObject({
+      rail: "cardano_preprod",
+      status: "confirmed",
+      simulated: false,
+      reference: PAYOUT_TX,
+      explorerUrl: `https://preprod.cardanoscan.io/transaction/${PAYOUT_TX}`,
+    });
+    expect(lastNote(run)).toBe(PAYOUT_TX);
+    expect(s.agent.paidOutLovelace).toBe(3_500_000n);
+    expect(s.agent.spentLovelace).toBe(PRICE); // report fees and payouts have separate budgets
+  });
+
+  it("crypto: a broadcast that times out before confirmation is reported as submitted", async () => {
+    const s = await startStack();
+    s.submitter.status = "mempool";
+    const run = await s.run(adaInvoice);
+    await approve(s.agent, run);
+    expect(run.state).toBe("EXECUTED");
+    expect(run.payout).toMatchObject({ status: "submitted", reference: PAYOUT_TX });
+  });
+
+  it("crypto: a wallet on the invoice that differs from the payee record is BLOCKED before any payout", async () => {
+    const s = await startStack();
+    const run = await s.run({ ...adaInvoice, cardanoAddress: SWAPPED_WALLET });
+
+    expect(run.state).toBe("BLOCKED");
+    expect(run.report?.verdict).toBe("ready_for_review"); // the address itself is valid
+    expect(run.route).toMatchObject({ status: "blocked", rail: "cardano_preprod" });
+    expect(run.route?.destination).toBeUndefined();
+    expect(JSON.stringify(run.route)).not.toContain(SWAPPED_WALLET);
+    expect(run.draft).toBeUndefined();
+    expect(s.agent.approve(run)).toMatchObject({ ok: false });
+    expect(s.signer.calls).toHaveLength(1);
+  });
+
+  it("crypto: submit error after signing -> PAYOUT_UNKNOWN, amount counted, invoice locked", async () => {
+    const s = await startStack();
+    const run = await s.run(adaInvoice);
+    s.signer.transaction = decodableTx();
+    s.submitter.fail = new Error("Blockfrost submitTx failed: socket hang up");
+    await approve(s.agent, run);
+
+    const signed = decodeCardanoTransaction(s.signer.transaction).txHash;
+    expect(run.state).toBe("PAYOUT_UNKNOWN");
+    expect(run.payout).toMatchObject({ status: "unknown", reference: signed, explorerUrl: `https://preprod.cardanoscan.io/transaction/${signed}` });
+    expect(lastNote(run)).toBe(`tx ${signed}: Blockfrost submitTx failed: socket hang up`);
+    expect(s.agent.paidOutLovelace).toBe(3_500_000n);
+  });
+
+  it("signer error before anything was sent -> FAILED, nothing counted", async () => {
+    const s = await startStack();
+    const run = await s.run(adaInvoice);
+    s.signer.fail = new Error("Funding wallet has no UTXOs available for the payment");
+    await approve(s.agent, run);
+    expect(run.state).toBe("FAILED");
+    expect(run.payout).toBeUndefined();
+    expect(s.submitter.calls).toHaveLength(0);
+    expect(s.agent.paidOutLovelace).toBe(0n);
+  });
+
+  it("approval is one-shot: a double click starts one payout; reject only from DRAFT_READY", async () => {
+    const s = await startStack();
+    const run = await s.run(adaInvoice);
+    const first = s.agent.approve(run);
+    const second = s.agent.approve(run);
+    expect(first.ok).toBe(true);
+    expect(second).toEqual({ ok: false, reason: "run is EXECUTING, not awaiting approval" });
+    if (first.ok) await first.done;
+    expect(s.submitter.calls).toHaveLength(1);
+    expect(s.agent.reject(run)).toEqual({ ok: false, reason: "run is EXECUTED, not awaiting approval" });
+
+    const other = await s.run({ ...adaInvoice, id: "NNS-2026-120" });
+    expect(s.agent.reject(other)).toEqual({ ok: true });
+    expect(other.state).toBe("REJECTED");
+    expect(s.agent.approve(other)).toMatchObject({ ok: false });
+  });
+
+  it("unknown payee: draft is not executable and approval is refused", async () => {
+    const s = await startStack();
+    const run = await s.run({ ...invoice, supplier: "Unverified Trading GmbH" });
+    expect(run.state).toBe("DRAFT_READY");
+    expect(run.draft).toMatchObject({ executable: false, route: { status: "unavailable" } });
+    expect(s.agent.approve(run)).toEqual({ ok: false, reason: "Payee not verified: onboard the payee before any payout" });
+  });
+
+  it("payout budget: a payout that would exceed it is refused before signing", async () => {
+    const s = await startStack({ buyer: { PAYOUT_BUDGET_LOVELACE: "5000000" } });
+    const a = await s.run(adaInvoice);
+    const b = await s.run({ ...adaInvoice, id: "NNS-2026-120" });
+    await approve(s.agent, a);
+    await approve(s.agent, b);
+    expect(a.state).toBe("EXECUTED");
+    expect(b.state).toBe("FAILED");
+    expect(b.error).toBe("payout refused before signing: session budget exhausted");
+    expect(s.signer.calls).toHaveLength(3); // two report fees, one payout
   });
 });
 
