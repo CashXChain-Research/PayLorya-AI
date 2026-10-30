@@ -3,70 +3,100 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>CxC AgentPay · Payment readiness</title>
+<meta name="theme-color" content="#080848">
+<meta name="description" content="An agent workspace for invoice intelligence, paid payment-readiness checks and human-reviewed payment drafts. Cardano Preprod demo.">
+<title>AgentPay — CashXChain</title>
 <style>
-:root{--navy:#000066;--teal:#005577;--ink:#151515;--grey:#60646c;--line:#dddfe4;--bg:#f5f6f8;--bad:#a01b28;--warn:#805800}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}header{background:var(--navy);color:white;padding:28px max(20px,calc((100vw - 1120px)/2))}h1{font-size:clamp(26px,4vw,38px);line-height:1.2;margin:8px 0}header p{margin:6px 0 18px;color:#e0e3ee}.eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase}.network{display:inline-block;background:#fff;color:var(--navy);border-radius:24px;padding:4px 12px;font-size:13px;font-weight:700}.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:18px}.metric{border-top:1px solid #ffffff55;padding-top:10px}.metric span{display:block;font-size:13px;color:#e0e3ee}.metric strong{font-size:24px}.wallets{display:flex;flex-wrap:wrap;gap:12px;margin-top:18px;font:13px ui-monospace,monospace}.wallets button{background:transparent;color:white;border-color:#ffffff70;padding:3px 8px}main{max-width:1160px;margin:auto;padding:24px 20px 40px;display:grid;gap:18px}section{background:white;border:1px solid var(--line);border-radius:12px;padding:24px}h2{margin:0 0 14px;color:var(--navy);font-size:20px}h3{font-size:16px;color:var(--teal)}.number{color:var(--teal);margin-right:8px}.row{display:flex;flex-wrap:wrap;align-items:center;gap:8px}button{font:inherit;font-size:14px;padding:9px 14px;border:1px solid var(--navy);border-radius:6px;background:white;color:var(--navy);cursor:pointer}button.primary{background:var(--navy);color:white;font-weight:650}button:hover:not(:disabled){box-shadow:0 0 0 2px #00557730}button:disabled{opacity:.5;cursor:not-allowed}button[aria-pressed="true"]{background:var(--teal);border-color:var(--teal);color:white}:focus-visible{outline:3px solid #0082aa;outline-offset:3px}textarea{margin:14px 0;width:100%;min-height:190px;resize:vertical;padding:14px;border:1px solid #a8adb7;border-radius:6px;font:14px/1.6 ui-monospace,monospace}.muted{color:var(--grey);font-size:14px}.hidden{display:none!important}.timeline{display:flex;gap:7px;flex-wrap:wrap;padding:0;list-style:none}.step{padding:4px 9px;background:#edf3f5;border-radius:4px;color:var(--teal);font:13px/1.6 ui-monospace,monospace}.step.bad{background:#fcebed;color:var(--bad)}.kv{display:grid;grid-template-columns:minmax(120px,180px) 1fr;gap:8px 16px;overflow-wrap:anywhere}.kv dt{color:var(--grey)}.kv dd{margin:0;white-space:pre-wrap}.notice{background:#edf5f7;border-left:4px solid var(--teal);padding:14px 18px;border-radius:4px}.danger{border-color:var(--bad);background:#fff0f1;color:#7b1420}.status-list{list-style:none;padding:0}.status-list li{padding:8px 0;border-bottom:1px solid var(--line)}.pass{color:var(--teal);font-weight:650}.fail{color:var(--bad);font-weight:650}.warn{color:var(--warn);font-weight:650}.skip{color:var(--grey)}.tag{display:inline-block;font-size:12px;border:1px solid var(--line);padding:2px 7px;border-radius:4px;white-space:nowrap}.table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:14px;text-align:left}th,td{padding:12px 8px;vertical-align:top;border-bottom:1px solid var(--line)}th{font-size:12px;text-transform:uppercase;color:var(--grey)}.verdict{font-size:24px;font-weight:750;margin:8px 0 18px;color:var(--navy)}a{color:var(--teal);overflow-wrap:anywhere}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f4f5f7;padding:16px;border-radius:6px;font-size:13px}footer{color:var(--grey);font-size:13px}#error:empty{display:none}@media(max-width:650px){section{padding:18px}.metrics{grid-template-columns:repeat(2,1fr)}.kv{grid-template-columns:1fr;gap:2px}.kv dd{margin-bottom:10px}.wallets{display:grid}th,td{padding:9px 5px}.tag{white-space:normal}}@media(prefers-reduced-motion:no-preference){.waiting::before{content:"";display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--teal);margin-right:10px;animation:pulse 1.8s infinite}@keyframes pulse{50%{opacity:.2}}}
+:root { --navy:#000066; --teal:#005577; --ink:#19232d; --grey:#6d7780; --line:#e4e8eb; --bg:#f6f8fa; --bad:#a01b28; --warn:#805800; }
+* { box-sizing:border-box; } html { scroll-behavior:smooth; scroll-padding-top:28px; }
+body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.6 "Inter", "Segoe UI", system-ui,sans-serif; }
+button,textarea,input { font:inherit; } button,a { -webkit-tap-highlight-color:transparent; } button { cursor:pointer; }
+a { color:var(--teal); text-decoration:none; } a:hover { text-decoration:underline; } :focus-visible { outline:3px solid #128aaf; outline-offset:4px; }
+.sidebar { position:fixed; inset:0 auto 0 0; width:228px; padding:32px 22px; background:#080848; color:white; display:flex; flex-direction:column; z-index:5; }
+.brand { display:flex; align-items:center; gap:11px; color:white; font-size:19px; font-weight:700; letter-spacing:-.7px; }.brand:hover{text-decoration:none}.brand-mark { display:grid; place-items:center; width:32px; height:32px; border:1px solid #ffffff55; border-radius:9px; font-size:20px; color:#85d5db; }
+.brand small { display:block; margin-top:-5px; color:#9b9bc5; font-size:10px; font-weight:400; letter-spacing:1.8px; text-transform:uppercase; }
+.nav-label { margin:48px 12px 12px; color:#9292bb; font-size:10px; font-weight:600; letter-spacing:1.8px; text-transform:uppercase; }
+.sidebar nav { display:grid; gap:8px; }.nav-item { display:flex; align-items:center; gap:12px; padding:11px 13px; border-radius:7px; color:#bcbcd5; font-size:13px; }.nav-item.active { color:white; background:#ffffff12; border:1px solid #ffffff14; }.nav-item:hover { color:white; background:#ffffff10; text-decoration:none; }.nav-icon{font-size:17px; width:20px; text-align:center; }.sidebar-bottom { margin-top:auto; border-top:1px solid #ffffff18; padding:22px 9px 0; }.env-label { display:flex; align-items:center; gap:8px; font-size:12px; }.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#4db6ad;box-shadow:0 0 0 4px #4db6ad15}.sidebar-bottom p{color:#9898bc;font-size:11px;margin:8px 0 0;}
+.shell { margin-left:228px; }.topbar { display:flex; justify-content:space-between; align-items:center; padding:19px 42px; border-bottom:1px solid var(--line); background:white; color:var(--grey); font-size:12px; }.topbar strong { color:var(--ink); font-weight:500; }.slash{margin:0 12px;color:#c3c9ce}.testnet { display:inline-flex; gap:9px; align-items:center; padding:5px 11px; border:1px solid var(--line); border-radius:20px; font-size:11px; color:var(--teal); }
+main { max-width:1510px; margin:auto; padding:32px 42px 28px; }.hero { display:grid; grid-template-columns:1.2fr 1fr; align-items:center; gap:30px; padding:12px 0 32px; }.eyebrow { display:flex; align-items:center; gap:8px; font-size:10px; letter-spacing:1.7px; font-weight:650; color:var(--teal); text-transform:uppercase; }.eyebrow:before{content:"";width:18px;height:1px;background:var(--teal)}h1 { margin:14px 0 14px; font-size:clamp(40px,4.3vw,64px); line-height:1.07; font-weight:550; letter-spacing:-3px; }h1 em{font-family:Georgia,serif;font-weight:400;color:var(--teal);letter-spacing:-2px}.hero p { max-width:440px; color:var(--grey); font-size:14px; line-height:1.8; margin:0; }.hero-tags{display:flex;gap:17px;margin-top:18px;font-size:10px;color:#667983}.hero-tags span:before{content:"✓";margin-right:6px;color:var(--teal)}
+.flow-art { position:relative; min-height:218px; display:grid; place-items:center; background-image:radial-gradient(#c8d4dd 1px,transparent 1px);background-size:15px 15px;mask-image:linear-gradient(90deg,transparent,#000 20%,#000 85%,transparent); }.flow { display:flex; align-items:center; gap:12px; }.mini-doc { transform:rotate(-7deg); width:124px; padding:17px 14px; background:white; border:1px solid #dce3e8; border-radius:9px; box-shadow:0 14px 35px #182d4510; }.doc-label { display:block; font-size:8px; color:#84919b; letter-spacing:1px; }.doc-title{font-size:12px;color:var(--navy);font-weight:650;margin-top:4px}.doc-line{height:4px;background:#edf0f4;border-radius:2px;margin-top:9px}.doc-line.short{width:65%}.doc-total{font-size:9px;margin-top:15px;border-top:1px solid var(--line);padding-top:9px;color:var(--teal)}.connector{color:#a4b9c6;font-size:22px}.flow-node{background:var(--navy);color:white;border-radius:13px;width:53px;height:53px;display:grid;place-items:center;font-size:25px;box-shadow:0 8px 20px #00006620}.flow-result{background:#fff;border:1px solid #dce7e8;padding:13px;border-radius:8px;box-shadow:0 10px 20px #182d4508}.flow-result strong{display:block;color:var(--teal);font-size:11px}.flow-result span{font-size:9px;color:var(--grey)}.art-caption{position:absolute;bottom:5px;font-size:9px;color:#91a0ac;letter-spacing:1px;text-transform:uppercase}
+.balancebar { background:white; border:1px solid var(--line); border-radius:10px; margin-bottom:28px; display:flex; align-items:center; }.balance-label{padding:18px 22px;min-width:155px;border-right:1px solid var(--line);font-size:11px;color:var(--grey)}.balance-label strong{display:block;color:var(--ink);font-size:13px;font-weight:600}.metrics{display:grid;grid-template-columns:repeat(4,1fr);flex:1}.metric{padding:12px 22px}.metric span{display:block;color:var(--grey);font-size:10px}.metric strong{font-size:18px;font-weight:600;letter-spacing:-.5px}.wallet-details{margin-right:20px;font-size:10px;position:relative;}.wallet-details summary{cursor:pointer;color:var(--grey);white-space:nowrap}.wallets{position:absolute;right:0;top:30px;width:315px;padding:18px;background:white;border:1px solid var(--line);border-radius:8px;box-shadow:0 12px 30px #14263815;z-index:6;display:grid;gap:12px;font:10px ui-monospace,monospace}.wallets button{font-size:9px;padding:2px 5px;margin-left:4px}
+.workspace-heading { display:flex;align-items:center;justify-content:space-between;margin-bottom:13px; }.workspace-heading h2{font-size:15px;font-weight:600;letter-spacing:-.3px;margin:0}.workspace-heading span{color:var(--grey);font-size:10px}.workspace{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:20px;align-items:start}section.card{background:white;border:1px solid var(--line);border-radius:10px;padding:24px;min-width:0}h2{margin:0 0 12px;font-size:15px;font-weight:600;letter-spacing:-.3px}.number{display:inline-grid;place-items:center;width:23px;height:23px;border:1px solid var(--line);border-radius:6px;font-size:10px;color:var(--grey);margin-right:8px}.card-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:15px}.card-head h2{margin:0}.card-tag{font-size:9px;color:var(--grey);padding:2px 7px;background:#f3f5f7;border-radius:4px}.muted{font-size:11px;color:var(--grey);line-height:1.7}.upload-zone{display:flex;align-items:center;gap:14px;border:1px dashed #bacbd4;border-radius:8px;padding:20px;background:#f9fbfc;cursor:pointer;transition:background .2s}.upload-zone:hover,.upload-zone.dragging{background:#edf6f8;border-color:var(--teal)}.upload-icon{width:38px;height:42px;display:grid;place-items:center;border:1px solid #cbdce3;background:white;border-radius:7px;font-size:21px;color:var(--teal)}.upload-copy strong{display:block;font-size:12px;font-weight:550}.upload-copy span{font-size:10px;color:var(--grey)}.upload-arrow{margin-left:auto;color:var(--teal);font-size:19px}.sample-heading{font-size:10px;color:var(--grey);display:flex;align-items:center;gap:10px;margin:16px 0 10px}.sample-heading:after{content:"";height:1px;flex:1;background:var(--line)}.row{display:flex;flex-wrap:wrap;align-items:center;gap:6px}button{padding:7px 10px;border:1px solid var(--line);border-radius:6px;background:white;color:var(--ink);font-size:10px}button:hover:not(:disabled){border-color:#91acbb;background:#f6fafb}button[aria-pressed="true"]{border-color:var(--teal);background:#edf6f7;color:var(--teal)}button:disabled{opacity:.5;cursor:not-allowed}button.primary{display:flex;align-items:center;justify-content:space-between;background:var(--navy);border-color:var(--navy);color:white;padding:12px 16px;min-width:156px;font-weight:550;font-size:12px}button.primary:hover:not(:disabled){background:#16167c}.primary .icon{margin-left:25px}.input-label{display:block;margin-top:16px;color:var(--grey);font-size:10px}textarea{width:100%;min-height:155px;resize:vertical;border:1px solid var(--line);border-radius:7px;padding:12px;margin:7px 0 15px;background:#fcfcfd;font:11px/1.7 ui-monospace,monospace;color:#455564}.run-actions{justify-content:space-between}.run-actions .muted{font-size:9px;max-width:200px}.console{position:relative;background:#fbfcfe!important}.live-label{display:flex;align-items:center;gap:7px;font-size:9px;color:var(--teal)}.console-empty{padding:25px 10px 20px;text-align:center}.empty-symbol{display:grid;place-items:center;margin:0 auto 13px;width:48px;height:48px;border:1px solid #e0e6ec;border-radius:50%;color:#9aaab8;font-size:23px;background:white}.console-empty strong{font-size:13px;font-weight:500}.console-empty p{max-width:235px;margin:6px auto 0}.stage-list{display:grid;gap:0;margin:20px 0 5px;padding:0;list-style:none}.stage-list li{display:flex;align-items:center;gap:10px;padding:9px 0;font-size:10px;color:#84919d}.stage-list i{font-style:normal;width:20px;height:20px;display:grid;place-items:center;border:1px solid #dbe2e8;background:#fff;border-radius:50%;font-size:9px}.stage-list li span:last-child{margin-left:auto;font-size:9px;color:#a4afb8}.timeline{display:grid;list-style:none;padding:0;margin:20px 0}.step{position:relative;padding:9px 12px 9px 31px;font-size:10px;color:var(--teal);border-left:1px solid #cbdbe1;margin-left:8px}.step:before{content:"✓";display:grid;place-items:center;position:absolute;left:-9px;top:8px;border-radius:50%;width:17px;height:17px;background:#e9f3f3;color:var(--teal);font-size:9px}.step.bad{color:var(--bad)}.step.bad:before{content:"!";background:#fdebed;color:var(--bad)}.console-foot{border-top:1px solid var(--line);padding-top:13px;display:flex;justify-content:space-between;color:#8d98a2;font-size:9px}.console-foot span:first-child:before{content:"◇";margin-right:6px;color:var(--teal)}.kv{display:grid;grid-template-columns:minmax(85px,135px) minmax(0,1fr);gap:8px 12px;overflow-wrap:anywhere;font-size:11px}.kv dt{color:var(--grey)}.kv dd{margin:0;white-space:pre-wrap}.status-list{list-style:none;padding:0;margin:15px 0 0}.status-list li{padding:10px 0;border-top:1px solid var(--line);font-size:11px}.status-list .muted{display:block;font-size:10px;margin:3px 0 0 16px}.pass{color:var(--teal);font-weight:550}.fail{color:var(--bad);font-weight:550}.warn{color:var(--warn);font-weight:550}.skip{color:#8a969e}.notice{background:#edf5f7;border-left:3px solid var(--teal);padding:12px;border-radius:4px;font-size:11px}.danger{border-color:var(--bad);background:#fff0f1;color:#7b1420}.tag{display:inline-block;font-size:8px;border:1px solid var(--line);padding:2px 5px;border-radius:4px}.table-wrap{overflow-x:auto}table{border-collapse:collapse;width:100%;text-align:left;font-size:10px}th,td{padding:10px 5px;vertical-align:top;border-bottom:1px solid var(--line)}th{font-size:8px;text-transform:uppercase;letter-spacing:.7px;color:var(--grey);font-weight:500}.verdict{font-size:22px;font-weight:500;letter-spacing:-.6px;margin:10px 0;color:var(--teal)}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f5f7f9;border:1px solid var(--line);padding:14px;border-radius:6px;font:10px/1.7 ui-monospace,monospace}.dev-card{grid-column:1/-1}.dev-card details summary{cursor:pointer;list-style:none}.dev-card details summary:after{content:"+";float:right;font-size:18px;color:var(--teal)}.dev-card details[open] summary:after{content:"−"}.dev-card h2{display:inline}.dev-content{margin-top:16px}.dev-content p{font-size:11px}.hidden{display:none!important}#error:empty{display:none}.upload-feedback{margin:5px 0 0;font-size:10px;color:var(--teal)}footer{display:flex;justify-content:space-between;gap:20px;padding-top:22px;color:#8a959f;font-size:9px}footer a{color:#778994}#payment a,#unknown-link a{overflow-wrap:anywhere}.draft-note{display:flex;gap:8px;align-items:center;color:var(--teal);background:#f0f6f6;padding:10px;border-radius:5px;font-size:10px}
+@media(min-width:1600px){main{padding-top:42px}.hero{padding-bottom:40px}.hero h1{font-size:70px}.workspace{gap:24px}}
+@media(max-width:1150px){.sidebar{width:185px;padding:28px 16px}.shell{margin-left:185px}main{padding:26px}.topbar{padding:18px 26px}.hero{grid-template-columns:1fr 1fr;gap:10px}h1{font-size:44px}.flow{gap:7px}.mini-doc{width:100px}.flow-node{width:43px;height:43px}.balance-label{min-width:120px;padding:14px}.metric{padding:10px 12px}.metric strong{font-size:16px}section.card{padding:20px}.wallet-details{margin-right:12px}.hero-tags{gap:9px;font-size:9px}}
+@media(max-width:900px){.sidebar{width:72px;padding:25px 12px;align-items:center}.brand{font-size:0}.brand-mark{font-size:20px}.brand small,.nav-label,.nav-item .nav-text,.sidebar-bottom{display:none}.sidebar nav{margin-top:42px;width:100%}.nav-item{padding:10px;justify-content:center}.shell{margin-left:72px}.hero{grid-template-columns:1fr}.flow-art{display:none}.hero h1 br{display:none}.hero h1{font-size:48px}.hero p{max-width:530px}.hero{padding:6px 0 26px}.balancebar{flex-wrap:wrap}.balance-label{display:none}.metrics{width:100%;flex:auto}.wallet-details{border-top:1px solid var(--line);width:100%;margin:0;padding:8px 15px}.wallets{left:10px;right:auto;top:32px}.workspace{gap:15px}section.card{padding:18px}.run-actions{align-items:flex-start;flex-direction:column}.hero-tags{font-size:10px;gap:18px}}
+@media(max-width:650px){.sidebar{display:none}.shell{margin-left:0}.topbar{padding:15px 20px}.topbar .slash{margin:0 8px}.topbar .crumb-root{display:none}.topbar .slash{display:none}.topbar strong:before{content:"CxC / ";color:var(--teal)}main{padding:23px 18px}.hero h1{font-size:44px;letter-spacing:-2px;margin-top:15px}.hero h1 br{display:block}.hero p{font-size:12px}.hero-tags{font-size:8px;gap:11px}.metrics{grid-template-columns:repeat(2,1fr)}.metric{padding:12px 17px}.metric:nth-child(-n+2){border-bottom:1px solid var(--line)}.metric strong{font-size:20px}.balancebar{margin-bottom:24px}.workspace{grid-template-columns:minmax(0,1fr)}.workspace-heading span{font-size:9px}.console-empty{padding:15px}.stage-list{grid-template-columns:1fr 1fr;gap:5px 12px}.stage-list li span:last-child{display:none}.console{order:1}#invoicebox{order:0}#extractbox{order:2}#policybox{order:3}#paybox{order:4}#reportbox{order:5}#draftbox{order:6}.dev-card{order:7}.kv{grid-template-columns:95px minmax(0,1fr)}.run-actions{flex-direction:row;align-items:center}.run-actions .muted{max-width:130px}.upload-zone{padding:15px}.upload-copy strong{font-size:11px}.upload-copy span{font-size:9px}footer{flex-direction:column;gap:5px;font-size:9px}.testnet{font-size:9px}.wallets{width:min(290px,calc(100vw - 70px))}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+.icon{width:18px;height:18px;display:inline-block;vertical-align:middle;flex-shrink:0}.flow-node .icon,.empty-symbol .icon{width:27px;height:27px}.brand-mark .icon{width:19px;height:19px}.nav-icon{display:grid;place-items:center}.empty-symbol{color:var(--teal)}.muted{font-size:12px}.run-actions .muted{font-size:10px}
 </style>
 </head>
 <body>
-<header>
-<div class="eyebrow">CashXChain · The Infrastructure for the money of tomorrow</div>
-<h1>Payment readiness, bought by an agent.</h1>
-<p>Claude extracts. Deterministic policy controls spending. A human approves the payout draft.</p>
-<span class="network" id="network">Cardano Preprod · testnet</span>
-<div class="metrics" id="metrics"></div>
-<div class="wallets"><span id="buyer"></span><span id="seller"></span></div>
-</header>
-<main>
-<section>
-<h2><span class="number">01</span> Invoice</h2>
-<p class="muted">Synthetic demo invoices only. The API costs tADA on Cardano Preprod (testnet).</p>
+<aside class="sidebar" aria-label="Workspace navigation">
+<a class="brand" href="#workspace"><span class="brand-mark" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 18 18 6M6 6h12v12"/></svg></span><span>CashXChain<small>AgentPay</small></span></a>
+<div class="nav-label">Workspace</div>
+<nav>
+<a class="nav-item active" href="#invoicebox" aria-label="Payment agent"><span class="nav-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h4"/></svg></span><span class="nav-text">Payment agent</span></a>
+<a class="nav-item" href="#activitybox" aria-label="Agent activity"><span class="nav-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 13h4l3-8 4 14 3-6h4"/></svg></span><span class="nav-text">Agent activity</span></a>
+<a class="nav-item" href="#reportbox" aria-label="Readiness report"><span class="nav-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9h10M7 13h6M7 17h8"/></svg></span><span class="nav-text">Readiness report</span></a>
+<a class="nav-item" href="#developerbox" aria-label="Developer API"><span class="nav-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5m8-10 5 5-5 5M14 4l-4 16"/></svg></span><span class="nav-text">Developer API</span></a>
+</nav>
+<div class="sidebar-bottom"><div class="env-label"><span class="dot"></span>Preprod environment</div><p>Test funds. Real guardrails.</p></div>
+</aside>
+<div class="shell">
+<div class="topbar"><div><span class="crumb-root">Workspace</span><span class="slash">/</span><strong>Payment agent</strong></div><span class="testnet"><span class="dot"></span><span id="network">Cardano Preprod · testnet</span></span></div>
+<main id="workspace">
+<div class="hero">
+<div><div class="eyebrow">Your agent. Your payment policy.</div><h1>From invoice.<br>To <em>ready.</em></h1><p>Let your agent understand the invoice, buy a readiness check and prepare the next move. You stay in control.</p><div class="hero-tags"><span>Invoice intelligence</span><span>Paid validation</span><span>Human approval</span></div></div>
+<div class="flow-art" aria-hidden="true"><div class="flow"><div class="mini-doc"><span class="doc-label">SUPPLIER INVOICE</span><div class="doc-title">Invoice received</div><div class="doc-line"></div><div class="doc-line short"></div><div class="doc-line"></div><div class="doc-total">Ready for analysis</div></div><span class="connector">→</span><div class="flow-node"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M5.6 18.4 18.4 5.6"/></svg></div><span class="connector">→</span><div class="flow-result"><strong>◇ Human review</strong><span>A draft. Always your decision.</span></div></div><span class="art-caption">Understand · Validate · Prepare</span></div>
+</div>
+<div class="balancebar"><div class="balance-label"><strong>Agent allowance</strong>tADA · test funds only</div><div class="metrics" id="metrics"></div><details class="wallet-details"><summary>Wallet details</summary><div class="wallets"><span id="buyer"></span><span id="seller"></span></div></details></div>
+<div class="workspace-heading"><h2>New payment workflow</h2><span>Synthetic invoices · Preprod only</span></div>
+<div class="workspace">
+<section class="card" id="invoicebox">
+<div class="card-head"><h2><span class="number">01</span> Add an invoice</h2><span class="card-tag">INPUT</span></div>
+<label class="upload-zone" id="dropzone" for="invoice-file" role="button" tabindex="0" aria-label="Import an invoice text or JSON file"><span class="upload-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6v18h12V7l-4-4Z"/><path d="M14 3v5h5M9 14l3-3 3 3M12 11v7"/></svg></span><span class="upload-copy"><strong>Drop an invoice or browse files</strong><span>Text or JSON · up to 256 KB</span></span><span class="upload-arrow" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 18 18 6M6 6h12v12"/></svg></span></label>
+<input id="invoice-file" type="file" accept=".txt,.json,text/plain,application/json" class="hidden">
+<p class="upload-feedback" id="file-status" role="status"></p>
+<div class="sample-heading">Or explore a demo scenario</div>
 <div class="row" id="samples" aria-label="Demo scenarios"></div>
-<label class="hidden" for="input">Invoice text or structured Invoice JSON</label>
-<textarea id="input" aria-label="Invoice text or structured Invoice JSON" placeholder="Choose a sample, paste invoice text, or use structured Invoice JSON to skip Claude."></textarea>
-<div class="row"><button class="primary" id="run">Run agent</button><span class="muted" id="health" role="status">Checking configuration…</span></div>
+<label class="input-label" for="input">INVOICE CONTENT</label>
+<textarea id="input" aria-label="Invoice text or structured Invoice JSON" placeholder="Choose an example, import a file, or paste your invoice here…"></textarea>
+<div class="row run-actions"><button class="primary" id="run" aria-label="Run agent">Run agent<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 18 18 6M6 6h12v12"/></svg></button><span class="muted" id="health" role="status">Checking configuration…</span></div>
+</section>
+<section class="card console" id="activitybox">
+<div class="card-head"><h2>Agent activity</h2><span class="live-label"><span class="dot"></span>LIVE VIEW</span></div>
+<div id="activity-empty"><div class="console-empty"><div class="empty-symbol" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M5.6 18.4 18.4 5.6"/></svg></div><strong>Ready when you are.</strong><p class="muted">Add an invoice and watch your agent work through each step.</p></div><ol class="stage-list"><li><i>1</i><span>Understand the invoice</span><span>Waiting</span></li><li><i>2</i><span>Check spend policy</span><span>Waiting</span></li><li><i>3</i><span>Buy the readiness report</span><span>Waiting</span></li><li><i>4</i><span>Prepare for human review</span><span>Waiting</span></li></ol></div>
 <div id="runbox" class="hidden" aria-live="polite"><ol class="timeline" id="timeline"></ol><p id="error" class="notice danger" role="alert"></p></div>
+<div class="console-foot"><span>Policy-controlled spending</span><span>Cardano x402</span></div>
 </section>
-<section id="extractbox">
-<h2><span class="number">02</span> Extracted fields</h2>
-<p class="muted" id="extraction-note">Text is extracted by Claude; amounts are converted deterministically. Structured Invoice JSON skips Claude.</p>
-<dl class="kv" id="extracted"><dt>Status</dt><dd>Waiting for an invoice run.</dd></dl>
+<section class="card" id="extractbox">
+<div class="card-head"><h2><span class="number">02</span> Invoice intelligence</h2><span class="card-tag">EXTRACTION</span></div>
+<p class="muted" id="extraction-note">Claude extracts the fields. Amounts are converted deterministically. Structured JSON skips Claude.</p>
+<dl class="kv" id="extracted"><dt>Status</dt><dd>Your extracted invoice will appear here.</dd></dl>
 </section>
-<section>
-<h2><span class="number">03</span> Spend policy</h2>
-<p class="muted">Offer comparisons are shown below. The server ledger enforces invoice locks and budget, including concurrent requests.</p>
-<ul class="status-list" id="policy"></ul>
+<section class="card" id="policybox">
+<div class="card-head"><h2><span class="number">03</span> Payment guardrails</h2><span class="card-tag">POLICY</span></div>
+<p class="muted">Your rules come first. The server enforces spend limits and invoice locks for every request.</p><ul class="status-list" id="policy"></ul>
 </section>
-<section id="paybox">
-<h2><span class="number">04</span> x402 payment</h2>
+<section class="card" id="paybox">
+<div class="card-head"><h2><span class="number">04</span> Service payment</h2><span class="card-tag">x402 · PREPROD</span></div>
 <p class="muted" id="offer-status">Waiting for a live HTTP 402 offer. Configuration alone is not payment evidence.</p>
-<dl class="kv" id="offer"></dl>
-<p id="waiting" class="notice waiting hidden" role="status">Waiting for confirmation on Cardano preprod (up to a few minutes). Keep this page open.</p>
-<div id="unknown" class="notice danger hidden" role="alert"><strong>Payment state unknown, invoice locked, will not pay again.</strong><p id="unknown-reason"></p><div id="unknown-link"></div></div>
-<dl class="kv" id="payment"></dl>
+<dl class="kv" id="offer"></dl><p id="waiting" class="notice waiting hidden" role="status">Waiting for confirmation on Cardano preprod (up to a few minutes). Keep this page open.</p>
+<div id="unknown" class="notice danger hidden" role="alert"><strong>Payment state unknown, invoice locked, will not pay again.</strong><p id="unknown-reason"></p><div id="unknown-link"></div></div><dl class="kv" id="payment"></dl>
+<p class="muted">This pays for the readiness check. The supplier invoice is a separate payment and is not executed here.</p>
 </section>
-<section id="reportbox">
-<h2><span class="number">05</span> Paid readiness report</h2>
-<p id="report-empty" class="muted">A report appears only after successful settlement.</p>
-<p class="verdict" id="verdict"></p>
-<div class="table-wrap"><table id="report-table" class="hidden"><thead><tr><th>Result</th><th>Check</th><th>Finding</th><th>Source</th></tr></thead><tbody id="checks"></tbody></table></div>
-<p class="notice hidden" id="quote"></p><p class="muted" id="disclaimer"></p>
+<section class="card" id="reportbox">
+<div class="card-head"><h2><span class="number">05</span> Readiness report</h2><span class="card-tag">RESULT</span></div><p id="report-empty" class="muted">Account checks, corridor findings and a simulated quote appear after successful settlement.</p>
+<p class="verdict" id="verdict"></p><div class="table-wrap"><table id="report-table" class="hidden"><thead><tr><th>Result</th><th>Check</th><th>Finding</th><th>Source</th></tr></thead><tbody id="checks"></tbody></table></div><p class="notice hidden" id="quote"></p><p class="muted" id="disclaimer"></p>
 </section>
-<section id="draftbox">
-<h2><span class="number">06</span> Payment draft</h2>
-<p id="draft-status" class="muted">A draft appears when the report is ready for human review.</p>
-<dl class="kv" id="draft"></dl>
-<button disabled title="not available: no payout endpoint in this demo">Execute payout</button>
+<section class="card" id="draftbox">
+<div class="card-head"><h2><span class="number">06</span> Your next move</h2><span class="card-tag">HUMAN REVIEW</span></div><p id="draft-status" class="muted">A payment draft appears when the report is ready for your review.</p><dl class="kv" id="draft"></dl><div class="row"><button disabled title="not available: no payout endpoint in this demo">Execute payout</button><span class="muted">No payout endpoint connected.</span></div>
 </section>
-<section>
-<h2><span class="number">07</span> For developers</h2>
-<p>Any agent can buy a readiness report. An unpaid request returns HTTP 402 with the terms in the base64-encoded <code>PAYMENT-REQUIRED</code> header.</p>
-<pre id="curl"></pre>
-<p class="muted">Requires a configured seller and facilitator. Corridors, rails, fees, FX and ETA are simulated. This is a data-quality and routing check, not an AML, sanctions or KYB decision.</p>
-</section>
-<footer>No supplier payout is executed. Run state and the spend ledger are in memory and reset when the server restarts.</footer>
+<section class="card dev-card" id="developerbox"><details><summary><h2>Build on the API</h2><span class="muted"> &nbsp; A readiness service for any agent.</span></summary><div class="dev-content"><p>An unpaid request returns HTTP 402. The base64-encoded <code>PAYMENT-REQUIRED</code> header contains the offer.</p><pre id="curl"></pre><p class="muted">Requires a configured seller and facilitator. Corridors, rails, fees, FX and ETA are simulated. This is a data-quality and routing check, not an AML, sanctions or KYB decision.</p></div></details></section>
+</div>
+<footer><span>CashXChain · The Infrastructure for the money of tomorrow</span><span>No supplier payout executed. Run state resets on server restart.</span></footer>
 </main>
+</div>
 <script>
 const $ = id => document.getElementById(id);
 const BAD = ["FAILED", "BLOCKED", "SETTLEMENT_UNKNOWN", "NEEDS_INFO"];
@@ -185,9 +215,26 @@ async function poll(id) {
     pollTimer=setTimeout(()=>poll(id),Math.min(1000*2**Math.min(failures,4),15000));
   }
 }
+async function importInvoice(file) {
+  if (!file) return;
+  const status = $("file-status");
+  if (!/\.(txt|json)$/i.test(file.name)) { status.textContent = "Use a .txt or .json invoice. PDF extraction is not available yet."; return; }
+  if (file.size > 256 * 1024) { status.textContent = "This file is too large. The limit is 256 KB."; return; }
+  try {
+    $("input").value = await file.text();
+    status.textContent = `${file.name} imported. Review the content before starting the agent.`;
+    for (const button of $("samples").children) button.setAttribute("aria-pressed", "false");
+  } catch { status.textContent = "The file could not be read. Try pasting its text instead."; }
+  $("invoice-file").value = "";
+}
+$("dropzone").onkeydown = event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); $("invoice-file").click(); } };
+$("invoice-file").onchange = event => importInvoice(event.target.files[0]);
+for (const name of ["dragenter", "dragover"]) $("dropzone").addEventListener(name, event => { event.preventDefault(); $("dropzone").classList.add("dragging"); });
+for (const name of ["dragleave", "drop"]) $("dropzone").addEventListener(name, event => { event.preventDefault(); $("dropzone").classList.remove("dragging"); });
+$("dropzone").addEventListener("drop", event => importInvoice(event.dataTransfer.files[0]));
 $("run").onclick=async()=>{
   if(!$("input").value.trim()){$("input").focus();return;}
-  $("run").disabled=true;resetRun();$("runbox").classList.remove("hidden");
+  $("run").disabled=true;resetRun();$("runbox").classList.remove("hidden");$("activity-empty").classList.add("hidden");
   try {
     const result=await json("/api/runs",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({input:$("input").value})});
     activeId=result.id;poll(activeId);
@@ -198,7 +245,7 @@ refreshHealth().then(fetchOffer).catch(error=>{$("health").textContent=`Configur
 json("/api/samples").then(samples=>{
   for(const [name,text]of Object.entries(samples)) {
     const b=document.createElement("button");b.textContent=LABELS[name]||name;b.setAttribute("aria-pressed","false");
-    b.onclick=()=>{$("input").value=text;for(const button of $("samples").children)button.setAttribute("aria-pressed",String(button===b));};
+    b.onclick=()=>{$("input").value=text;$("file-status").textContent="";for(const button of $("samples").children)button.setAttribute("aria-pressed",String(button===b));};
     $("samples").appendChild(b);
   }
 }).catch(error=>{$("samples").textContent=`Samples unavailable: ${error.message}`;});
