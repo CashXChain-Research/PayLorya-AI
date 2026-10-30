@@ -1,23 +1,9 @@
 // Cloudflare Worker that fronts the Node app running in a Cloudflare Container.
 // Single named instance: run state is in memory, so all traffic must hit the same container.
 import { Container, getContainer } from "@cloudflare/containers";
+import { containerEnv, type ForwardedKey } from "./env.js";
 
-const FORWARDED = [
-  "ANTHROPIC_API_KEY",
-  "ANTHROPIC_BASE_URL",
-  "CLAUDE_MODEL",
-  "BLOCKFROST_PROJECT_ID",
-  "SELLER_ADDRESS",
-  "BUYER_MNEMONIC",
-  "FACILITATOR_URL",
-  "LOCAL_FACILITATOR",
-  "PUBLIC_BASE_URL",
-  "PRICE_LOVELACE",
-  "MAX_PRICE_LOVELACE",
-  "SESSION_BUDGET_LOVELACE",
-] as const;
-
-type Env = { AGENTPAY: DurableObjectNamespace<AgentPayContainer> } & Partial<Record<(typeof FORWARDED)[number], string>>;
+type Env = { AGENTPAY: DurableObjectNamespace<AgentPayContainer> } & Partial<Record<ForwardedKey, string>>;
 
 export class AgentPayContainer extends Container<Env> {
   defaultPort = 8787;
@@ -25,12 +11,8 @@ export class AgentPayContainer extends Container<Env> {
 
   constructor(ctx: DurableObjectState<{}>, env: Env) {
     super(ctx, env);
-    const vars: Record<string, string> = { PORT: "8787" };
-    for (const key of FORWARDED) {
-      const value = env[key];
-      if (value) vars[key] = value;
-    }
-    this.envVars = vars;
+    // Read at container start, so secrets and vars set via wrangler reach the Node process.
+    this.envVars = containerEnv(env);
   }
 }
 

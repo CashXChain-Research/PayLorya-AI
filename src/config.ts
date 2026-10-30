@@ -45,6 +45,9 @@ const EnvSchema = z.object({
   CLAUDE_MODEL: z.string().default("claude-opus-5-5"),
 });
 
+// Every env key the app reads; cloudflare/env.ts must forward all of them except PORT.
+export const ENV_KEYS = Object.keys(EnvSchema.shape) as (keyof typeof EnvSchema.shape)[];
+
 export type Config = z.infer<typeof EnvSchema> & {
   baseUrl: string;
   facilitatorUrl: string;

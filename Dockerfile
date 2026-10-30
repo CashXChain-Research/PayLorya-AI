@@ -6,4 +6,4 @@ COPY src ./src
 COPY public ./public
 ENV PORT=8787
 EXPOSE 8787
-CMD ["npx", "tsx", "src/server.ts"]
+CMD ["node_modules/.bin/tsx", "src/server.ts"]
