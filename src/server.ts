@@ -27,6 +27,8 @@ app.get(["/health", "/api/health"], (_req, res) => {
     buyerAddress: agent?.buyerAddress,
     sellerAddress: config.SELLER_ADDRESS,
     priceLovelace: config.PRICE_LOVELACE.toString(),
+    maxPriceLovelace: config.MAX_PRICE_LOVELACE.toString(),
+    sessionBudgetLovelace: config.SESSION_BUDGET_LOVELACE.toString(),
     spentLovelace: agent?.spentLovelace.toString() ?? "0",
   });
 });
@@ -48,6 +50,22 @@ app.post("/api/runs", (req, res) => {
   const run = runs.create(input);
   void agent.process(run);
   res.status(202).json({ id: run.id, state: run.state });
+});
+
+// Summaries for the inbox; the full run (input text included) stays behind /api/runs/:id.
+app.get("/api/runs", (_req, res) => {
+  res.json(
+    runs.list().map(run => ({
+      id: run.id,
+      state: run.state,
+      createdAt: run.createdAt,
+      supplier: run.invoice?.supplier,
+      invoiceId: run.invoice?.id,
+      amountMinor: run.invoice?.amountMinor,
+      currency: run.invoice?.currency,
+      transactionHash: run.payment?.transactionHash,
+    })),
+  );
 });
 
 app.get("/api/runs/:id", (req, res) => {

@@ -44,6 +44,11 @@ export class RunStore {
     return this.runs.get(id);
   }
 
+  /** Newest first. */
+  list(): Run[] {
+    return [...this.runs.values()].reverse();
+  }
+
   transition(run: Run, state: RunState, note?: string): void {
     run.state = state;
     run.timeline.push({ state, at: new Date().toISOString(), note });
