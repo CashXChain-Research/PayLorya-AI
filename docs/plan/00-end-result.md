@@ -75,7 +75,8 @@ a pre-recorded successful run in the video.
 - [ ] The three safety scenarios demonstrated live (injection, repeat invoice, missing bank details).
 - [ ] README: pitch, live link, video link, architecture diagram, trust boundary, real-vs-simulated
       table, quick start, limitations.
-- [ ] Demo video, within the Devfolio length limit.
+- [ ] Demo video, **at most 2.5 minutes** (Cardano track rule): who it is for, the problem, the business
+      case, and one paid request from start to finish.
 - [ ] Devfolio submission filled in and submitted before the deadline.
 - [ ] `npm run typecheck` and `npm test` green on `main`, with CI on every PR.
 
@@ -176,24 +177,25 @@ write it into your PR description). Additive changes to shared files are fine af
 
 ## 9. Checkpoints
 
-The exact submission deadline is on Devfolio (tum.devfolio.co). **Fill it in here: ________**
+**Deadline: Saturday 31 October 2026, 15:00.** Live judging 15:00–17:00 (Cardano track page).
 
 | CP | When | Exit criteria |
 | --- | --- | --- |
-| CP0 | Now | PR #1 merged, everyone on fresh `main`, branches created |
-| CP1 "first proof" | ASAP | C: the live URL returns the correct 402 (AT1, `npm run remote:check`). Then A: the first real preprod tx via `npm run remote:run -- --yes` on the live URL, evidence committed |
+| CP0 | Done | PR #1 merged, everyone on fresh `main`, branches created |
+| CP1 "first proof" | **Done** 2026-10-31 00:33 | C: the live URL returns the correct 402 (AT1, `npm run remote:check`). Then A: the first real preprod tx via `npm run remote:run -- --yes` on the live URL, evidence committed |
 | CP2 "integrated" | Mid-way | An agent run on the live URL ends `DRAFT_READY` with a real tx (AT3). Live extraction works (AT4). UI shows every state |
-| CP3 "feature freeze" | Deadline - 4 h | Bug fixes and docs only. Record the demo video on the live URL |
-| CP4 "submit" | Deadline - 1 h | Repo public, Devfolio submitted, links checked in incognito (AT10) |
+| CP3 "feature freeze" | Sat 11:00 | Bug fixes and docs only. Record the demo video on the live URL |
+| CP4 "submit" | Sat 14:00 | Repo public, Devfolio submitted, links checked in incognito (AT10) |
 
 **Status board (update as you go):**
 
 | Workstream | Status | Blocker |
 | --- | --- | --- |
-| A Live x402 payment | Done: A1 (wallets), A3 (live recon), A5 (wallet queue), A6 (`run.settlement`). Remote tooling ready (`remote:check`/`remote:run`/`remote:safety`, tested offline). A2, A4, A7 and A8 run against the live URL | C's deploy (keys only on Cloudflare) |
-| B Agent experience and UI | not started | |
-| C Cloudflare | #4 merged: env forwarding, CI, `docs/DEPLOY.md`. Not deployed yet. `DEPLOY.md` still verifies with local `preflight`/`smoke:x402`; switch to `remote:check`/`remote:run` | buyer-cloud wallet from A; keys from the dashboards |
-| D Submission | not started | needs live URL, evidence, UI |
+| A Live x402 payment | **Milestone 1 done** (#8): tx `4e959d66…a87b2` on the live URL, evidence committed. Done: A1, A2, A3, A5, A6, remote tooling. Next: invoice payout core (Cardano route, approve endpoint, route interface; decision A). A7 live safety run is on the laptop session. A8: keep 1 confirmation (32 s) | – |
+| B Agent experience and UI | Now owned by a separate Claude session. `main` has the "AI CFO" UI (#7, approval is client-side only). `feat/agent-ux` (Codex) holds extraction harness, readiness checks and tests and conflicts with #7 in `public/index.html` and `src/fixtures.ts` | UI choice |
+| C Cloudflare | **Live** at https://cxc-agentpay.cashxchain.workers.dev with all four secrets (`x402Ready`, `aiReady`). CI green. Open: protect `POST /api/runs` (token or rate limit), lower the budget. The GitHub check "Workers Builds" fails instantly (the deploy itself works) | – |
+| D Submission | Drafts on `main` (README, PITCH, DEMO-SCRIPT, SUBMISSION). The repo is already public, and a history scan found no secrets. Open: switch the story to "agent checks, pays the check via x402, pays the invoice on approval"; video ≤ 2.5 min; Devfolio; license | invoice payout, UI |
+| CashXChain fiat route | Owned by a separate Claude session. Sandbox payouts per the docs; secret `CASHXCHAIN_API_KEY` (`cxc_sk_sandbox_…`) | sandbox account, test funds, key |
 
 ## 10. Rules for everyone (humans and agents)
 
@@ -238,6 +240,10 @@ The exact submission deadline is on Devfolio (tum.devfolio.co). **Fill it in her
 - No Masumi.
 - `SETTLEMENT_UNKNOWN` and idempotency are mandatory and stay conservative.
 - No automatic Claude model fallback (removed in PR #1).
+- Invoice payout (2026-10-31): the **Approve** click triggers the real payout. Payees come only from a
+  vendor registry, never from invoice text. A payout happens only after a passed paid check, and at
+  most once per invoice. Crypto invoices pay on Cardano Preprod, fiat invoices via the CashXChain
+  sandbox.
 - API keys (Blockfrost, Anthropic) live only on Cloudflare. Live payments run against the
   deployment (2026-10-30).
 - Tracks: Cardano is primary. API3 and BSV: no. Adevar Labs: only if it needs no extra build.
