@@ -199,9 +199,10 @@ export function parseProtocolParams(body: unknown): ProtocolParams | undefined {
 
 export function blockfrostHint(status: number, projectId: string): string {
   if (status === 401 || status === 403) {
-    // Network-prefixed ids are a convention, not verified here, so this is only a hint.
+    // Verified live 2026-10-30: preprod answers any rejected id with 403 "Invalid project token.", whatever its
+    // prefix, so the prefix only suggests a cause.
     const net = /^(mainnet|preview)/.exec(projectId)?.[1];
-    if (net) return `the id looks like a ${net} project: create a Preprod project at blockfrost.io and use its id`;
+    if (net) return `BLOCKFROST_PROJECT_ID was rejected; its prefix suggests a ${net} project: create a Preprod project at blockfrost.io and use its id`;
     return "BLOCKFROST_PROJECT_ID was rejected: it must be a valid Preprod project id (blockfrost.io dashboard)";
   }
   if (status === 402) return "Blockfrost daily request quota exceeded: wait for the reset or use another project";

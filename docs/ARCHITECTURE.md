@@ -97,13 +97,23 @@ otherwise `ready_for_review`.
 - The middleware fetches the facilitator's `/supported` at startup in the background and
   retries on the first paid request (502 if still unreachable); the server does not crash.
 
+## Verified live
+
+- 2026-10-30: hosted facilitator `GET /supported` returns one kind: x402 v2, `exact`,
+  `cardano:preprod`, `assetTransferMethods` `["default","masumi","script"]`,
+  `areFeesSponsored: false`, `l1Confirmations` `[0, 20]`. So `CARDANO_L1_CONFIRMATIONS=-1`
+  (mempool) is out of range there. `/` and `/health` return 404. Fixture in `tests/milestone.test.ts`.
+- 2026-10-30: Blockfrost preprod answers a missing key with 403 "Missing project token" and any
+  rejected key (including `mainnet…`/`preview…` prefixes) with 403 "Invalid project token.". The
+  preflight hint now treats the prefix as a suggestion only. `/health` needs no key.
+
 ## Not verified yet
 
-- Hosted facilitator URL is taken from developers.cardano.org and has not been exercised by us
-  (`npm run preflight` checks its `/supported`).
+- No hosted-facilitator verify/settle has run yet.
 - No live preprod payment has run yet: that is milestone 1 (`npm run smoke:x402`).
 - With `LOCAL_FACILITATOR=true`, verify also calls Blockfrost `POST /utils/txs/evaluate/utxos`;
   untested against real Blockfrost for a script-free tx.
 - Cloudflare Containers deploy is written against `@cloudflare/containers@0.3.7` and the
   wrangler 4.156 schema but not deployed yet.
-- `EXPLORER_TX_URL` default (Cardanoscan preprod) to be confirmed with the first real tx.
+- `EXPLORER_TX_URL` default (Cardanoscan preprod) to be confirmed with the first real tx, in a
+  browser: Cardanoscan serves a Cloudflare challenge to scripts, so it cannot be checked automatically.
