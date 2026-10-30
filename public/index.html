@@ -3,139 +3,422 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>CxC AgentPay</title>
+<title>CxC AI CFO</title>
 <style>
-  :root { --navy:#000066; --teal:#005577; --ink:#111; --grey:#6b6b6b; --line:#e3e3e3; --bg:#fafafa; --ok:#005577; --bad:#8a1c1c; --warn:#8a6d00; }
+  :root {
+    --navy:#000066; --teal:#005577; --ink:#0d0d14; --grey:#6b6b76; --soft:#9a9aa5; --line:#e4e4ea; --bg:#f5f5f8; --card:#fff;
+    --ok:#005577; --ok-bg:#e6f1f4; --bad:#9b1c1c; --bad-bg:#f8eaea; --warn:#7a5c00; --warn-bg:#f8f2e0;
+  }
   * { box-sizing:border-box; }
-  body { margin:0; font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; color:var(--ink); background:var(--bg); }
-  header { background:var(--navy); color:#fff; padding:20px 16px; }
-  header h1 { margin:0; font-size:20px; letter-spacing:.2px; }
-  header p { margin:4px 0 0; opacity:.8; font-size:13px; }
-  main { max-width:960px; margin:0 auto; padding:16px; display:grid; gap:16px; }
-  section { background:#fff; border:1px solid var(--line); border-radius:8px; padding:16px; }
-  h2 { margin:0 0 12px; font-size:13px; text-transform:uppercase; letter-spacing:.08em; color:var(--teal); }
-  textarea { width:100%; min-height:150px; font:13px/1.4 ui-monospace,monospace; border:1px solid var(--line); border-radius:6px; padding:10px; }
-  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:8px; }
-  button { border:1px solid var(--navy); background:#fff; color:var(--navy); padding:7px 12px; border-radius:6px; cursor:pointer; font-size:13px; }
-  button.primary { background:var(--navy); color:#fff; }
-  button:disabled { opacity:.5; cursor:default; }
-  .muted { color:var(--grey); font-size:13px; }
-  .timeline { display:flex; flex-wrap:wrap; gap:6px; }
-  .step { font:12px ui-monospace,monospace; padding:3px 8px; border-radius:4px; background:#eef3f6; color:var(--teal); }
-  .step.end-bad { background:#f6e9e9; color:var(--bad); }
-  table { width:100%; border-collapse:collapse; font-size:13px; }
-  td { padding:6px 4px; border-top:1px solid var(--line); vertical-align:top; }
-  .pass { color:var(--ok); font-weight:600; } .fail { color:var(--bad); font-weight:600; } .warn { color:var(--warn); font-weight:600; } .skip { color:var(--grey); }
-  .tag { font-size:11px; color:var(--grey); border:1px solid var(--line); border-radius:3px; padding:0 4px; }
-  .kv { display:grid; grid-template-columns:140px 1fr; gap:4px 12px; font-size:13px; word-break:break-all; }
-  .kv b { color:var(--grey); font-weight:500; }
+  body { margin:0; font:14px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; color:var(--ink); background:var(--bg); }
   a { color:var(--teal); }
-  .verdict { font-size:18px; font-weight:700; color:var(--navy); }
-  .hidden { display:none; }
+  code, .mono { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px; }
+
+  header { background:var(--navy); color:#fff; }
+  .bar { max-width:1180px; margin:0 auto; padding:14px 16px; display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+  .brand { font-weight:700; font-size:17px; letter-spacing:.2px; }
+  .brand span { font-weight:400; opacity:.75; }
+  .pills { margin-left:auto; display:flex; gap:6px; flex-wrap:wrap; }
+  .pill { font-size:12px; border:1px solid rgba(255,255,255,.3); border-radius:999px; padding:2px 10px; white-space:nowrap; }
+  .pill.live::before { content:""; display:inline-block; width:7px; height:7px; border-radius:50%; background:#7fd3e6; margin-right:6px; vertical-align:1px; }
+  .pill.off::before { background:#e6a07f; }
+  .hero { max-width:1180px; margin:0 auto; padding:6px 16px 22px; }
+  .hero h1 { margin:0; font-size:26px; line-height:1.25; font-weight:700; }
+  .hero p { margin:6px 0 0; opacity:.85; max-width:760px; }
+  .trust { display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; }
+  .trust div { background:rgba(255,255,255,.08); border-radius:6px; padding:6px 10px; font-size:13px; }
+  .trust b { color:#9fe0ee; font-weight:600; }
+
+  main { max-width:1180px; margin:0 auto; padding:16px; display:grid; gap:16px; }
+  .kpis { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-top:-34px; }
+  .kpi { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:12px 14px; }
+  .kpi .label { font-size:12px; color:var(--grey); }
+  .kpi .value { font-size:22px; font-weight:700; color:var(--navy); margin-top:2px; }
+  .kpi .sub { font-size:12px; color:var(--soft); }
+  .meter { height:5px; background:var(--line); border-radius:3px; margin-top:6px; overflow:hidden; }
+  .meter i { display:block; height:100%; background:var(--teal); width:0; transition:width .4s; }
+
+  .grid { display:grid; grid-template-columns:380px 1fr; gap:16px; align-items:start; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; }
+  .card h2 { margin:0 0 10px; font-size:12px; text-transform:uppercase; letter-spacing:.09em; color:var(--teal); }
+  textarea { width:100%; min-height:150px; font:12px/1.45 ui-monospace,Menlo,monospace; border:1px solid var(--line); border-radius:8px; padding:10px; resize:vertical; color:var(--ink); background:#fcfcfd; }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px; }
+  .chip { border:1px solid var(--line); background:#fff; color:var(--ink); border-radius:999px; padding:4px 10px; font-size:12px; cursor:pointer; }
+  .chip:hover { border-color:var(--teal); color:var(--teal); }
+  .chip.safety { border-style:dashed; }
+  button.primary { width:100%; margin-top:8px; border:0; background:var(--navy); color:#fff; padding:10px 14px; border-radius:8px; cursor:pointer; font-size:14px; font-weight:600; }
+  button.primary:disabled { opacity:.5; cursor:default; }
+  .hint { color:var(--grey); font-size:12px; margin-top:6px; }
+
+  .inbox { list-style:none; margin:0; padding:0; }
+  .inbox li { display:grid; grid-template-columns:1fr auto; gap:2px 8px; padding:9px 8px; border-top:1px solid var(--line); cursor:pointer; border-radius:6px; }
+  .inbox li:hover { background:#f7f8fb; }
+  .inbox li.sel { background:var(--ok-bg); }
+  .inbox .who { font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .inbox .amt { text-align:right; font-variant-numeric:tabular-nums; }
+  .inbox .meta { color:var(--soft); font-size:12px; }
+  .empty { color:var(--soft); font-size:13px; padding:8px 0; }
+
+  .badge { font-size:11px; font-weight:600; border-radius:4px; padding:1px 7px; white-space:nowrap; justify-self:end; }
+  .b-ok { background:var(--ok-bg); color:var(--ok); } .b-bad { background:var(--bad-bg); color:var(--bad); }
+  .b-warn { background:var(--warn-bg); color:var(--warn); } .b-run { background:#eceefa; color:var(--navy); }
+  .b-done { background:var(--navy); color:#fff; }
+
+  .steps { list-style:none; margin:0; padding:0; }
+  .step { position:relative; padding:0 0 18px 34px; }
+  .step::before { content:""; position:absolute; left:11px; top:24px; bottom:0; width:2px; background:var(--line); }
+  .step:last-child::before { display:none; }
+  .dot { position:absolute; left:0; top:0; width:24px; height:24px; border-radius:50%; display:grid; place-items:center; font-size:12px; font-weight:700; background:#fff; border:2px solid var(--line); color:var(--soft); }
+  .step.done .dot { background:var(--teal); border-color:var(--teal); color:#fff; }
+  .step.active .dot { border-color:var(--navy); color:var(--navy); animation:pulse 1.2s infinite; }
+  .step.bad .dot { background:var(--bad); border-color:var(--bad); color:#fff; }
+  .step.warn .dot { background:var(--warn); border-color:var(--warn); color:#fff; }
+  @keyframes pulse { 0%,100% { box-shadow:0 0 0 0 rgba(0,0,102,.25); } 50% { box-shadow:0 0 0 6px rgba(0,0,102,0); } }
+  .step h3 { margin:1px 0 2px; font-size:15px; }
+  .step .who-does { font-size:11px; color:var(--soft); text-transform:uppercase; letter-spacing:.06em; margin-left:6px; font-weight:500; }
+  .step .body { color:var(--grey); font-size:13px; }
+  .step.pending h3 { color:var(--soft); }
+
+  .kv { display:grid; grid-template-columns:130px 1fr; gap:3px 12px; font-size:13px; margin-top:6px; color:var(--ink); }
+  .kv b { color:var(--grey); font-weight:500; }
+  .kv span { word-break:break-all; }
+  .checks { list-style:none; margin:6px 0 0; padding:0; font-size:13px; }
+  .checks li { display:flex; gap:8px; padding:3px 0; color:var(--ink); }
+  .checks .ic { width:16px; flex:none; font-weight:700; }
+  .ic.pass { color:var(--ok); } .ic.fail { color:var(--bad); } .ic.warn { color:var(--warn); } .ic.skip { color:var(--soft); }
+  .src { font-size:11px; color:var(--soft); border:1px solid var(--line); border-radius:3px; padding:0 4px; margin-left:auto; white-space:nowrap; height:fit-content; }
+  .note { margin-top:8px; font-size:12px; padding:8px 10px; border-radius:6px; background:#f4f5f9; color:var(--grey); }
+  .note.ok { background:var(--ok-bg); color:var(--ok); } .note.bad { background:var(--bad-bg); color:var(--bad); } .note.warn { background:var(--warn-bg); color:var(--warn); }
+  .tx { display:inline-block; margin-top:4px; font-family:ui-monospace,Menlo,monospace; font-size:12px; word-break:break-all; }
+
+  .decision { border:1px solid var(--line); border-radius:10px; padding:14px; margin-top:6px; color:var(--ink); }
+  .decision .big { font-size:22px; font-weight:700; color:var(--navy); font-variant-numeric:tabular-nums; }
+  .actions { display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
+  .actions button { border:1px solid var(--navy); background:#fff; color:var(--navy); border-radius:8px; padding:8px 14px; cursor:pointer; font-weight:600; }
+  .actions button.go { background:var(--navy); color:#fff; }
+  .detail-head { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; margin-bottom:12px; }
+  .detail-head .title { font-size:18px; font-weight:700; }
+  .placeholder { color:var(--soft); text-align:center; padding:48px 16px; }
+  .placeholder b { display:block; color:var(--ink); font-size:16px; margin-bottom:4px; }
+  footer { max-width:1180px; margin:0 auto; padding:8px 16px 28px; color:var(--soft); font-size:12px; }
+
+  @media (max-width: 900px) {
+    .grid { grid-template-columns:1fr; }
+    .kpis { grid-template-columns:repeat(2,1fr); }
+    .hero h1 { font-size:21px; }
+  }
 </style>
 </head>
 <body>
 <header>
-  <h1>CxC Payment Readiness API</h1>
-  <p>Pay-per-request validation for autonomous payment agents · x402 on Cardano Preprod · CashXChain</p>
-</header>
-<main>
-  <section>
-    <h2>1 · Invoice</h2>
-    <div class="row" id="samples"></div>
-    <textarea id="input" placeholder="Paste invoice text or a structured invoice JSON"></textarea>
-    <div class="row">
-      <button class="primary" id="run">Run agent</button>
-      <span class="muted" id="health"></span>
+  <div class="bar">
+    <div class="brand">CashXChain <span>· AI CFO</span></div>
+    <div class="pills">
+      <span class="pill" id="p-net">cardano:preprod</span>
+      <span class="pill" id="p-wallet">agent wallet …</span>
+      <span class="pill live" id="p-status">connecting…</span>
     </div>
-  </section>
+  </div>
+  <div class="hero">
+    <h1>Send your invoices. Your AI CFO gets them ready to pay.</h1>
+    <p>It reads each supplier invoice, hires a verification agent and pays it per request on Cardano, then puts the payment on your desk for approval.</p>
+    <div class="trust">
+      <div><b>Claude reads.</b> Fields only, no wallet access.</div>
+      <div><b>Code decides.</b> Allow-listed payee, price cap, budget, one payment per invoice.</div>
+      <div><b>You approve.</b> Nothing pays a supplier without you.</div>
+    </div>
+  </div>
+</header>
 
-  <section id="runbox" class="hidden">
-    <h2>2 · Agent run</h2>
-    <div class="timeline" id="timeline"></div>
-    <p class="muted" id="error"></p>
-  </section>
+<main>
+  <div class="kpis">
+    <div class="kpi"><div class="label">Invoices received</div><div class="value" id="k-total">0</div><div class="sub" id="k-total-sub">this session</div></div>
+    <div class="kpi"><div class="label">Ready for your approval</div><div class="value" id="k-ready">0</div><div class="sub" id="k-ready-sub">verified and drafted</div></div>
+    <div class="kpi"><div class="label">Held by the CFO</div><div class="value" id="k-held">0</div><div class="sub">needs info, blocked or refused</div></div>
+    <div class="kpi"><div class="label">Spent on verification</div><div class="value" id="k-spend">0 tADA</div><div class="sub" id="k-budget">of … budget</div><div class="meter"><i id="k-meter"></i></div></div>
+  </div>
 
-  <section id="paybox" class="hidden">
-    <h2>3 · x402 payment proof</h2>
-    <div class="kv" id="payment"></div>
-  </section>
+  <div class="grid">
+    <div style="display:grid; gap:16px;">
+      <section class="card">
+        <h2>Invoice inbox</h2>
+        <div class="chips" id="chips"></div>
+        <textarea id="input" placeholder="Paste a supplier invoice: free text, an email, or structured JSON"></textarea>
+        <button class="primary" id="send">Send to AI CFO</button>
+        <div class="hint" id="send-hint">Each verification costs <span id="price">2</span> tADA on Cardano Preprod (test funds).</div>
+      </section>
+      <section class="card">
+        <h2>All invoices</h2>
+        <ul class="inbox" id="list"><li class="empty">No invoices yet. Pick a sample above.</li></ul>
+      </section>
+    </div>
 
-  <section id="reportbox" class="hidden">
-    <h2>4 · Paid readiness report</h2>
-    <p class="verdict" id="verdict"></p>
-    <table id="checks"></table>
-    <p class="muted" id="quote"></p>
-    <p class="muted" id="disclaimer"></p>
-  </section>
-
-  <section id="draftbox" class="hidden">
-    <h2>5 · Payment draft (human approval required)</h2>
-    <div class="kv" id="draft"></div>
-  </section>
+    <section class="card" id="detail">
+      <div class="placeholder"><b>No invoice selected</b>Send an invoice to watch the AI CFO work through it, step by step.</div>
+    </section>
+  </div>
 </main>
+<footer>
+  Demo on Cardano Preprod with test funds. Corridors, rails, fees and FX are simulated and labeled as such. The report is a data-quality and routing check, not an AML, sanctions or KYB decision. Supplier payouts are not executed in this demo.
+</footer>
+
 <script>
 const $ = id => document.getElementById(id);
-const BAD = ["FAILED", "BLOCKED", "SETTLEMENT_UNKNOWN", "NEEDS_INFO"];
-const DONE = ["DRAFT_READY", ...BAD];
-const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
-const kv = obj => Object.entries(obj).map(([k, v]) => `<b>${esc(k)}</b><span>${v}</span>`).join("");
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+const ada = l => `${(Number(l || 0) / 1e6).toLocaleString("en-US", { maximumFractionDigits: 2 })} tADA`;
+const short = a => (a && a.length > 22 ? `${a.slice(0, 12)}…${a.slice(-8)}` : a || "");
+const EXP = { JPY: 0 };
+const money = (minor, cur) => {
+  if (minor == null || !cur) return "";
+  const e = EXP[cur] ?? 2;
+  return `${cur} ${(minor / 10 ** e).toLocaleString("en-US", { minimumFractionDigits: e, maximumFractionDigits: e })}`;
+};
+const TERMINAL = ["DRAFT_READY", "NEEDS_INFO", "BLOCKED", "SETTLEMENT_UNKNOWN", "FAILED"];
+const POLICY_REASONS = ["already paid", "already in progress", "budget exhausted", "unknown settlement", "max payments"];
+const isPolicyStop = run => run.state === "FAILED" && POLICY_REASONS.some(r => (run.error || "").includes(r));
 
-fetch("/api/health").then(r => r.json()).then(h => {
-  $("health").textContent = `x402 ${h.x402Ready ? "ready" : "not configured"} · AI ${h.aiReady ? "ready" : "off"} · price ${Number(h.priceLovelace) / 1e6} tADA`;
-});
-fetch("/api/samples").then(r => r.json()).then(samples => {
-  for (const [name, text] of Object.entries(samples)) {
+const SCENARIOS = [
+  { key: "sepa_ok", label: "Supplier invoice (EUR)" },
+  { key: "us_ok", label: "US vendor (USD)" },
+  { key: "bad_iban", label: "Typo in IBAN" },
+  { key: "no_bank_details", label: "No bank details", safety: true },
+  { key: "prompt_injection", label: "Prompt injection", safety: true },
+  { key: "repeat", label: "Same invoice again", safety: true },
+];
+
+let health = {};
+let samples = {};
+let selected = null;
+let lastInput = "";
+let approvals = {};
+try { approvals = JSON.parse(localStorage.getItem("cxc-approvals") || "{}"); } catch { approvals = {}; }
+const saveApprovals = () => { try { localStorage.setItem("cxc-approvals", JSON.stringify(approvals)); } catch {} };
+
+async function loadHealth() {
+  try {
+    health = await (await fetch("/api/health")).json();
+  } catch { health = {}; }
+  const ready = health.x402Ready && health.aiReady;
+  $("p-status").textContent = ready ? "agent online" : health.status ? (health.x402Ready ? "AI offline" : "wallet not configured") : "offline";
+  $("p-status").className = `pill live ${ready ? "" : "off"}`;
+  $("p-wallet").textContent = health.buyerAddress ? `agent ${short(health.buyerAddress)}` : "agent wallet not set";
+  $("price").textContent = (Number(health.priceLovelace || 2e6) / 1e6).toString();
+  const spent = Number(health.spentLovelace || 0), budget = Number(health.sessionBudgetLovelace || 0);
+  $("k-spend").textContent = ada(spent);
+  $("k-budget").textContent = budget ? `of ${ada(budget)} session budget` : "session budget";
+  $("k-meter").style.width = budget ? `${Math.min(100, (spent / budget) * 100)}%` : "0";
+}
+
+async function loadSamples() {
+  try { samples = await (await fetch("/api/samples")).json(); } catch { samples = {}; }
+  $("chips").innerHTML = "";
+  for (const s of SCENARIOS) {
+    if (s.key !== "repeat" && !samples[s.key]) continue;
     const b = document.createElement("button");
-    b.textContent = name;
-    b.onclick = () => { $("input").value = text; };
-    $("samples").appendChild(b);
+    b.className = `chip ${s.safety ? "safety" : ""}`;
+    b.textContent = s.label;
+    b.title = s.key === "repeat" ? "Re-send the last invoice you sent" : s.key;
+    b.onclick = () => { $("input").value = s.key === "repeat" ? lastInput || samples.sepa_ok : samples[s.key]; };
+    $("chips").appendChild(b);
   }
-});
+}
 
-$("run").onclick = async () => {
-  $("run").disabled = true;
-  ["paybox", "reportbox", "draftbox"].forEach(id => $(id).classList.add("hidden"));
-  $("runbox").classList.remove("hidden");
-  $("timeline").innerHTML = ""; $("error").textContent = "";
-  const res = await fetch("/api/runs", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ input: $("input").value }) });
-  const body = await res.json();
-  if (!res.ok) { $("error").textContent = body.error; $("run").disabled = false; return; }
-  poll(body.id);
+function badge(state, id) {
+  if (state === "DRAFT_READY" && approvals[id] === "approved") return `<span class="badge b-done">Approved</span>`;
+  if (state === "DRAFT_READY" && approvals[id] === "rejected") return `<span class="badge b-bad">Rejected</span>`;
+  const map = {
+    CREATED: ["Received", "b-run"], EXTRACTED: ["Reading", "b-run"], PRECHECKED: ["Checking", "b-run"], PAYING: ["Paying on Cardano", "b-run"],
+    PAID: ["Verified", "b-run"], DRAFT_READY: ["Awaiting you", "b-ok"], NEEDS_INFO: ["Needs info", "b-warn"], BLOCKED: ["Blocked", "b-bad"],
+    SETTLEMENT_UNKNOWN: ["Locked", "b-bad"], FAILED: ["Stopped", "b-bad"],
+  };
+  const [t, c] = map[state] || [state, "b-run"];
+  return `<span class="badge ${c}">${t}</span>`;
+}
+
+async function loadList() {
+  let list = [];
+  try { list = await (await fetch("/api/runs")).json(); } catch { return; }
+  if (!Array.isArray(list)) return;
+  $("k-total").textContent = list.length;
+  const ready = list.filter(r => r.state === "DRAFT_READY" && !approvals[r.id]);
+  const approved = list.filter(r => approvals[r.id] === "approved").length;
+  $("k-ready").textContent = ready.length;
+  $("k-ready-sub").textContent = approved ? `${approved} approved by you` : "verified and drafted";
+  $("k-held").textContent = list.filter(r => TERMINAL.includes(r.state) && r.state !== "DRAFT_READY").length;
+  $("list").innerHTML = list.length
+    ? list.map(r => `<li data-id="${esc(r.id)}" class="${r.id === selected ? "sel" : ""}">
+        <span class="who">${esc(r.supplier || "Reading invoice…")}</span>
+        <span class="amt">${esc(money(r.amountMinor, r.currency))}</span>
+        <span class="meta">${esc(r.invoiceId || r.id.slice(0, 8))} · ${new Date(r.createdAt).toLocaleTimeString()}</span>
+        ${badge(r.state, r.id)}
+      </li>`).join("")
+    : `<li class="empty">No invoices yet. Pick a sample above.</li>`;
+  for (const li of $("list").querySelectorAll("li[data-id]")) li.onclick = () => select(li.dataset.id);
+}
+
+$("send").onclick = async () => {
+  const input = $("input").value.trim();
+  if (!input) return;
+  $("send").disabled = true;
+  try {
+    const res = await fetch("/api/runs", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ input }) });
+    const body = await res.json();
+    if (!res.ok) { $("send-hint").textContent = body.error || `HTTP ${res.status}`; return; }
+    lastInput = input;
+    await select(body.id);
+    loadList();
+  } finally {
+    $("send").disabled = false;
+  }
 };
 
-async function poll(id) {
-  const run = await (await fetch(`/api/runs/${id}`)).json();
-  render(run);
-  if (DONE.includes(run.state)) { $("run").disabled = false; return; }
-  setTimeout(() => poll(id), 1200);
+let pollTimer;
+async function select(id) {
+  selected = id;
+  clearTimeout(pollTimer);
+  const tick = async () => {
+    if (selected !== id) return;
+    let run;
+    try { run = await (await fetch(`/api/runs/${id}`)).json(); } catch { pollTimer = setTimeout(tick, 2000); return; }
+    renderDetail(run);
+    if (!TERMINAL.includes(run.state)) pollTimer = setTimeout(tick, 1500);
+    else { loadHealth(); loadList(); }
+  };
+  await tick();
+  loadList();
 }
 
-function render(run) {
-  $("timeline").innerHTML = run.timeline.map(t => `<span class="step ${BAD.includes(t.state) ? "end-bad" : ""}" title="${esc(t.note)}">${esc(t.state)}</span>`).join("");
-  $("error").textContent = run.error ?? "";
+function reached(run, state) { return run.timeline.some(t => t.state === state); }
+
+function step(cls, n, title, who, body) {
+  return `<li class="step ${cls}"><div class="dot">${cls === "bad" ? "!" : cls === "done" ? "✓" : n}</div>
+    <h3>${title}<span class="who-does">${who}</span></h3><div class="body">${body || ""}</div></li>`;
+}
+
+function renderDetail(run) {
+  const inv = run.invoice;
+  const s = run.state;
+  const policyStop = isPolicyStop(run);
+  const steps = [];
+
+  // 1 Read
+  if (inv) {
+    steps.push(step("done", 1, "Read the invoice", "Claude", `
+      <div class="kv">
+        <b>Supplier</b><span>${esc(inv.supplier)}</span>
+        <b>Amount</b><span>${esc(money(inv.amountMinor, inv.currency))}</span>
+        <b>Invoice</b><span>${esc(inv.id)}${inv.reference ? ` · ref ${esc(inv.reference)}` : ""}</span>
+        <b>Country</b><span>${esc(inv.destinationCountry)}</span>
+        <b>Account</b><span class="mono">${esc(inv.iban || (inv.routingNumber ? `ABA ${inv.routingNumber} / ${inv.accountNumber || "?"}` : "none found"))}${inv.bic ? ` · ${esc(inv.bic)}` : ""}</span>
+      </div>
+      <div class="note">Claude only returns invoice fields. It cannot set the payee, the price or the budget, so instructions hidden in an invoice have nothing to act on.</div>`));
+  } else if (s === "FAILED") {
+    steps.push(step("bad", 1, "Read the invoice", "Claude", `<div class="note bad">${esc(run.error)}</div>`));
+  } else {
+    steps.push(step("active", 1, "Read the invoice", "Claude", "Extracting supplier, amount and bank details…"));
+  }
+
+  // 2 Precheck
+  if (reached(run, "PRECHECKED")) steps.push(step("done", 2, "Free local check", "Code", "An account identifier is present, so verification is worth paying for."));
+  else if (s === "NEEDS_INFO" && !run.report) steps.push(step("warn", 2, "Free local check", "Code", `<div class="note warn">Held before spending anything: ${esc(run.timeline.at(-1)?.note || "missing details")}. No payment was made.</div>`));
+  else steps.push(step(inv ? "active" : "pending", 2, "Free local check", "Code", ""));
+
+  // 3 Hire verification agent (x402)
+  const price = health.priceLovelace, cap = health.maxPriceLovelace;
+  const payState = run.payment ? "done" : policyStop || s === "SETTLEMENT_UNKNOWN" || (s === "FAILED" && reached(run, "PAYING")) ? "bad" : reached(run, "PAYING") ? "active" : "pending";
+  let payBody = `Buys a readiness report from the CxC verification API. It answers HTTP 402 with a price; the agent pays per request with x402.`;
+  if (payState !== "pending") {
+    const okAll = !!run.payment;
+    const reason = run.error || "";
+    const rows = [
+      ["Payee is the allow-listed CxC seller", okAll ? "pass" : reason.includes("payTo") ? "fail" : okAll ? "pass" : "skip", health.sellerAddress ? short(health.sellerAddress) : ""],
+      [`Price ${price ? ada(price) : ""} within cap ${cap ? ada(cap) : ""}`, okAll ? "pass" : "skip", ""],
+      ["Within session budget", okAll ? "pass" : reason.includes("budget") ? "fail" : "skip", ""],
+      ["First payment for this invoice", okAll ? "pass" : /already paid|already in progress|unknown settlement/.test(reason) ? "fail" : "skip", ""],
+    ];
+    if (payState === "active") rows.forEach(r => (r[1] = "pass"));
+    payBody += `<ul class="checks">${rows.map(([t, st, x]) => `<li><span class="ic ${st}">${st === "pass" ? "✓" : st === "fail" ? "✕" : "·"}</span><span>${esc(t)}${x ? ` <span class="mono">${esc(x)}</span>` : ""}</span></li>`).join("")}</ul>`;
+    const foreign = (run.input || "").match(/addr_test1[0-9a-z]{20,}/g)?.find(a => a !== health.sellerAddress);
+    if (foreign && (okAll || payState === "active")) {
+      payBody += `<div class="note warn"><b>Prompt injection ignored.</b> The invoice text told the agent to pay <span class="mono">${esc(short(foreign))}</span>. That address never reached the wallet: the agent pays only the allow-listed seller, at the configured price.</div>`;
+    }
+    if (payState === "active") payBody += `<div class="note">Signed. Settling on Cardano Preprod, this takes about 1 to 3 minutes…</div>`;
+    if (policyStop) payBody += `<div class="note bad">Refused before signing: ${esc(reason)}. No transaction, spend unchanged.</div>`;
+    else if (s === "SETTLEMENT_UNKNOWN") payBody += `<div class="note bad">Settlement unclear. The invoice is locked so it can never be paid twice.${run.settlement?.explorerUrl ? ` <a href="${esc(run.settlement.explorerUrl)}" target="_blank" rel="noopener">Check the explorer</a>` : ""}</div>`;
+    else if (s === "FAILED" && !run.payment) payBody += `<div class="note bad">${esc(reason)}</div>`;
+  }
+  steps.push(step(payState, 3, "Hire the verification agent", "x402", payBody));
+
+  // 4 Paid
   if (run.payment) {
     const p = run.payment;
-    $("paybox").classList.remove("hidden");
-    $("payment").innerHTML = kv({
-      network: esc(p.network), amount: `${Number(p.amount) / 1e6} tADA`, buyer: esc(p.buyerAddress), seller: esc(p.sellerAddress),
-      "tx hash": `<a href="${esc(p.explorerUrl)}" target="_blank" rel="noopener">${esc(p.transactionHash)}</a>`, settled: esc(p.settledAt),
-    });
+    steps.push(step("done", 4, "Paid on Cardano", "Preprod", `
+      ${ada(p.amount)} from the agent wallet to the CxC seller.<br>
+      <a class="tx" href="${esc(p.explorerUrl)}" target="_blank" rel="noopener">${esc(p.transactionHash)} ↗</a>
+      <div class="note ok">Pay for results only: the seller settles after the report is delivered. If the report fails, the payment is cancelled.</div>`));
+  } else {
+    steps.push(step("pending", 4, "Paid on Cardano", "Preprod", ""));
   }
+
+  // 5 Report
   if (run.report) {
     const r = run.report;
-    $("reportbox").classList.remove("hidden");
-    $("verdict").textContent = r.verdict.replaceAll("_", " ");
-    $("checks").innerHTML = r.checks.map(c => `<tr><td class="${c.status}">${c.status}</td><td>${esc(c.id)}</td><td>${esc(c.message)}</td><td><span class="tag">${esc(c.source)}</span></td></tr>`).join("");
-    $("quote").textContent = r.routeQuote ? `${r.routeQuote.label}: ${r.routeQuote.rail}, fee ${r.routeQuote.feeUsd} USD, ${r.routeQuote.fxRate}, ETA ${r.routeQuote.etaHours} h` : "";
-    $("disclaimer").textContent = r.disclaimer;
+    const vcls = r.verdict === "ready_for_review" ? "ok" : r.verdict === "blocked" ? "bad" : "warn";
+    const q = r.routeQuote;
+    steps.push(step(vcls === "ok" ? "done" : vcls === "bad" ? "bad" : "warn", 5, "Verification report", "CxC API", `
+      <ul class="checks">${r.checks.map(c => `<li><span class="ic ${esc(c.status)}">${c.status === "pass" ? "✓" : c.status === "fail" ? "✕" : c.status === "warn" ? "!" : "·"}</span><span>${esc(c.message)}</span><span class="src">${esc(c.source)}</span></li>`).join("")}</ul>
+      ${q ? `<div class="note">${esc(q.label)}: ${esc(q.rail)} · fee USD ${esc(q.feeUsd)} · ${esc(q.fxRate)} · ETA ${esc(q.etaHours)} h</div>` : ""}`));
+  } else {
+    steps.push(step("pending", 5, "Verification report", "CxC API", ""));
   }
+
+  // 6 Decision
+  let decision = "";
   if (run.draft) {
-    const d = run.draft;
-    $("draftbox").classList.remove("hidden");
-    $("draft").innerHTML = kv({ status: esc(d.status), executable: String(d.executable), invoice: esc(d.invoiceId), supplier: esc(d.supplier), amount: `${esc(d.amountMinor)} minor ${esc(d.currency)}`, note: esc(d.note) });
+    const d = run.draft, a = approvals[run.id];
+    decision = `<div class="decision">
+      <div>Pay <b>${esc(d.supplier)}</b> · invoice ${esc(d.invoiceId)}</div>
+      <div class="big">${esc(money(d.amountMinor, d.currency))}</div>
+      ${d.routeQuote ? `<div class="hint">${esc(d.routeQuote.rail)} · fee USD ${esc(d.routeQuote.feeUsd)} (${esc(d.routeQuote.label)})</div>` : ""}
+      ${a === "approved" ? `<div class="note ok">Approved by you at ${esc(approvals[run.id + ":at"] || "")}. In production this goes to CashXChain payout rails. In this demo no supplier payout is executed.</div>`
+        : a === "rejected" ? `<div class="note bad">Rejected by you. Nothing will be paid.</div>`
+        : `<div class="actions"><button class="go" id="approve">Approve payment</button><button id="reject">Reject</button></div>
+           <div class="hint">The AI CFO never pays a supplier on its own.</div>`}
+    </div>`;
+    steps.push(step(a === "rejected" ? "bad" : a ? "done" : "active", 6, "Your decision", "You", decision));
+  } else if (TERMINAL.includes(s)) {
+    const why = s === "NEEDS_INFO" ? "Held: the CFO needs more information from the supplier before anything can be paid."
+      : policyStop ? "Stopped by the spend policy. Nothing was paid twice."
+      : s === "SETTLEMENT_UNKNOWN" ? "Locked until the payment is reconciled."
+      : "Stopped. Nothing was paid to the supplier.";
+    steps.push(step("warn", 6, "Your decision", "You", `<div class="note warn">${esc(why)}</div>`));
+  } else {
+    steps.push(step("pending", 6, "Your decision", "You", ""));
   }
+
+  $("detail").innerHTML = `
+    <div class="detail-head">
+      <span class="title">${esc(inv ? inv.supplier : "New invoice")}</span>
+      ${badge(s, run.id)}
+      <span class="hint mono">${esc(run.id.slice(0, 8))}</span>
+    </div>
+    <ol class="steps">${steps.join("")}</ol>`;
+
+  const decide = verdict => () => {
+    approvals[run.id] = verdict;
+    approvals[run.id + ":at"] = new Date().toLocaleTimeString();
+    saveApprovals();
+    renderDetail(run);
+    loadList();
+  };
+  if ($("approve")) $("approve").onclick = decide("approved");
+  if ($("reject")) $("reject").onclick = decide("rejected");
 }
+
+loadHealth();
+loadSamples();
+loadList();
+setInterval(() => { loadList(); }, 4000);
 </script>
 </body>
 </html>

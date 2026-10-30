@@ -356,7 +356,7 @@ describe("remote:run against a real seller stack", () => {
     expect(await remoteRun({ baseUrl: s.url, yes: true, sample: "sepa_ok", log: out.log })).toBe(1);
     expect(out.text()).toContain("free-text input needs ANTHROPIC_API_KEY on the server");
     expect(await remoteRun({ baseUrl: s.url, yes: true, sample: "nope", log: out.log })).toBe(1);
-    expect(out.text()).toContain("unknown sample nope; the server has: sepa_ok, us_ok, bad_iban");
+    expect(out.text()).toContain("unknown sample nope; the server has: sepa_ok, us_ok, bad_iban, no_bank_details, prompt_injection");
     expect(s.runsCreated()).toBe(0);
   });
 
