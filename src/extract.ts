@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { parseMessage } from "@anthropic-ai/sdk/lib/parser";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
 import { normalizeIban } from "./readiness.js";
@@ -28,13 +29,23 @@ export class ExtractionError extends Error {}
 export async function extractInvoice(text: string, model: string): Promise<Invoice> {
   const client = new Anthropic();
   // No model fallback on purpose: a refusal stops the run instead of switching models mid-demo.
-  const response = await client.messages.parse({
+  const params = {
     model,
     max_tokens: 16000,
     system: SYSTEM,
-    messages: [{ role: "user", content: `<invoice>\n${text}\n</invoice>` }],
-    output_config: { effort: "low", format: zodOutputFormat(ExtractionSchema) },
-  });
+    messages: [{ role: "user" as const, content: `<invoice>\n${text}\n</invoice>` }],
+    output_config: { effort: "low" as const, format: zodOutputFormat(ExtractionSchema) },
+  };
+  // Check refusal before SDK parsing: refusal text is not necessarily JSON.
+  const message = await client.messages.create(params);
+  if (message.stop_reason === "refusal") throw new ExtractionError("model declined the extraction");
+  if (message.stop_reason !== "end_turn") throw new ExtractionError("model did not complete the extraction");
+  let response;
+  try {
+    response = parseMessage(message, params, { logger: console });
+  } catch {
+    throw new ExtractionError("model output did not match the schema");
+  }
   if (response.stop_reason === "refusal") throw new ExtractionError("model declined the extraction");
   if (!response.parsed_output) throw new ExtractionError("model output did not match the schema");
   return toInvoice(response.parsed_output);
