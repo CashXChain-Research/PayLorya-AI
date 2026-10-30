@@ -49,8 +49,14 @@ npx wrangler secret put SELLER_ADDRESS
 npx wrangler deploy
 ```
 
-Then put the printed `https://cxc-agentpay.<subdomain>.workers.dev` into `vars.PUBLIC_BASE_URL` in
-`wrangler.jsonc` and run `npx wrangler deploy` again. The first container start after a deploy can take
+Live URL: **https://cxc-agentpay.cashxchain.workers.dev** (CashXChain account, pinned via `account_id`
+in `wrangler.jsonc`). It is set as `vars.PUBLIC_BASE_URL`. If the URL changes, update it there and run
+`npx wrangler deploy` again.
+
+Alternative to `wrangler secret put`: after the first deploy, add the four secrets in the dashboard under
+Workers & Pages → `cxc-agentpay` → Settings → Variables and Secrets, type **Secret**. Secrets survive
+`wrangler deploy`; plain variables added in the dashboard do not (deploy replaces them with `vars`).
+Redeploy afterwards so the container restarts with the new env. The first container start after a deploy can take
 a while; retry `/api/health` until it answers.
 
 ## Verify

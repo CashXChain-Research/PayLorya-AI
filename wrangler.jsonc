@@ -1,6 +1,8 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "cxc-agentpay",
+  // CashXChain account; pinned so a login with several accounts cannot deploy elsewhere.
+  "account_id": "755009eab613c24e1d604d857042601c",
   "main": "cloudflare/worker.ts",
   "compatibility_date": "2026-10-01",
   "containers": [
@@ -17,10 +19,11 @@
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["AgentPayContainer"] }],
   "observability": { "enabled": true },
-  // Non-secret config. Set PUBLIC_BASE_URL to the deployed URL after the first deploy.
+  // Non-secret config. Every deploy overwrites vars with these values; keep them here, not in the dashboard.
   // Secrets (never here): ANTHROPIC_API_KEY, BLOCKFROST_PROJECT_ID, BUYER_MNEMONIC, SELLER_ADDRESS
   // via `npx wrangler secret put <NAME>`. See docs/DEPLOY.md.
   "vars": {
+    "PUBLIC_BASE_URL": "https://cxc-agentpay.cashxchain.workers.dev",
     "LOCAL_FACILITATOR": "false",
     "PRICE_LOVELACE": "2000000",
     "MAX_PRICE_LOVELACE": "3000000",
