@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
+import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
 import { normalizeIban } from "./readiness.js";
 import { CURRENCY_EXPONENT, InvoiceSchema, type Invoice } from "./types.js";
@@ -27,14 +27,13 @@ export class ExtractionError extends Error {}
 
 export async function extractInvoice(text: string, model: string): Promise<Invoice> {
   const client = new Anthropic();
-  const response = await client.beta.messages.parse({
+  // No model fallback on purpose: a refusal stops the run instead of switching models mid-demo.
+  const response = await client.messages.parse({
     model,
     max_tokens: 16000,
-    betas: ["server-side-fallback-2026-07-01"],
-    fallbacks: "default",
     system: SYSTEM,
     messages: [{ role: "user", content: `<invoice>\n${text}\n</invoice>` }],
-    output_config: { effort: "low", format: betaZodOutputFormat(ExtractionSchema) },
+    output_config: { effort: "low", format: zodOutputFormat(ExtractionSchema) },
   });
   if (response.stop_reason === "refusal") throw new ExtractionError("model declined the extraction");
   if (!response.parsed_output) throw new ExtractionError("model output did not match the schema");
