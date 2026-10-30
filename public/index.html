@@ -3,139 +3,205 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>CxC AgentPay</title>
+<title>CxC AgentPay · Payment readiness</title>
 <style>
-  :root { --navy:#000066; --teal:#005577; --ink:#111; --grey:#6b6b6b; --line:#e3e3e3; --bg:#fafafa; --ok:#005577; --bad:#8a1c1c; --warn:#8a6d00; }
-  * { box-sizing:border-box; }
-  body { margin:0; font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; color:var(--ink); background:var(--bg); }
-  header { background:var(--navy); color:#fff; padding:20px 16px; }
-  header h1 { margin:0; font-size:20px; letter-spacing:.2px; }
-  header p { margin:4px 0 0; opacity:.8; font-size:13px; }
-  main { max-width:960px; margin:0 auto; padding:16px; display:grid; gap:16px; }
-  section { background:#fff; border:1px solid var(--line); border-radius:8px; padding:16px; }
-  h2 { margin:0 0 12px; font-size:13px; text-transform:uppercase; letter-spacing:.08em; color:var(--teal); }
-  textarea { width:100%; min-height:150px; font:13px/1.4 ui-monospace,monospace; border:1px solid var(--line); border-radius:6px; padding:10px; }
-  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:8px; }
-  button { border:1px solid var(--navy); background:#fff; color:var(--navy); padding:7px 12px; border-radius:6px; cursor:pointer; font-size:13px; }
-  button.primary { background:var(--navy); color:#fff; }
-  button:disabled { opacity:.5; cursor:default; }
-  .muted { color:var(--grey); font-size:13px; }
-  .timeline { display:flex; flex-wrap:wrap; gap:6px; }
-  .step { font:12px ui-monospace,monospace; padding:3px 8px; border-radius:4px; background:#eef3f6; color:var(--teal); }
-  .step.end-bad { background:#f6e9e9; color:var(--bad); }
-  table { width:100%; border-collapse:collapse; font-size:13px; }
-  td { padding:6px 4px; border-top:1px solid var(--line); vertical-align:top; }
-  .pass { color:var(--ok); font-weight:600; } .fail { color:var(--bad); font-weight:600; } .warn { color:var(--warn); font-weight:600; } .skip { color:var(--grey); }
-  .tag { font-size:11px; color:var(--grey); border:1px solid var(--line); border-radius:3px; padding:0 4px; }
-  .kv { display:grid; grid-template-columns:140px 1fr; gap:4px 12px; font-size:13px; word-break:break-all; }
-  .kv b { color:var(--grey); font-weight:500; }
-  a { color:var(--teal); }
-  .verdict { font-size:18px; font-weight:700; color:var(--navy); }
-  .hidden { display:none; }
+:root{--navy:#000066;--teal:#005577;--ink:#151515;--grey:#60646c;--line:#dddfe4;--bg:#f5f6f8;--bad:#a01b28;--warn:#805800}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}header{background:var(--navy);color:white;padding:28px max(20px,calc((100vw - 1120px)/2))}h1{font-size:clamp(26px,4vw,38px);line-height:1.2;margin:8px 0}header p{margin:6px 0 18px;color:#e0e3ee}.eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase}.network{display:inline-block;background:#fff;color:var(--navy);border-radius:24px;padding:4px 12px;font-size:13px;font-weight:700}.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:18px}.metric{border-top:1px solid #ffffff55;padding-top:10px}.metric span{display:block;font-size:13px;color:#e0e3ee}.metric strong{font-size:24px}.wallets{display:flex;flex-wrap:wrap;gap:12px;margin-top:18px;font:13px ui-monospace,monospace}.wallets button{background:transparent;color:white;border-color:#ffffff70;padding:3px 8px}main{max-width:1160px;margin:auto;padding:24px 20px 40px;display:grid;gap:18px}section{background:white;border:1px solid var(--line);border-radius:12px;padding:24px}h2{margin:0 0 14px;color:var(--navy);font-size:20px}h3{font-size:16px;color:var(--teal)}.number{color:var(--teal);margin-right:8px}.row{display:flex;flex-wrap:wrap;align-items:center;gap:8px}button{font:inherit;font-size:14px;padding:9px 14px;border:1px solid var(--navy);border-radius:6px;background:white;color:var(--navy);cursor:pointer}button.primary{background:var(--navy);color:white;font-weight:650}button:hover:not(:disabled){box-shadow:0 0 0 2px #00557730}button:disabled{opacity:.5;cursor:not-allowed}button[aria-pressed="true"]{background:var(--teal);border-color:var(--teal);color:white}:focus-visible{outline:3px solid #0082aa;outline-offset:3px}textarea{margin:14px 0;width:100%;min-height:190px;resize:vertical;padding:14px;border:1px solid #a8adb7;border-radius:6px;font:14px/1.6 ui-monospace,monospace}.muted{color:var(--grey);font-size:14px}.hidden{display:none!important}.timeline{display:flex;gap:7px;flex-wrap:wrap;padding:0;list-style:none}.step{padding:4px 9px;background:#edf3f5;border-radius:4px;color:var(--teal);font:13px/1.6 ui-monospace,monospace}.step.bad{background:#fcebed;color:var(--bad)}.kv{display:grid;grid-template-columns:minmax(120px,180px) 1fr;gap:8px 16px;overflow-wrap:anywhere}.kv dt{color:var(--grey)}.kv dd{margin:0;white-space:pre-wrap}.notice{background:#edf5f7;border-left:4px solid var(--teal);padding:14px 18px;border-radius:4px}.danger{border-color:var(--bad);background:#fff0f1;color:#7b1420}.status-list{list-style:none;padding:0}.status-list li{padding:8px 0;border-bottom:1px solid var(--line)}.pass{color:var(--teal);font-weight:650}.fail{color:var(--bad);font-weight:650}.warn{color:var(--warn);font-weight:650}.skip{color:var(--grey)}.tag{display:inline-block;font-size:12px;border:1px solid var(--line);padding:2px 7px;border-radius:4px;white-space:nowrap}.table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:14px;text-align:left}th,td{padding:12px 8px;vertical-align:top;border-bottom:1px solid var(--line)}th{font-size:12px;text-transform:uppercase;color:var(--grey)}.verdict{font-size:24px;font-weight:750;margin:8px 0 18px;color:var(--navy)}a{color:var(--teal);overflow-wrap:anywhere}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f4f5f7;padding:16px;border-radius:6px;font-size:13px}footer{color:var(--grey);font-size:13px}#error:empty{display:none}@media(max-width:650px){section{padding:18px}.metrics{grid-template-columns:repeat(2,1fr)}.kv{grid-template-columns:1fr;gap:2px}.kv dd{margin-bottom:10px}.wallets{display:grid}th,td{padding:9px 5px}.tag{white-space:normal}}@media(prefers-reduced-motion:no-preference){.waiting::before{content:"";display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--teal);margin-right:10px;animation:pulse 1.8s infinite}@keyframes pulse{50%{opacity:.2}}}
 </style>
 </head>
 <body>
 <header>
-  <h1>CxC Payment Readiness API</h1>
-  <p>Pay-per-request validation for autonomous payment agents · x402 on Cardano Preprod · CashXChain</p>
+<div class="eyebrow">CashXChain · The Infrastructure for the money of tomorrow</div>
+<h1>Payment readiness, bought by an agent.</h1>
+<p>Claude extracts. Deterministic policy controls spending. A human approves the payout draft.</p>
+<span class="network" id="network">Cardano Preprod · testnet</span>
+<div class="metrics" id="metrics"></div>
+<div class="wallets"><span id="buyer"></span><span id="seller"></span></div>
 </header>
 <main>
-  <section>
-    <h2>1 · Invoice</h2>
-    <div class="row" id="samples"></div>
-    <textarea id="input" placeholder="Paste invoice text or a structured invoice JSON"></textarea>
-    <div class="row">
-      <button class="primary" id="run">Run agent</button>
-      <span class="muted" id="health"></span>
-    </div>
-  </section>
-
-  <section id="runbox" class="hidden">
-    <h2>2 · Agent run</h2>
-    <div class="timeline" id="timeline"></div>
-    <p class="muted" id="error"></p>
-  </section>
-
-  <section id="paybox" class="hidden">
-    <h2>3 · x402 payment proof</h2>
-    <div class="kv" id="payment"></div>
-  </section>
-
-  <section id="reportbox" class="hidden">
-    <h2>4 · Paid readiness report</h2>
-    <p class="verdict" id="verdict"></p>
-    <table id="checks"></table>
-    <p class="muted" id="quote"></p>
-    <p class="muted" id="disclaimer"></p>
-  </section>
-
-  <section id="draftbox" class="hidden">
-    <h2>5 · Payment draft (human approval required)</h2>
-    <div class="kv" id="draft"></div>
-  </section>
+<section>
+<h2><span class="number">01</span> Invoice</h2>
+<p class="muted">Synthetic demo invoices only. The API costs tADA on Cardano Preprod (testnet).</p>
+<div class="row" id="samples" aria-label="Demo scenarios"></div>
+<label class="hidden" for="input">Invoice text or structured Invoice JSON</label>
+<textarea id="input" aria-label="Invoice text or structured Invoice JSON" placeholder="Choose a sample, paste invoice text, or use structured Invoice JSON to skip Claude."></textarea>
+<div class="row"><button class="primary" id="run">Run agent</button><span class="muted" id="health" role="status">Checking configuration…</span></div>
+<div id="runbox" class="hidden" aria-live="polite"><ol class="timeline" id="timeline"></ol><p id="error" class="notice danger" role="alert"></p></div>
+</section>
+<section id="extractbox">
+<h2><span class="number">02</span> Extracted fields</h2>
+<p class="muted" id="extraction-note">Text is extracted by Claude; amounts are converted deterministically. Structured Invoice JSON skips Claude.</p>
+<dl class="kv" id="extracted"><dt>Status</dt><dd>Waiting for an invoice run.</dd></dl>
+</section>
+<section>
+<h2><span class="number">03</span> Spend policy</h2>
+<p class="muted">Offer comparisons are shown below. The server ledger enforces invoice locks and budget, including concurrent requests.</p>
+<ul class="status-list" id="policy"></ul>
+</section>
+<section id="paybox">
+<h2><span class="number">04</span> x402 payment</h2>
+<p class="muted" id="offer-status">Waiting for a live HTTP 402 offer. Configuration alone is not payment evidence.</p>
+<dl class="kv" id="offer"></dl>
+<p id="waiting" class="notice waiting hidden" role="status">Waiting for confirmation on Cardano preprod (up to a few minutes). Keep this page open.</p>
+<div id="unknown" class="notice danger hidden" role="alert"><strong>Payment state unknown, invoice locked, will not pay again.</strong><p id="unknown-reason"></p><div id="unknown-link"></div></div>
+<dl class="kv" id="payment"></dl>
+</section>
+<section id="reportbox">
+<h2><span class="number">05</span> Paid readiness report</h2>
+<p id="report-empty" class="muted">A report appears only after successful settlement.</p>
+<p class="verdict" id="verdict"></p>
+<div class="table-wrap"><table id="report-table" class="hidden"><thead><tr><th>Result</th><th>Check</th><th>Finding</th><th>Source</th></tr></thead><tbody id="checks"></tbody></table></div>
+<p class="notice hidden" id="quote"></p><p class="muted" id="disclaimer"></p>
+</section>
+<section id="draftbox">
+<h2><span class="number">06</span> Payment draft</h2>
+<p id="draft-status" class="muted">A draft appears when the report is ready for human review.</p>
+<dl class="kv" id="draft"></dl>
+<button disabled title="not available: no payout endpoint in this demo">Execute payout</button>
+</section>
+<section>
+<h2><span class="number">07</span> For developers</h2>
+<p>Any agent can buy a readiness report. An unpaid request returns HTTP 402 with the terms in the base64-encoded <code>PAYMENT-REQUIRED</code> header.</p>
+<pre id="curl"></pre>
+<p class="muted">Requires a configured seller and facilitator. Corridors, rails, fees, FX and ETA are simulated. This is a data-quality and routing check, not an AML, sanctions or KYB decision.</p>
+</section>
+<footer>No supplier payout is executed. Run state and the spend ledger are in memory and reset when the server restarts.</footer>
 </main>
 <script>
 const $ = id => document.getElementById(id);
 const BAD = ["FAILED", "BLOCKED", "SETTLEMENT_UNKNOWN", "NEEDS_INFO"];
 const DONE = ["DRAFT_READY", ...BAD];
-const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
-const kv = obj => Object.entries(obj).map(([k, v]) => `<b>${esc(k)}</b><span>${v}</span>`).join("");
-
-fetch("/api/health").then(r => r.json()).then(h => {
-  $("health").textContent = `x402 ${h.x402Ready ? "ready" : "not configured"} · AI ${h.aiReady ? "ready" : "off"} · price ${Number(h.priceLovelace) / 1e6} tADA`;
-});
-fetch("/api/samples").then(r => r.json()).then(samples => {
-  for (const [name, text] of Object.entries(samples)) {
-    const b = document.createElement("button");
-    b.textContent = name;
-    b.onclick = () => { $("input").value = text; };
+const LABELS = {sepa_ok:"SEPA invoice",us_ok:"US ACH invoice",bad_iban:"Invalid IBAN",injection:"Prompt injection attempt",missing_account:"Missing bank details",over_ceiling:"Above demo ceiling",no_corridor:"Unsupported corridor"};
+const esc = s => String(s ?? "").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c]);
+const kv = obj => Object.entries(obj).map(([k,v])=>`<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("");
+const ada = value => {try {const n=BigInt(value);return `${n/1000000n}.${(n%1000000n).toString().padStart(6,"0").replace(/0+$/,"")||"0"} tADA`;}catch{return "Unavailable";}};
+const short = s => s ? `${s.slice(0,16)}…${s.slice(-8)}` : "Not configured";
+function txLink(container, url, hash) {
+  if (!url || !hash) return;
+  try {const parsed = new URL(url);if (parsed.protocol!=="https:") return;}catch{return;}
+  const a=document.createElement("a");a.href=url;a.target="_blank";a.rel="noopener noreferrer";a.textContent=hash;container.appendChild(a);
+}
+let health, offer, currentRun, pollTimer, activeId, failures=0;
+async function json(url, options) {
+  const response=await fetch(url,{...options,signal:AbortSignal.timeout(15000)});
+  const body=await response.json();
+  if (!response.ok) throw new Error(typeof body.error==="string"?body.error:`HTTP ${response.status}`);
+  return body;
+}
+function wallet(id,label,address) {
+  const el=$(id);el.textContent=`${label}: ${short(address)} `;
+  if(!address)return;
+  const b=document.createElement("button");b.textContent="Copy";b.setAttribute("aria-label",`Copy ${label.toLowerCase()} address`);
+  b.onclick=async()=>{try{await navigator.clipboard.writeText(address);b.textContent="Copied";}catch{b.textContent="Copy unavailable";}};
+  el.appendChild(b);
+}
+async function refreshHealth() {
+  health=await json("/api/health");
+  $("network").textContent=`${health.network} · testnet`;
+  $("metrics").innerHTML=Object.entries({Price:health.priceLovelace,Cap:health.maxPriceLovelace,Budget:health.sessionBudgetLovelace,Spent:health.spentLovelace}).map(([k,v])=>`<div class="metric"><span>${esc(k)}</span><strong>${esc(ada(v))}</strong></div>`).join("");
+  wallet("buyer","Buyer",health.buyerAddress);wallet("seller","Seller",health.sellerAddress);
+  $("health").textContent=`x402 ${health.x402Ready?"configured":"not configured"} · Claude ${health.aiReady?"configured":"off — use JSON"}`;
+  renderPolicy();
+}
+function line(ok,label,detail) {return `<li><span class="${ok===true?"pass":ok===false?"fail":"skip"}">${ok===true?"✓":ok===false?"✗":"…"} ${esc(label)}</span> <span class="muted">${esc(detail)}</span></li>`;}
+function renderPolicy() {
+  const h=health,r=currentRun,p=r?.payment;
+  const payee=offer&&h?.sellerAddress ? offer.payTo===h.sellerAddress : null;
+  let cap=null,budget=null;
+  try {if(offer&&h){cap=BigInt(offer.amount)<=BigInt(h.maxPriceLovelace);budget=BigInt(h.spentLovelace)+(p?0n:BigInt(offer.amount))<=BigInt(h.sessionBudgetLovelace);}}catch{}
+  const locked=r?.state==="SETTLEMENT_UNKNOWN" || /already paid|unknown settlement|already in progress/.test(r?.error??"");
+  const first=locked?false:p?true:null;
+  $("policy").innerHTML=line(payee,"Payee allowlisted",offer?"Live offer compared with configured seller":"Awaiting live offer")+line(cap,"Price ≤ cap",h?`Cap ${ada(h.maxPriceLovelace)}`:"Awaiting configuration")+line(budget,"Budget left",h?`${ada(h.spentLovelace)} spent / ${ada(h.sessionBudgetLovelace)} budget; pending holds are checked by server`:"Awaiting configuration")+line(first,"First payment for this invoice",locked?"Invoice is locked against payment":p?"Server accepted this payment; invoice is now locked":"Awaiting server ledger decision");
+}
+async function fetchOffer() {
+  offer=undefined;$("offer").textContent="";renderPolicy();
+  if(!health?.x402Ready) {$("offer-status").textContent="Live offer unavailable: configure the seller, buyer wallet and Blockfrost first.";return;}
+  try {
+    const response=await fetch("/v1/payment-readiness",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({invoice:{}}),signal:AbortSignal.timeout(35000)});
+    if(response.status!==402)throw new Error(`Expected HTTP 402; received ${response.status}`);
+    const encoded=response.headers.get("payment-required");if(!encoded)throw new Error("PAYMENT-REQUIRED header missing");
+    const terms=JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(encoded),c=>c.charCodeAt(0))));
+    offer=terms.accepts?.find(o=>o.scheme==="exact"&&o.network==="cardano:preprod"&&o.asset==="lovelace");
+    if(!offer)throw new Error("No supported Cardano preprod offer");
+    $("offer-status").textContent="Live HTTP 402 offer · terms observed without signing or paying";
+    $("offer").innerHTML=kv({scheme:offer.scheme,network:offer.network,asset:offer.asset,amount:ada(offer.amount),payTo:offer.payTo});
+  } catch(error) {$("offer-status").textContent=`Offer unavailable: ${error.message}`;}
+  renderPolicy();
+}
+function resetRun() {
+  currentRun=undefined;failures=0;clearTimeout(pollTimer);activeId=undefined;
+  for(const id of ["timeline","error","payment","unknown-reason","unknown-link","verdict","checks","quote","disclaimer","draft"])$(id).textContent="";
+  for(const id of ["unknown","waiting","report-table","quote"])$(id).classList.add("hidden");
+  $("report-empty").classList.remove("hidden");$("extracted").innerHTML=kv({Status:"Waiting for extraction…"});
+  $("draft-status").textContent="A draft appears when the report is ready for human review.";renderPolicy();
+}
+function render(run) {
+  currentRun=run;
+  $("timeline").innerHTML=run.timeline.map(t=>`<li class="step ${BAD.includes(t.state)?"bad":""}" title="${esc(t.note)}">${esc(t.state)}</li>`).join("");
+  $("error").textContent=run.error || (BAD.includes(run.state)?run.timeline.at(-1)?.note:"") || "";
+  if(run.invoice)$("extracted").innerHTML=kv(run.invoice);
+  let structured=false;try{structured=typeof JSON.parse(run.input).amountMinor==="number";}catch{}
+  $("extraction-note").textContent=structured?"Structured Invoice JSON supplied; Claude was not called.":"Extracted by Claude; amounts converted deterministically.";
+  $("waiting").classList.toggle("hidden",run.state!=="PAYING");
+  $("unknown").classList.toggle("hidden",run.state!=="SETTLEMENT_UNKNOWN");
+  if(run.state==="SETTLEMENT_UNKNOWN") {
+    $("unknown-reason").textContent=run.settlement?.reason || run.error || "Verify settlement before taking further action.";
+    $("unknown-link").textContent="";
+    // A supplies this additive field; absence must never be rendered as a successful payment.
+    if(run.settlement)txLink($("unknown-link"),run.settlement.explorerUrl,run.settlement.transactionHash);
+  }
+  if(run.payment) {
+    const p=run.payment;$("payment").innerHTML=kv({Status:"Settled",network:p.network,asset:p.asset,amount:ada(p.amount),buyer:p.buyerAddress,seller:p.sellerAddress,"Settled at":p.settledAt});
+    const dt=document.createElement("dt");dt.textContent="Transaction";const dd=document.createElement("dd");dd.textContent=p.transactionHash;
+    try {if(new URL(p.explorerUrl).protocol==="https:"){dd.textContent="";txLink(dd,p.explorerUrl,p.transactionHash);}}catch{}
+    $("payment").append(dt,dd);
+  }
+  if(run.report) {
+    const r=run.report;$("report-empty").classList.add("hidden");$("report-table").classList.remove("hidden");
+    $("verdict").textContent=r.verdict.replaceAll("_"," ");
+    $("checks").innerHTML=r.checks.map(c=>`<tr><td class="${["pass","fail","warn","skip"].includes(c.status)?c.status:"skip"}">${esc(c.status)}</td><td>${esc(c.id)}</td><td>${esc(c.message)}</td><td><span class="tag">${esc(c.source)}</span></td></tr>`).join("");
+    $("quote").classList.toggle("hidden",!r.routeQuote);
+    if(r.routeQuote)$("quote").textContent=`Simulated route/fees: ${r.routeQuote.rail}, fee ${r.routeQuote.feeUsd} USD, ${r.routeQuote.fxRate}, ETA ${r.routeQuote.etaHours} h`;
+    $("disclaimer").textContent=r.disclaimer;
+  }
+  if(run.draft) {
+    $("draft-status").textContent="Awaiting human approval. No payout executed.";
+    $("draft").innerHTML=kv({Invoice:run.draft.invoiceId,Supplier:run.draft.supplier,Amount:`${run.draft.amountMinor} minor ${run.draft.currency}`,Note:run.draft.note});
+  }
+  renderPolicy();
+}
+async function poll(id) {
+  if(activeId!==id)return;
+  try {
+    const run=await json(`/api/runs/${encodeURIComponent(id)}`);if(activeId!==id)return;
+    failures=0;render(run);
+    await refreshHealth().catch(()=>{});
+    if(DONE.includes(run.state)){$("run").disabled=false;activeId=undefined;return;}
+    // No short overall timeout: settlement can take four minutes or longer.
+    pollTimer=setTimeout(()=>poll(id),1200);
+  } catch(error) {
+    if(activeId!==id)return;
+    failures++;$("error").textContent=`Connection interrupted: ${error.message}. Checking this same run again; no new payment request is sent.`;
+    pollTimer=setTimeout(()=>poll(id),Math.min(1000*2**Math.min(failures,4),15000));
+  }
+}
+$("run").onclick=async()=>{
+  if(!$("input").value.trim()){$("input").focus();return;}
+  $("run").disabled=true;resetRun();$("runbox").classList.remove("hidden");
+  try {
+    const result=await json("/api/runs",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({input:$("input").value})});
+    activeId=result.id;poll(activeId);
+  }catch(error){$("error").textContent=`Could not confirm run creation: ${error.message}. Check existing runs before retrying if the request timed out.`;$("run").disabled=false;}
+};
+$("curl").textContent=`curl -i -X POST '${location.origin}/v1/payment-readiness' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Idempotency-Key: demo-unpaid-offer' \\\n  --data '{"invoice":{"id":"DEMO-1","supplier":"Demo supplier","destinationCountry":"DE","currency":"EUR","amountMinor":125000,"reference":"DEMO-1","iban":"DE89370400440532013000"}}'`;
+refreshHealth().then(fetchOffer).catch(error=>{$("health").textContent=`Configuration unavailable: ${error.message}`;renderPolicy();});
+json("/api/samples").then(samples=>{
+  for(const [name,text]of Object.entries(samples)) {
+    const b=document.createElement("button");b.textContent=LABELS[name]||name;b.setAttribute("aria-pressed","false");
+    b.onclick=()=>{$("input").value=text;for(const button of $("samples").children)button.setAttribute("aria-pressed",String(button===b));};
     $("samples").appendChild(b);
   }
-});
-
-$("run").onclick = async () => {
-  $("run").disabled = true;
-  ["paybox", "reportbox", "draftbox"].forEach(id => $(id).classList.add("hidden"));
-  $("runbox").classList.remove("hidden");
-  $("timeline").innerHTML = ""; $("error").textContent = "";
-  const res = await fetch("/api/runs", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ input: $("input").value }) });
-  const body = await res.json();
-  if (!res.ok) { $("error").textContent = body.error; $("run").disabled = false; return; }
-  poll(body.id);
-};
-
-async function poll(id) {
-  const run = await (await fetch(`/api/runs/${id}`)).json();
-  render(run);
-  if (DONE.includes(run.state)) { $("run").disabled = false; return; }
-  setTimeout(() => poll(id), 1200);
-}
-
-function render(run) {
-  $("timeline").innerHTML = run.timeline.map(t => `<span class="step ${BAD.includes(t.state) ? "end-bad" : ""}" title="${esc(t.note)}">${esc(t.state)}</span>`).join("");
-  $("error").textContent = run.error ?? "";
-  if (run.payment) {
-    const p = run.payment;
-    $("paybox").classList.remove("hidden");
-    $("payment").innerHTML = kv({
-      network: esc(p.network), amount: `${Number(p.amount) / 1e6} tADA`, buyer: esc(p.buyerAddress), seller: esc(p.sellerAddress),
-      "tx hash": `<a href="${esc(p.explorerUrl)}" target="_blank" rel="noopener">${esc(p.transactionHash)}</a>`, settled: esc(p.settledAt),
-    });
-  }
-  if (run.report) {
-    const r = run.report;
-    $("reportbox").classList.remove("hidden");
-    $("verdict").textContent = r.verdict.replaceAll("_", " ");
-    $("checks").innerHTML = r.checks.map(c => `<tr><td class="${c.status}">${c.status}</td><td>${esc(c.id)}</td><td>${esc(c.message)}</td><td><span class="tag">${esc(c.source)}</span></td></tr>`).join("");
-    $("quote").textContent = r.routeQuote ? `${r.routeQuote.label}: ${r.routeQuote.rail}, fee ${r.routeQuote.feeUsd} USD, ${r.routeQuote.fxRate}, ETA ${r.routeQuote.etaHours} h` : "";
-    $("disclaimer").textContent = r.disclaimer;
-  }
-  if (run.draft) {
-    const d = run.draft;
-    $("draftbox").classList.remove("hidden");
-    $("draft").innerHTML = kv({ status: esc(d.status), executable: String(d.executable), invoice: esc(d.invoiceId), supplier: esc(d.supplier), amount: `${esc(d.amountMinor)} minor ${esc(d.currency)}`, note: esc(d.note) });
-  }
-}
+}).catch(error=>{$("samples").textContent=`Samples unavailable: ${error.message}`;});
 </script>
 </body>
 </html>

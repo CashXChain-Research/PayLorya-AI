@@ -27,6 +27,8 @@ app.get(["/health", "/api/health"], (_req, res) => {
     buyerAddress: agent?.buyerAddress,
     sellerAddress: config.SELLER_ADDRESS,
     priceLovelace: config.PRICE_LOVELACE.toString(),
+    maxPriceLovelace: config.MAX_PRICE_LOVELACE.toString(),
+    sessionBudgetLovelace: config.SESSION_BUDGET_LOVELACE.toString(),
     spentLovelace: agent?.spentLovelace.toString() ?? "0",
   });
 });
