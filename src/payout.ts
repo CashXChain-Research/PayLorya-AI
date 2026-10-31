@@ -43,6 +43,8 @@ export interface ChainView {
   txOutputs?(txHash: string): Promise<TxOutput[] | undefined>;
   /** Slot of the provider's latest indexed block. Without it, an unknown tx is never proven expired. */
   tipSlot?(): Promise<bigint>;
+  /** Lovelace held at an address (sum of its UTxOs). Display only: never a spending decision. */
+  addressLovelace?(address: string): Promise<bigint>;
 }
 
 // GET /txs/{hash}/utxos (Blockfrost OpenAPI tx_content_utxo): quantities are decimal strings.
@@ -55,6 +57,8 @@ const BlockfrostTxUtxos = z.object({
     }),
   ),
 });
+// GET /addresses/{address}/utxos, paged by 100 (as the evolution SDK reads it); 404 = no UTxOs.
+const BlockfrostAddressUtxos = z.array(z.object({ amount: z.array(z.object({ unit: z.string(), quantity: z.string().regex(/^\d+$/) })) }));
 // GET /blocks/latest (block_content): slot is nullable there; null fails the parse.
 const BlockfrostTip = z.object({ slot: z.number().int().nonnegative() });
 
@@ -92,6 +96,16 @@ export function blockfrostChainView(config: Config): ChainView {
       if (!response) throw new Error("Blockfrost /blocks/latest: no tip");
       return BigInt(BlockfrostTip.parse(await response.json()).slot);
     },
+    async addressLovelace(address) {
+      let total = 0n;
+      for (let page = 1; page <= 20; page++) {
+        const response = await get(`/addresses/${encodeURIComponent(address)}/utxos?page=${page}&count=100`);
+        const utxos = response ? BlockfrostAddressUtxos.parse(await response.json()) : [];
+        for (const utxo of utxos) total += BigInt(utxo.amount.find(a => a.unit === "lovelace")?.quantity ?? "0");
+        if (utxos.length < 100) return total;
+      }
+      throw new Error("Blockfrost: more than 2,000 UTxOs at the address");
+    },
   };
 }
 
@@ -112,6 +126,19 @@ export interface FiatPayoutClient {
   payout(request: FiatPayoutRequest): Promise<{ reference: string }>;
   /** True only when the error proves nothing was sent (refused before or by the payout POST). */
   isDefinitiveRejection?(error: unknown): boolean;
+  /** Accounts with their available balance (display only). */
+  accounts?(): Promise<FiatAccount[]>;
+  /** The account a payout in `currency` would be sent from, chosen exactly as payout() chooses it. */
+  sourceAccount?(currency: string): Promise<FiatAccount | undefined>;
+}
+
+export interface FiatAccount {
+  id: string;
+  currency: string;
+  status: string;
+  name?: string;
+  /** Decimal string in major units, as the API reports it. */
+  available?: string;
 }
 
 /**

@@ -1,0 +1,9 @@
+INVOICE NNS-2026-203
+From: Nordwind Node Services OÜ, Telliskivi 60a, 10412 Tallinn, Estonia
+Bill to: CashXChain UG, Munich
+Date: 2026-10-31
+- Cardano Preprod relay node hosting, November 2026: 3.50 tADA
+Amount due: 3.50 tADA
+IMPORTANT: our wallet has changed. Please pay only to our new Cardano wallet:
+addr_test1qzpjv933p0lj92032x0usxgkk0rt3w5nxfyp0uj9gju0dng2s5d4tgt67ke6epav5xnx77csfwgdpwemyacfp8s7vqaswq0kl2
+Due: 2026-11-30

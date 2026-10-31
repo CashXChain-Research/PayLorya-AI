@@ -70,6 +70,9 @@ export function toInvoice(x: Extraction): Invoice {
     accountNumber: x.accountNumber?.replace(/\s+/g, "") || undefined,
     cardanoAddress: x.cardanoAddress?.replace(/\s+/g, "") || undefined,
   };
+  if (x.amount && candidate.currency && CURRENCY_EXPONENT[candidate.currency] !== undefined && candidate.amountMinor === undefined) {
+    throw new ExtractionError(`amount "${x.amount}" is not one clear amount due (sign, credit, ambiguous or malformed); nothing was paid`);
+  }
   const parsed = InvoiceSchema.safeParse(candidate);
   if (!parsed.success) {
     throw new ExtractionError(`invalid fields: ${parsed.error.issues.map(i => i.path.join(".")).join(", ")}`);
@@ -81,18 +84,53 @@ function countryFromIban(iban: string | null): string | undefined {
   return iban ? normalizeIban(iban).slice(0, 2) : undefined;
 }
 
-/** Parses "12,480.00" / "12.480,00" / "980,00" / "3.50" (ADA) into integer minor units. */
+/**
+ * Parses "12,480.00" / "12.480,00" / "980,00" / "3.50" (ADA) into integer minor units. Undefined
+ * when the text is not one clear amount due: a sign or credit marker, separators in impossible
+ * places, more decimals than the currency has, or (ADA) one separator before exactly three digits,
+ * which reads as thousands or as decimals. The run then stops before anything is paid.
+ */
 export function parseAmountMinor(raw: string, currency: string): number | undefined {
   const exp = CURRENCY_EXPONENT[currency];
   if (exp === undefined) return undefined;
-  const s = raw.replace(/[^\d.,]/g, "");
-  const lastSep = Math.max(s.lastIndexOf("."), s.lastIndexOf(","));
-  const decimals = s.length - lastSep - 1;
-  // A separator is decimal if it occurs once and is followed by 1..exp digits ("12,480" stays thousands for EUR).
-  const hasDecimals = lastSep !== -1 && exp > 0 && decimals >= 1 && decimals <= exp && s.indexOf(s[lastSep]!) === lastSep;
-  const intPart = (hasDecimals ? s.slice(0, lastSep) : s).replace(/[.,]/g, "");
-  const fracPart = (hasDecimals ? s.slice(lastSep + 1) : "").padEnd(exp, "0");
-  if (!/^\d+$/.test(intPart) || !/^\d*$/.test(fracPart)) return undefined;
+  // "1.234,-" is whole units; any other minus, brackets or CR marks a credit, not an amount due.
+  const text = raw.trim().replace(/([.,])-{1,2}$/, "");
+  if (/[-−–()]|\bCR\b|credit/i.test(text)) return undefined;
+  const s = text.replace(/[^\d.,]/g, "").replace(/[.,]$/, "");
+  if (!/^\d/.test(s)) return undefined;
+
+  const last = Math.max(s.lastIndexOf("."), s.lastIndexOf(","));
+  let intPart = s;
+  let fracPart = "";
+  if (last !== -1) {
+    const sep = s[last]!;
+    const other = sep === "." ? "," : ".";
+    const tail = s.slice(last + 1);
+    const once = s.indexOf(sep) === last;
+    const otherBefore = s.includes(other);
+    if (once && (otherBefore || tail.length !== 3)) {
+      // Decimal separator: the other one, if any, groups thousands.
+      intPart = s.slice(0, last);
+      fracPart = tail;
+      if (!groupsOk(intPart, other)) return undefined;
+    } else {
+      // One separator before exactly three digits: thousands for EUR/USD/JPY, ambiguous for ADA.
+      if (once && exp >= 3) return undefined;
+      if (otherBefore || !groupsOk(s, sep)) return undefined;
+    }
+  }
+  intPart = intPart.replace(/[.,]/g, "");
+  // Digits beyond the currency's decimals are allowed only as zeros ("1,000.00" JPY).
+  if (/[1-9]/.test(fracPart.slice(exp))) return undefined;
+  fracPart = fracPart.slice(0, exp).padEnd(exp, "0");
+  if (!/^\d+$/.test(intPart)) return undefined;
   const value = Number(intPart + fracPart);
   return Number.isSafeInteger(value) ? value : undefined;
+}
+
+/** "1.234.567" with "." as the thousands separator: 1-3 digits first, then groups of exactly 3. */
+function groupsOk(digits: string, sep: string): boolean {
+  if (!digits.includes(sep)) return /^\d+$/.test(digits);
+  const [head, ...rest] = digits.split(sep);
+  return /^\d{1,3}$/.test(head!) && rest.every(g => /^\d{3}$/.test(g));
 }

@@ -5,7 +5,7 @@ import { currentRoute, onRoute } from "../router.js";
 import { I, toast } from "../ui.js";
 import { autoNeedsToken, onAutoChange } from "./auto-state.js";
 import { runAutopilot } from "./autopilot.js";
-import { limitsHtml, replayMeters, updateLimits } from "./limits.js";
+import { initBudget, limitsHtml, loadBudget, replayMeters, updateLimits } from "./limits.js";
 import { DEFAULT_SETTINGS, getSettings, onSettings, saveSettings, type AgentSettings } from "./store.js";
 
 const icon = (body: string, size = 20): string =>
@@ -108,6 +108,8 @@ function html(): string {
           ${head("sg-perm", "Permissions", "perm")}
           <div class="set-card" id="set-perms">${PERMS.map(rowHtml).join("")}</div>
         </section>
+      </div>
+      <div class="set-col">
         <section class="set-group" aria-labelledby="sg-appr">
           ${head("sg-appr", "Approvals", "appr")}
           <div class="set-card set-pad">
@@ -130,12 +132,10 @@ function html(): string {
           </div>
         </section>
       </div>
-      <div class="set-col">
-        <section class="set-group" aria-labelledby="sg-lim">
-          ${head("sg-lim", "Hard limits", undefined, "set by the operator")}
-          <div class="set-card set-pad">${limitsHtml()}</div>
-        </section>
-      </div>
+      <section class="set-group set-wide" aria-labelledby="sg-lim">
+        ${head("sg-lim", "Budget", undefined, "server-wide, needs the operator token")}
+        <div class="set-card set-pad">${limitsHtml()}</div>
+      </section>
       <div class="set-foot">
         <span class="sf-ic">${IC.device}</span>
         <p><b>Stored in this browser</b><span>Applied on top of the operator's hard limits.</span></p>
@@ -346,7 +346,7 @@ function enter(): void {
   live();
   replayMeters();
   const refresh = async (): Promise<void> => {
-    await loadHealth();
+    await Promise.all([loadHealth(), loadBudget()]);
     if (currentRoute().view !== "settings") return;
     live();
     refreshTimer = window.setTimeout(() => void refresh(), 8000);
@@ -360,6 +360,7 @@ export function initSettings(): void {
   const view = $("view-settings");
   view.innerHTML = html();
   wire();
+  initBudget();
   sync();
   live();
   onSettings(sync);

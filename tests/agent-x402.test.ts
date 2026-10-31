@@ -247,6 +247,7 @@ const env = (facilitatorUrl: string, overrides: Env = {}): Env => ({
   FACILITATOR_URL: facilitatorUrl,
   // The default test invoice (EUR 12,480.00) is above the demo fiat cap; cap tests set their own.
   FIAT_PAYOUT_MAX_MINOR: "5000000",
+  FIAT_BUDGET_MINOR: "50000000",
   ...overrides,
 });
 
@@ -777,10 +778,9 @@ describe("invoice payout after human approval", () => {
     expect(second.fingerprint).not.toBe(first.fingerprint);
 
     await approve(s.agent, first);
-    await approve(s.agent, second);
     expect(first.state).toBe("EXECUTED");
-    expect(second.state).toBe("FAILED");
-    expect(second.error).toContain("already paid");
+    expect(s.agent.approve(second)).toEqual({ ok: false, reason: "payout refused: payout for this invoice already paid" });
+    expect(second.state).toBe("DRAFT_READY");
     expect(fiat.calls).toHaveLength(1);
   });
 
@@ -797,9 +797,8 @@ describe("invoice payout after human approval", () => {
     fiat.fail = undefined;
     await approve(s.agent, b);
     await approve(s.agent, c);
-    await approve(s.agent, d);
-    expect([a.state, b.state, c.state, d.state]).toEqual(["DRAFT_READY", "EXECUTED", "EXECUTED", "FAILED"]);
-    expect(d.error).toBe("payout refused: fiat payout limit of 2 per session reached");
+    expect(s.agent.approve(d)).toEqual({ ok: false, reason: "payout refused: fiat payout limit of 2 per session reached" });
+    expect([a.state, b.state, c.state, d.state]).toEqual(["DRAFT_READY", "EXECUTED", "EXECUTED", "DRAFT_READY"]);
     expect(fiat.calls).toHaveLength(3);
     expect(s.agent.fiatPayoutsUsed).toBe(2);
   });
@@ -916,10 +915,10 @@ describe("invoice payout after human approval", () => {
     const a = await s.run(adaInvoice);
     const b = await s.run({ ...adaInvoice, id: "NNS-2026-120" });
     await approve(s.agent, a);
-    await approve(s.agent, b);
     expect(a.state).toBe("EXECUTED");
-    expect(b.state).toBe("FAILED");
-    expect(b.error).toBe("payout refused before signing: session budget exhausted");
+    // Refused at the click: the draft stays, and raising the budget makes it payable.
+    expect(s.agent.approve(b)).toEqual({ ok: false, reason: "payout refused: session budget exhausted" });
+    expect(b.state).toBe("DRAFT_READY");
     expect(s.signer.calls).toHaveLength(3); // two report fees, one payout
   });
 });
@@ -1342,9 +1341,7 @@ describe("unknown outcomes resolved from chain evidence", () => {
     s.submitter.fail = undefined;
     const again = await s.run({ ...adaInvoice, id: " nns 2026-118 " });
     expect(again.state).toBe("DRAFT_READY");
-    await approve(s.agent, again);
-    expect(again.state).toBe("FAILED");
-    expect(again.error).toBe("payout refused before signing: payout for this invoice already paid");
+    expect(s.agent.approve(again)).toEqual({ ok: false, reason: "payout refused: payout for this invoice already paid" });
     expect(s.submitter.calls).toHaveLength(1);
     expect(s.agent.paidOutLovelace).toBe(3_500_000n);
   });
@@ -1435,5 +1432,205 @@ describe("blockfrostChainView against Blockfrost's documented shapes", () => {
   it("tipSlot: a tip without a slot throws instead of guessing", async () => {
     const { chain } = await blockfrost({ slot: null });
     await expect(chain.tipSlot!()).rejects.toThrow();
+  });
+});
+
+const eur900 = (id = invoice.id): Invoice => ({ ...invoice, id, amountMinor: 90_000 });
+
+describe("runtime budgets (PUT /api/budget) in the payment flow", () => {
+  const usInvoice: Invoice = {
+    id: "A-5540",
+    supplier: "Lakeside Robotics Inc.",
+    destinationCountry: "US",
+    currency: "USD",
+    amountMinor: 42_500,
+    routingNumber: "021000021",
+    accountNumber: "000123456789",
+  };
+
+  it("fiat budget per currency: the click is refused and the draft stays; another currency has its own budget; raising it pays", async () => {
+    const fiat = stubFiat();
+    const s = await startStack({ fiat });
+    s.agent.updateBudget({ fiatBudgetMinor: { EUR: 150_000 }, fiatBudgetDefaultMinor: 50_000 });
+    const a = await s.run(eur900());
+    const b = await s.run(eur900("INV-2026-1043"));
+    const c = await s.run(usInvoice);
+
+    await approve(s.agent, a);
+    expect(a.state).toBe("EXECUTED");
+    expect(s.agent.approve(b)).toEqual({
+      ok: false,
+      reason: "payout refused: the EUR budget (1,500.00 EUR, 900.00 EUR used) does not cover 900.00 EUR",
+    });
+    expect(b.state).toBe("DRAFT_READY");
+    await approve(s.agent, c); // USD falls back to the default budget of 500.00
+    expect(c.state).toBe("EXECUTED");
+    expect(s.agent.budgetUsage.fiatPaidMinor).toEqual({ EUR: 90_000, USD: 42_500 });
+
+    s.agent.updateBudget({ fiatBudgetMinor: { EUR: 200_000 } });
+    await approve(s.agent, b);
+    expect(b.state).toBe("EXECUTED");
+    expect(fiat.calls).toHaveLength(3);
+  });
+
+  it("a definitive refusal frees its amount from the currency budget", async () => {
+    const fiat = stubFiat();
+    const s = await startStack({ fiat });
+    s.agent.updateBudget({ fiatBudgetMinor: { EUR: 100_000 } });
+    const run = await s.run(eur900());
+    fiat.fail = new Error("refused: insufficient_balance");
+    await approve(s.agent, run);
+    expect(run.state).toBe("DRAFT_READY");
+    expect(s.agent.budgetUsage.fiatPaidMinor).toEqual({});
+    fiat.fail = undefined;
+    await approve(s.agent, run);
+    expect(run.state).toBe("EXECUTED");
+  });
+
+  it("a draft held back by the per-payout cap becomes payable once the cap is raised, with the same verified route", async () => {
+    const fiat = stubFiat();
+    const s = await startStack({ fiat, buyer: { FIAT_PAYOUT_MAX_MINOR: "50000" } });
+    const run = await s.run(eur900());
+    expect(run.draft).toMatchObject({ executable: false, route: { status: "unavailable" } });
+    expect(s.agent.approve(run)).toEqual({ ok: false, reason: "Amount above the fiat payout cap of 500.00 EUR: pay by hand" });
+
+    s.agent.updateBudget({ fiatPayoutMaxMinor: 100_000 });
+    await approve(s.agent, run);
+    expect(run.state).toBe("EXECUTED");
+    expect(run.draft).toMatchObject({ executable: true, route: { status: "selected", rail: "cxc_fiat", destination: invoice.iban } });
+    expect(fiat.calls[0]?.destination).toBe(invoice.iban);
+  });
+
+  it("a cap lowered after drafting stops the click; the draft stays for later", async () => {
+    const s = await startStack({ fiat: stubFiat() });
+    const run = await s.run(adaInvoice);
+    expect(run.draft?.executable).toBe(true);
+    s.agent.updateBudget({ cardanoPayoutMaxLovelace: "2000000" });
+    const refused = s.agent.approve(run);
+    expect(refused).toMatchObject({ ok: false });
+    expect(run.state).toBe("DRAFT_READY");
+    expect(s.submitter.calls).toHaveLength(0);
+  });
+
+  it("the Cardano payout budget applies at the next click", async () => {
+    const s = await startStack();
+    const run = await s.run(adaInvoice);
+    s.agent.updateBudget({ cardanoBudgetLovelace: "3000000" });
+    expect(s.agent.approve(run)).toEqual({ ok: false, reason: "payout refused: session budget exhausted" });
+    s.agent.updateBudget({ cardanoBudgetLovelace: "4000000" });
+    await approve(s.agent, run);
+    expect(run.state).toBe("EXECUTED");
+  });
+
+  it("the check budget applies to the next report payment", async () => {
+    const s = await startStack();
+    s.agent.updateBudget({ checkBudgetLovelace: "1000000" });
+    const run = await s.run();
+    expect(run.state).toBe("FAILED");
+    expect(run.error).toContain("session budget exhausted");
+    expect(s.signer.calls).toHaveLength(0);
+  });
+
+  it("refuses values above the hard maximum, unknown keys and bad currency codes, and keeps the old budget", async () => {
+    const s = await startStack();
+    const before = s.agent.budget;
+    expect(() => s.agent.updateBudget({ cardanoBudgetLovelace: "999000000000" })).toThrow(/at most 500 tADA/);
+    expect(() => s.agent.updateBudget({ fiatPayoutMaxMinor: -1 })).toThrow();
+    expect(() => s.agent.updateBudget({ fiatBudgetMinor: { eur: 100 } })).toThrow(/ISO-4217/);
+    expect(() => s.agent.updateBudget({ approvalsOff: true } as never)).toThrow();
+    expect(s.agent.budget).toEqual(before);
+  });
+});
+
+describe("payment preview (the confirmation window) and balances", () => {
+  const accounts = [
+    { id: "acc_usd", currency: "USD", status: "active", name: "USD operating", available: "25000.00" },
+    { id: "acc_eur", currency: "EUR", status: "active", name: "EUR operating", available: "100.00" },
+  ];
+  const fiatWithAccounts = () => {
+    const fiat = stubFiat();
+    return Object.assign(fiat, {
+      accounts: async () => accounts,
+      sourceAccount: async (currency: string) => accounts.find(a => a.currency === currency),
+    });
+  };
+  const chainWithBalance = (lovelace: bigint): ChainView => ({ hasTransaction: async () => true, addressLovelace: async () => lovelace });
+
+  it("fiat: source account in the invoice currency, destination from the payee record, budget, proof and key; nothing moves", async () => {
+    const fiat = fiatWithAccounts();
+    const s = await startStack({ fiat });
+    const run = await s.run();
+    const preview = await s.agent.preview(run, "operator-token");
+
+    expect(preview).toMatchObject({
+      runId: run.id,
+      state: "DRAFT_READY",
+      payable: true,
+      blockers: [],
+      payee: "Brenner Maschinenbau GmbH",
+      rail: "cxc_fiat",
+      railLabel: "Stub CashXChain sandbox payout",
+      amount: { minor: 1_248_000, currency: "EUR" },
+      from: { kind: "cxc_account", accountId: "acc_eur", currency: "EUR", name: "EUR operating", available: "100.00" },
+      to: { kind: "iban", iban: "DE89370400440532013000", bic: "COBADEFFXXX" },
+      budget: { currency: "EUR", usedMinor: 0, limitMinor: 50_000_000, afterMinor: 1_248_000, perPaymentMaxMinor: 5_000_000, payouts: { used: 0, limit: 5 } },
+      check: { verdict: "ready_for_review", txHash: TX, priceLovelace: "2000000" },
+      idempotencyKey: `payout-${payoutKey(findPayee(payeeDirectory(SUPPLIER_WALLET), invoice.supplier)!, invoice)}`,
+      approvals: "operator-token",
+    });
+    expect(preview.warnings).toEqual(["The EUR account holds 100.00 EUR, less than this payout: CashXChain would refuse it, nothing paid"]);
+    expect(fiat.calls).toHaveLength(0);
+    expect(run.state).toBe("DRAFT_READY");
+  });
+
+  it("cardano: buyer wallet with its balance, verified wallet as destination; a low balance warns, disabled approvals block", async () => {
+    const s = await startStack({ chain: chainWithBalance(4_000_000n) });
+    const run = await s.run(adaInvoice);
+    const preview = await s.agent.preview(run, "disabled");
+    expect(preview).toMatchObject({
+      payable: false,
+      blockers: ["approvals are switched off: APPROVE_TOKEN is not configured"],
+      rail: "cardano_preprod",
+      from: { kind: "cardano_wallet", address: BUYER, network: CARDANO_NETWORK, balanceLovelace: "4000000" },
+      to: { kind: "cardano_address", address: SUPPLIER_WALLET },
+      budget: { currency: "ADA", usedMinor: 0, limitMinor: 30_000_000, afterMinor: 3_500_000, perPaymentMaxMinor: 10_000_000 },
+    });
+    expect(preview.warnings).toEqual(["The buyer wallet holds 4.000000 ADA, too little for this payout plus network fees"]);
+    expect(preview).not.toHaveProperty("idempotencyKey");
+  });
+
+  it("names what stops a payout: a cap, an earlier payout of the same invoice, a run no longer awaiting approval", async () => {
+    const fiat = fiatWithAccounts();
+    const s = await startStack({ fiat, buyer: { FIAT_PAYOUT_MAX_MINOR: "50000" } });
+    const capped = await s.run(eur900());
+    expect((await s.agent.preview(capped, "operator-token")).blockers).toEqual(["Amount above the fiat payout cap of 500.00 EUR: pay by hand"]);
+
+    s.agent.updateBudget({ fiatPayoutMaxMinor: 100_000 });
+    await approve(s.agent, capped);
+    const after = await s.agent.preview(capped, "operator-token");
+    expect(after).toMatchObject({ payable: false, state: "EXECUTED" });
+    expect(after.blockers[0]).toBe("run is EXECUTED, not awaiting approval");
+
+    const again = await s.run({ ...eur900(), id: "inv 2026 1042" });
+    expect((await s.agent.preview(again, "operator-token")).blockers).toEqual(["payout refused: payout for this invoice already paid"]);
+  });
+
+  it("balances: wallet lovelace, CashXChain accounts, budgets and usage; read errors are reported, not thrown", async () => {
+    const s = await startStack({ fiat: fiatWithAccounts(), chain: chainWithBalance(42_000_000n) });
+    expect(await s.agent.balances()).toMatchObject({
+      cardano: { address: BUYER, network: CARDANO_NETWORK, balanceLovelace: "42000000" },
+      cashxchain: { ready: true, simulated: false, accounts },
+      budget: { checkBudgetLovelace: "20000000", fiatPayoutsPerSession: 5 },
+      usage: { checkSpentLovelace: "0", fiatPayouts: 0 },
+    });
+
+    const broken = await startStack({
+      fiat: Object.assign(stubFiat(), { accounts: async () => Promise.reject(new Error("CashXChain GET /v1/banking/accounts: 503")) }),
+      chain: { hasTransaction: async () => true, addressLovelace: async () => Promise.reject(new Error("Blockfrost down")) },
+    });
+    expect(await broken.agent.balances()).toMatchObject({
+      cardano: { error: "Blockfrost down" },
+      cashxchain: { accounts: [], error: "CashXChain GET /v1/banking/accounts: 503" },
+    });
   });
 });

@@ -2,9 +2,12 @@ import type { ReadinessReport } from "../../../../src/types.js";
 import { ada, esc, money, short } from "../../shared/dom.js";
 import { getRun, type Run } from "../api.js";
 import { decideRun } from "../approval.js";
+import { confirmPayment } from "../confirm.js";
 import { health, loadHealth } from "../health.js";
 import { loadList } from "../list.js";
-import { onSettings } from "../settings/store.js";
+import { autoNeedsToken, wasAttempted } from "../settings/auto-state.js";
+import { autoApproves } from "../settings/policy.js";
+import { getSettings, onSettings } from "../settings/store.js";
 import { TERMINAL } from "../stages.js";
 import { callout, checkList, pill, txLink } from "../ui.js";
 import { approvalHtml, payoutHtml, type Card } from "./cards.js";
@@ -23,6 +26,8 @@ interface Tracker {
   reportSaid: boolean;
   cards: Card[];
   lost?: boolean;
+  /** The confirmation window opened by itself for this run (once). */
+  opened?: boolean;
 }
 
 const trackers = new Map<string, Tracker>();
@@ -40,6 +45,29 @@ function opts(t: Tracker): PostOpts {
     foot: () => `<span data-pill="${esc(t.id)}">${t.run ? pill(t.run.state, t.run.payout?.status) : ""}</span>
       <button class="m-link" type="button" data-open="${esc(t.id)}">Open in Inbox ${AI.arrow}</button>`,
   };
+}
+
+/** True when the chat follows this run (its narration reports the outcome). */
+export const tracked = (id: string): boolean => trackers.has(id);
+
+/**
+ * A run started from the Assistant that is ready to pay opens the confirmation window, once,
+ * after its approval card is in the thread. Not when this browser's auto-approve will take it.
+ */
+function autoOpen(t: Tracker): void {
+  const run = t.run;
+  if (t.opened || !run || run.state !== "DRAFT_READY" || !run.draft?.executable || reached(run, "EXECUTING")) return;
+  t.opened = true;
+  void enqueue(async () => {
+    const now = t.run;
+    if (!now || now.state !== "DRAFT_READY" || wasAttempted(now.id)) return;
+    if (autoApproves(now, getSettings()) && !autoNeedsToken()) return;
+    void confirmPayment(now.id).then(outcome => {
+      const card = t.cards.at(-1);
+      if (outcome && card) card.mine = outcome === "approved" ? "approve" : "reject";
+      void poll(t);
+    });
+  });
 }
 
 /** Follows a run the chat created: narrates each new timeline entry until the run settles. */
@@ -78,6 +106,7 @@ async function poll(t: Tracker): Promise<void> {
       for (const msg of messagesFor(t, i)) await post(t.id, msg, opts(t));
     });
   }
+  autoOpen(t);
   const busy = !TERMINAL.includes(run.state);
   void enqueue(async () => setWorking(t.id, busy && !t.lost));
   if (busy) t.timer = window.setTimeout(() => void poll(t), FAST);
@@ -271,6 +300,13 @@ export async function act(button: HTMLButtonElement): Promise<void> {
   const card = t?.cards[Number(host?.dataset.card)];
   const decision = button.dataset.act;
   if (!t?.run || !card || card.busy || (decision !== "approve" && decision !== "reject")) return;
+  // Approving always goes through the confirmation window; it shows the proof first.
+  if (decision === "approve") {
+    const outcome = await confirmPayment(t.id);
+    if (outcome) card.mine = outcome === "approved" ? "approve" : "reject";
+    await poll(t);
+    return;
+  }
   card.busy = decision;
   card.note = undefined;
   renderCard(t.run, card);
@@ -278,10 +314,10 @@ export async function act(button: HTMLButtonElement): Promise<void> {
   try {
     const res = await decideRun(t.id, decision);
     if (res.ok) card.mine = decision;
-    else if (res.status === 0) card.note = `Cancelled. Nothing was ${decision === "approve" ? "approved" : "rejected"}; the invoice is still waiting for you.`;
-    else if (res.status === 401) card.note = `The operator token was not accepted. Nothing was ${decision === "approve" ? "approved" : "rejected"}; try again.`;
+    else if (res.status === 0) card.note = "Cancelled. Nothing was rejected; the invoice is still waiting for you.";
+    else if (res.status === 401) card.note = "The operator token was not accepted. Nothing was rejected; try again.";
     else if (res.status === 409) reply = `It is no longer waiting for a decision (${esc(res.error)}).`;
-    else reply = `I couldn't ${decision} it: ${esc(res.error)}.`;
+    else reply = `I couldn't reject it: ${esc(res.error)}.`;
   } catch {
     reply = "I couldn't reach the agent. Nothing changed; try again.";
   }

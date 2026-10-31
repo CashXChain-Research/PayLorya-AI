@@ -51,6 +51,15 @@ export function askOperatorToken(reason = "This deployment asks for the operator
   });
 }
 
+const changes = new Set<(id?: string) => void>();
+/** Called after an approve or reject went through and when a payout settles (balances, budgets). */
+export function onPaymentChange(listener: (id?: string) => void): void {
+  changes.add(listener);
+}
+export function emitPaymentChange(id?: string): void {
+  for (const listener of changes) listener(id);
+}
+
 /** Asks for the token now (e.g. to let auto-approve run) and keeps it for this tab. */
 export async function ensureOperatorToken(): Promise<boolean> {
   if (storedToken()) return true;
@@ -87,6 +96,37 @@ export async function decideRun(id: string, decision: Decision, opts: { interact
   if (!result.ok && result.status === 401) {
     storeToken(undefined);
     if (interactive) toast(`Wrong operator token. Nothing was ${decision === "approve" ? "approved" : "rejected"}; try again.`);
+  }
+  if (result.ok) emitPaymentChange(id);
+  return result;
+}
+
+/**
+ * Another operator-only call (e.g. PUT /api/budget): sends the stored token, asks for one when this
+ * tab has none, and asks once more after a 401 before retrying. status 0: the dialog was cancelled.
+ */
+export async function withOperatorToken<T extends { ok: boolean; status?: number }>(
+  reason: string,
+  request: (token: string) => Promise<T>,
+): Promise<T | { ok: false; error: string; status: 0 }> {
+  const cancelled = { ok: false as const, error: "Cancelled. Nothing was changed.", status: 0 as const };
+  let token = storedToken();
+  let asked = false;
+  if (!token) {
+    token = await askOperatorToken(reason);
+    asked = true;
+    if (!token) return cancelled;
+    storeToken(token);
+  }
+  let result = await request(token);
+  if (!result.ok && result.status === 401) {
+    storeToken(undefined);
+    if (asked) return result;
+    token = await askOperatorToken(`The stored operator token was not accepted. ${reason}`);
+    if (!token) return cancelled;
+    storeToken(token);
+    result = await request(token);
+    if (!result.ok && result.status === 401) storeToken(undefined);
   }
   return result;
 }
