@@ -6,11 +6,13 @@ import { loadConfig } from "./config.js";
 import { mountLocalFacilitator } from "./facilitator.js";
 import { sampleInvoices } from "./fixtures.js";
 import { CashXChainPayoutRoute } from "./payout-cashxchain.js";
+import { admitRun, clientId, RunRateLimiter } from "./ratelimit.js";
 import { RunStore } from "./runs.js";
 import { mountSeller } from "./seller.js";
 
 const config = loadConfig();
-const runs = new RunStore();
+const runs = new RunStore(config.MAX_RUNS);
+const limiter = new RunRateLimiter(config.RUNS_PER_MINUTE_PER_CLIENT, config.RUNS_PER_HOUR);
 const app = express();
 app.use(express.json({ limit: "256kb" }));
 // "/app" and "/about" resolve to their .html pages.
@@ -23,7 +25,7 @@ mountSeller(app, config);
 const fiat = config.CASHXCHAIN_API_KEY ? new CashXChainPayoutRoute(new CashXChainClient({ apiKey: config.CASHXCHAIN_API_KEY })) : undefined;
 const agent = config.x402Ready ? new BuyerAgent(config, runs, undefined, fiat ? { fiat } : {}) : undefined;
 
-app.get(["/health", "/api/health"], (_req, res) => {
+app.get(["/health", "/api/health"], (req, res) => {
   res.json({
     status: "ok",
     network: "cardano:preprod",
@@ -45,6 +47,14 @@ app.get(["/health", "/api/health"], (_req, res) => {
     fiatPayoutsUsed: agent?.fiatPayoutsUsed ?? 0,
     approvalTokenRequired: Boolean(config.APPROVE_TOKEN),
     cashxchain: { ready: config.cxcReady, environment: "sandbox", api: CXC_SANDBOX_API },
+    // clientIdFrom: which header identified this caller (live check that CF-Connecting-IP reaches the container).
+    limits: {
+      runsPerMinutePerClient: config.RUNS_PER_MINUTE_PER_CLIENT,
+      runsPerHour: config.RUNS_PER_HOUR,
+      maxTextChars: config.MAX_TEXT_CHARS,
+      maxRuns: config.MAX_RUNS,
+      clientIdFrom: clientId(name => req.header(name), req.socket.remoteAddress).from,
+    },
   });
 });
 
@@ -57,12 +67,13 @@ app.post("/api/runs", (req, res) => {
     res.status(503).json({ error: "x402 not configured (SELLER_ADDRESS, BUYER_MNEMONIC, BLOCKFROST_PROJECT_ID)" });
     return;
   }
-  const input = typeof req.body?.input === "string" ? req.body.input : JSON.stringify(req.body?.input ?? "");
-  if (!input || input === '""') {
-    res.status(400).json({ error: "body.input (invoice text or JSON) required" });
+  // 400 / 413 / 429 / 503 before any model call or payment (src/ratelimit.ts).
+  const admitted = admitRun({ body: req.body, header: name => req.header(name), socketAddress: req.socket.remoteAddress }, { limiter, runs, maxTextChars: config.MAX_TEXT_CHARS });
+  if (!admitted.ok) {
+    res.status(admitted.status).set(admitted.headers).json(admitted.body);
     return;
   }
-  const run = runs.create(input);
+  const run = admitted.run;
   void agent.process(run);
   res.status(202).json({ id: run.id, state: run.state });
 });

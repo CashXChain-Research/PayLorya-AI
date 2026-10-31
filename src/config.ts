@@ -53,6 +53,14 @@ const EnvSchema = z.object({
   // Optional operator token: when set, approving or rejecting a draft requires it.
   APPROVE_TOKEN: optional,
 
+  // Public POST /api/runs limits (src/ratelimit.ts): fixed windows per client IP and overall.
+  RUNS_PER_MINUTE_PER_CLIENT: z.coerce.number().int().positive().default(10),
+  RUNS_PER_HOUR: z.coerce.number().int().positive().default(120),
+  // Free text longer than this is refused (413) before the Claude call; structured invoices are exempt.
+  MAX_TEXT_CHARS: z.coerce.number().int().positive().default(20_000),
+  // Runs kept in memory; settled runs are evicted oldest first, in-flight runs never.
+  MAX_RUNS: z.coerce.number().int().positive().default(500),
+
   // AI (ANTHROPIC_BASE_URL can point at a Cloudflare AI Gateway; the SDK reads it from env)
   // CashXChain fiat payouts (sandbox only). Unset: fiat payouts use the simulated stand-in.
   CASHXCHAIN_API_KEY: optional.refine(
