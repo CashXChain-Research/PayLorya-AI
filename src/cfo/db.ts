@@ -170,6 +170,30 @@ const MIGRATIONS: string[][] = [
   [`ALTER TABLE payments ADD COLUMN verification_json TEXT`],
   // Test tADA granted once to the account's agent wallet (src/cfo/funder.ts); funded_at counts grants per day.
   [`ALTER TABLE workspaces ADD COLUMN funded_json TEXT`, `ALTER TABLE workspaces ADD COLUMN funded_at TEXT`],
+  // Public API: keys per account (only their SHA-256), and replies kept per Idempotency-Key (24 h).
+  [
+    `CREATE TABLE api_keys (
+       id TEXT PRIMARY KEY,
+       workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+       name TEXT NOT NULL,
+       prefix TEXT NOT NULL,
+       hash TEXT NOT NULL UNIQUE,
+       scopes_json TEXT NOT NULL,
+       created_at TEXT NOT NULL,
+       last_used_at TEXT,
+       revoked_at TEXT
+     )`,
+    `CREATE INDEX api_keys_ws ON api_keys(workspace_id, created_at)`,
+    `CREATE TABLE api_idempotency (
+       key_id TEXT NOT NULL REFERENCES api_keys(id) ON DELETE CASCADE,
+       idem_key TEXT NOT NULL,
+       request_hash TEXT NOT NULL,
+       status INTEGER NOT NULL,
+       body_json TEXT,
+       created_at TEXT NOT NULL,
+       PRIMARY KEY (key_id, idem_key)
+     )`,
+  ],
 ];
 
 export async function migrate(sql: Sql): Promise<void> {
