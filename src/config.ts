@@ -46,6 +46,12 @@ const EnvSchema = z.object({
   SUPPLIER_CARDANO_ADDRESS: optional.refine(v => v === undefined || v.startsWith("addr_test1"), "Preprod address (addr_test1...)"),
   PAYOUT_MAX_LOVELACE: z.coerce.bigint().default(10_000_000n),
   PAYOUT_BUDGET_LOVELACE: z.coerce.bigint().default(30_000_000n),
+  // Fiat payouts hold no wallet budget, so they are capped here: per payout (minor units of the
+  // invoice currency) and per server session. Keeps the public demo under the sandbox day limit.
+  FIAT_PAYOUT_MAX_MINOR: z.coerce.number().int().positive().default(100_000),
+  FIAT_PAYOUTS_PER_SESSION: z.coerce.number().int().positive().default(5),
+  // Optional operator token: when set, approving or rejecting a draft requires it.
+  APPROVE_TOKEN: optional,
 
   // AI (ANTHROPIC_BASE_URL can point at a Cloudflare AI Gateway; the SDK reads it from env)
   // CashXChain fiat payouts (sandbox only). Unset: fiat payouts use the simulated stand-in.

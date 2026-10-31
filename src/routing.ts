@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { normalizeIban } from "./readiness.js";
-import type { Invoice, RouteCheck, RouteDecision } from "./types.js";
+import { CURRENCY_EXPONENT, type Invoice, type RouteCheck, type RouteDecision } from "./types.js";
 
 /**
  * Verified payee directory (vendor master). Synthetic demo records: in production they come from
@@ -61,6 +61,8 @@ export function findPayee(directory: VerifiedPayee[], supplier: string): Verifie
 
 export interface RouteLimits {
   payoutMaxLovelace: bigint;
+  /** Per-payout cap for fiat, in minor units of the invoice currency. Unset: no app-side cap. */
+  fiatMaxMinor?: number;
 }
 
 // A plain lovelace output below roughly 1 ADA is rejected by the ledger (min-UTxO).
@@ -129,6 +131,18 @@ export function decideRoute(invoice: Invoice, directory: VerifiedPayee[], limits
     };
   }
   checks.push({ id: "account", status: "pass", message: "Invoice bank details match the verified payee record" });
+  if (limits.fiatMaxMinor !== undefined) {
+    const exp = CURRENCY_EXPONENT[invoice.currency] ?? 2;
+    const cap = `${(limits.fiatMaxMinor / 10 ** exp).toFixed(exp)} ${invoice.currency}`;
+    if (invoice.amountMinor > limits.fiatMaxMinor) {
+      // Not a fraud signal like changed bank details: the invoice is fine, the agent just does not
+      // pay this much on its own. The run stays a draft for manual handling.
+      const message = `Amount above the fiat payout cap of ${cap}: pay by hand`;
+      checks.push({ id: "limit", status: "fail", message });
+      return { status: "unavailable", rail, payee: payee.name, checks, reason: message };
+    }
+    checks.push({ id: "limit", status: "pass", message: `Within the fiat payout cap of ${cap}` });
+  }
   if (invoice.cardanoAddress && invoice.cardanoAddress !== payee.cardanoAddress) {
     checks.push({ id: "wallet", status: "warn", message: "A wallet address on the invoice is not on the payee record and was ignored" });
   }
