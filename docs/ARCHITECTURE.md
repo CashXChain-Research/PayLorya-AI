@@ -145,7 +145,8 @@ Payout safety mirrors the report payment:
   error stays `PAYOUT_UNKNOWN`.
 - CashXChain route (`src/payout-cashxchain.ts`): source account in the invoice currency,
   beneficiary from the payee record, `POST /v1/banking/payouts` under the agent's key, polled to
-  a final status.
+  a final status. `reference` is the invoice id normalized like `payoutKey` (upper case, letters
+  and digits only), so every id variant behind one key sends the same body.
   - **Refused** (`isDefinitiveRejection`, nothing paid): any failure before the payout POST; on the
     POST, `plan_limit_exceeded` / `insufficient_balance` (they prove no payout exists under the
     key), or another 4xx on a key this process never sent; and the final statuses `failed` /

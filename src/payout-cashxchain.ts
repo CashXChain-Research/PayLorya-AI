@@ -63,9 +63,9 @@ export class CashXChainPayoutRoute implements FiatPayoutClient {
       beneficiary_id: beneficiaryId,
       amount: toDecimal(invoice.amountMinor, invoice.currency),
       currency: invoice.currency,
-      // Normalized like the fingerprint the key comes from, so a re-extracted "inv-…" keeps the
-      // body identical (a different body under the same key is 409 idempotency_key_reuse).
-      reference: invoice.id.trim().toUpperCase().slice(0, REFERENCE_MAX),
+      // Normalized like the invoice id in the agent's payoutKey (case, spaces, punctuation), so every
+      // id variant that maps to the same key sends the same body (else 409 idempotency_key_reuse).
+      reference: invoice.id.toUpperCase().replace(/[^\p{L}\p{N}]+/gu, "").slice(0, REFERENCE_MAX),
     };
 
     let payout: CxcPayout;
