@@ -77,14 +77,17 @@ function shell(): string {
     <div class="side-foot">
       <a href="/app/settings" data-nav="settings" class="side-settings">${icon("settings", 18)}<span>Settings</span></a>
       <div class="user-row">
-        <button class="user-btn" type="button" id="user-btn" aria-haspopup="menu" aria-expanded="false"><span id="user-av">${avatar("…")}</span><span class="user-text"><b id="user-name">&nbsp;</b><span id="user-email">&nbsp;</span></span></button>
+        <button class="user-btn" type="button" id="user-btn" aria-haspopup="menu" aria-controls="user-menu" aria-expanded="false"><span id="user-av">${avatar("…")}</span><span class="user-text"><b id="user-name">&nbsp;</b><span id="user-email">&nbsp;</span></span></button>
         ${themeBtn()}
-        <div class="menu" id="user-menu" role="menu" hidden>
+        <div class="menu" id="user-menu" role="menu" aria-labelledby="user-btn" hidden>
           <a href="/app/settings" role="menuitem">${icon("settings", 16)}Settings</a>
           <a href="/app/agent" role="menuitem">${icon("shield", 16)}Agent & access</a>
+          <a href="/" role="menuitem">${icon("home", 16)}Homepage</a>
           <button type="button" role="menuitem" data-signout>${icon("logout", 16)}Sign out</button>
         </div>
       </div>
+      <nav class="side-legal" aria-label="Legal links"><a href="/privacy">Privacy Policy</a><a href="/terms">Terms of Service</a><a href="/legal">Legal notice (Impressum)</a></nav>
+      <small class="side-copyright">&copy; 2026 CashXChain Inc.<br>All rights reserved.</small>
     </div>
   </aside>
   <div class="scrim" id="scrim"></div>
@@ -205,14 +208,17 @@ function closeDrawer(): void {
   document.getElementById("menu-btn")?.setAttribute("aria-expanded", "false");
 }
 
+function closeUserMenu(): void {
+  document.getElementById("user-menu")!.hidden = true;
+  document.getElementById("user-btn")!.setAttribute("aria-expanded", "false");
+}
+
 function wire(): void {
   document.addEventListener("click", e => {
     const target = e.target as HTMLElement;
     const a = target.closest<HTMLAnchorElement>("a[href]");
-    const menu = document.getElementById("user-menu")!;
     if (!target.closest("#user-btn") && !target.closest("#user-menu")) {
-      menu.hidden = true;
-      document.getElementById("user-btn")?.setAttribute("aria-expanded", "false");
+      closeUserMenu();
     }
     if (target.closest("[data-signout]")) {
       e.preventDefault();
@@ -223,7 +229,7 @@ function wire(): void {
     const url = new URL(a.href, location.href);
     if (url.origin !== location.origin || !/^\/app(\/|$)/.test(url.pathname)) return;
     e.preventDefault();
-    menu.hidden = true;
+    closeUserMenu();
     navigateTo(url.pathname + url.search);
   });
   window.addEventListener("popstate", route);
@@ -232,8 +238,10 @@ function wire(): void {
   document.getElementById("scrim")!.addEventListener("click", closeDrawer);
   document.addEventListener("keydown", e => {
     if (e.key === "Escape") {
-      closeDrawer();
-      document.getElementById("user-menu")!.hidden = true;
+      if (!document.getElementById("user-menu")!.hidden) {
+        closeUserMenu();
+        document.getElementById("user-btn")!.focus();
+      } else closeDrawer();
     }
   });
   document.getElementById("user-btn")!.addEventListener("click", () => {
