@@ -3,8 +3,8 @@ import { paymentMiddleware, x402ResourceServer } from "@x402/express";
 import { HTTPFacilitatorClient } from "@x402/core/server";
 import { ExactCardanoScheme } from "@x402/cardano/exact/server";
 import { CARDANO_NETWORK, type Config } from "./config.js";
-import { buildReadinessReport, ReadinessLedger } from "./readiness.js";
-import { InvoiceSchema } from "./types.js";
+import { buildReadinessReport, IdempotencyConflictError, ReadinessLedger } from "./readiness.js";
+import { InvoiceSchema, type ReadinessReport } from "./types.js";
 
 export const READINESS_PATH = "/v1/payment-readiness";
 
@@ -67,9 +67,16 @@ export function mountSeller(app: Express, config: Config): void {
       res.status(422).json({ error: "invalid invoice", issues: parsed.error.issues });
       return;
     }
-    const report = buildReadinessReport(parsed.data, idempotencyKey, ledger, {
-      amountCeilingMinor: config.DEMO_AMOUNT_CEILING_MINOR,
-    });
+    let report: ReadinessReport;
+    try {
+      report = buildReadinessReport(parsed.data, idempotencyKey, ledger, {
+        amountCeilingMinor: config.DEMO_AMOUNT_CEILING_MINOR,
+      });
+    } catch (error) {
+      if (!(error instanceof IdempotencyConflictError)) throw error;
+      res.status(409).json({ error: error.message }); // >= 400: the middleware cancels settlement
+      return;
+    }
     res.json(report);
   });
 }

@@ -1,7 +1,15 @@
 import { readFileSync } from "node:fs";
 import { build } from "esbuild";
 import { describe, expect, it } from "vitest";
-import { BUILDS } from "../web/build.js";
+import { BUILDS, VENDOR } from "../web/build.js";
+
+const read = (path: string): Buffer | undefined => {
+  try {
+    return readFileSync(path);
+  } catch {
+    return undefined; // missing file: reported by the assertion
+  }
+};
 
 // The container serves public/assets as committed (no build step in the Dockerfile).
 describe("committed web bundle", () => {
@@ -9,14 +17,14 @@ describe("committed web bundle", () => {
     for (const options of BUILDS) {
       const result = await build({ ...options, write: false, logLevel: "silent" });
       for (const file of result.outputFiles) {
-        let committed = "";
-        try {
-          committed = readFileSync(file.path, "utf8");
-        } catch {
-          // missing file: reported by the assertion below
-        }
-        expect(committed, `${file.path} is stale`).toBe(file.text);
+        expect(read(file.path)?.toString("utf8"), `${file.path} is stale`).toBe(file.text);
       }
+    }
+  });
+
+  it("vendored files match node_modules (run npm run build:web)", () => {
+    for (const { from, to } of VENDOR) {
+      expect(read(to)?.equals(readFileSync(from)), `${to} differs from ${from}`).toBe(true);
     }
   });
 });

@@ -25,11 +25,12 @@ Cloudflare docs, 2026-10-30). `wrangler deploy --dry-run` passes with this confi
 | `BUYER_MNEMONIC` | secret (**buyer-cloud** wallet) | `npx wrangler secret put` |
 | `SELLER_ADDRESS` | secret | `npx wrangler secret put` |
 | `CASHXCHAIN_API_KEY` | secret, optional: CashXChain **sandbox** key for fiat payouts (see below) | `npx wrangler secret put` |
-| `APPROVE_TOKEN` | secret, optional but recommended before judging: only requests carrying it may approve or reject a draft | `npx wrangler secret put` |
+| `APPROVE_TOKEN` | secret, **required for approvals** (fail-closed): only requests carrying it may approve or reject a draft; unset, approve/reject answer 503 and `/api/health` shows `approvals: "disabled"` | `npx wrangler secret put` |
 | `BETTER_AUTH_SECRET` | secret, AI CFO accounts: signs sessions (32+ random characters, `openssl rand -hex 32`). Unset: a random one per start | `npx wrangler secret put` |
 | `PUBLIC_BASE_URL` | var | `vars` in `wrangler.jsonc`, after the first deploy |
 | `LOCAL_FACILITATOR`, `PRICE_LOVELACE`, `MAX_PRICE_LOVELACE`, `SESSION_BUDGET_LOVELACE`, `MAX_PAYMENTS_PER_RUN` | var | `vars` in `wrangler.jsonc` |
 | `FACILITATOR_URL`, `CARDANO_L1_CONFIRMATIONS`, `BLOCKFROST_PREPROD_URL`, `EXPLORER_TX_URL`, `DEMO_AMOUNT_CEILING_MINOR`, `FIAT_PAYOUT_MAX_MINOR` (1,000.00), `FIAT_PAYOUTS_PER_SESSION` (5), `CLAUDE_MODEL`, `ANTHROPIC_BASE_URL`, `DATA_DIR`, `CFO_AI_DAILY_LIMIT` | optional var | add to `vars` only to override the default in `src/config.ts` |
+| `RUNS_PER_MINUTE_PER_CLIENT` (10), `RUNS_PER_HOUR` (120, all clients together), `MAX_TEXT_CHARS` (20,000), `MAX_RUNS` (500) | optional var: limits for the public `POST /api/runs` (`src/ratelimit.ts`); `/api/health` shows the effective values under `limits` | add to `vars` only to override the default in `src/config.ts` |
 
 Every key in `src/config.ts` (except `PORT`) is forwarded into the container by `cloudflare/env.ts`.
 `tests/cloudflare-env.test.ts` fails if the two drift apart. When you add a config key, add it there.
@@ -50,7 +51,7 @@ npx wrangler secret put BLOCKFROST_PROJECT_ID
 npx wrangler secret put BUYER_MNEMONIC
 npx wrangler secret put SELLER_ADDRESS
 npx wrangler secret put CASHXCHAIN_API_KEY   # optional: real CashXChain sandbox payouts
-npx wrangler secret put APPROVE_TOKEN        # optional: protects approve/reject (UI asks for it)
+npx wrangler secret put APPROVE_TOKEN        # required for approve/reject (UI asks for it); unset = approvals disabled
 npx wrangler deploy
 ```
 

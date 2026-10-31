@@ -3,13 +3,14 @@ import { ExactCardanoScheme } from "@x402/cardano/exact/client";
 import { wrapFetchWithPayment, x402Client, x402HTTPClient } from "@x402/fetch";
 import { blockfrostProvider, CARDANO_NETWORK, type Config } from "./config.js";
 import { extractInvoice } from "./extract.js";
-import { blockfrostChainView, blockfrostSubmitter, simulatedCxcPayouts, type ChainSubmitter, type ChainView, type FiatPayoutClient } from "./payout.js";
+import { PayoutUnknownError } from "./payout-cashxchain.js";
+import { blockfrostChainView, blockfrostSubmitter, simulatedCxcPayouts, type ChainSubmitter, type ChainView, type FiatPayoutClient, type TxOutput } from "./payout.js";
 import { filterOffers, precheck, SpendLedger, type SpendPolicy } from "./policy.js";
 import { invoiceFingerprint } from "./readiness.js";
 import { decideRoute, findPayee, payeeDirectory, payoutKey, type VerifiedPayee } from "./routing.js";
 import type { Run, RunStore } from "./runs.js";
 import { READINESS_PATH } from "./seller.js";
-import { InvoiceSchema, type Invoice, type PaymentDraft, type PayoutResult, type ReadinessReport, type RouteDecision } from "./types.js";
+import { InvoiceSchema, type Invoice, type PaymentDraft, type PaymentProof, type PayoutResult, type ReadinessReport, type RouteDecision } from "./types.js";
 
 /** Payout rails and chain access; tests inject stubs. */
 export interface PayoutRails {
@@ -17,6 +18,7 @@ export interface PayoutRails {
   fiat?: FiatPayoutClient;
   chain?: ChainView;
   walletSync?: Partial<typeof WALLET_SYNC>;
+  reconcile?: Partial<typeof RECONCILE>;
 }
 
 /**
@@ -25,6 +27,17 @@ export interface PayoutRails {
  * Otherwise the next tx can be built on, or checked against, a stale UTxO set and fail after signing.
  */
 const WALLET_SYNC = { timeoutMs: 90_000, pollMs: 3_000, graceMs: 30_000 };
+
+/** Background chain check of an unknown outcome (SETTLEMENT_UNKNOWN, Cardano PAYOUT_UNKNOWN). */
+const RECONCILE = { pollMs: 15_000, windowMs: 20 * 60_000 };
+
+/**
+ * How far the provider's tip must be past a tx's validity end before the tx's absence proves it can
+ * no longer land: covers indexer lag and rollbacks up to ~30 Preprod blocks (10 min of slots).
+ */
+const EXPIRY_MARGIN_SLOTS = 600n;
+
+const PAID_ON_CARDANO = "Paid on Cardano Preprod (testnet)";
 
 const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
 
@@ -43,6 +56,7 @@ export class BuyerAgent {
   private submitter?: ChainSubmitter;
   private chain?: ChainView;
   private readonly walletSync: typeof WALLET_SYNC;
+  private readonly reconcileTiming: typeof RECONCILE;
   // Last tx this wallet broadcast (or may have), and when we learned of it.
   private lastTx?: { hash: string; at: number };
   private walletQueue: Promise<void> = Promise.resolve();
@@ -80,6 +94,7 @@ export class BuyerAgent {
     this.submitter = rails.submitter;
     this.chain = rails.chain;
     this.walletSync = { ...WALLET_SYNC, ...rails.walletSync };
+    this.reconcileTiming = { ...RECONCILE, ...rails.reconcile };
   }
 
   get buyerAddress(): string {
@@ -209,11 +224,15 @@ export class BuyerAgent {
         return this.runs.transition(run, "DRAFT_READY", `Payout refused before broadcast, nothing paid; approve again: ${run.error}`);
       }
       // The broadcast may have reached the chain: count it and lock the invoice.
-      const tx = signedTxHash(signed.transaction);
+      const ours = decodeSigned(signed.transaction);
+      const tx = ours?.txHash;
       if (tx) this.noteTx(tx);
       this.payoutLedger.markUnknown(key, amount);
-      run.payout = { ...base, status: "unknown", ...explorer(tx), label: "Payout outcome unknown: check the explorer before paying again", executedAt: new Date().toISOString() };
-      return this.runs.transition(run, "PAYOUT_UNKNOWN", tx ? `tx ${tx}: ${run.error}` : run.error);
+      const unknown: PayoutResult = { ...base, status: "unknown", ...explorer(tx), label: "Payout outcome unknown: check the explorer before paying again", executedAt: new Date().toISOString() };
+      run.payout = unknown;
+      this.runs.transition(run, "PAYOUT_UNKNOWN", tx ? `tx ${tx}: ${run.error}` : run.error);
+      if (ours) this.watchPayout(run, key, { txHash: ours.txHash, payTo: destination, lovelace: amount, ttlSlot: ours.ttlSlot }, unknown);
+      return;
     }
     this.noteTx(sent.txHash);
     this.payoutLedger.markPaid(key, amount);
@@ -222,7 +241,7 @@ export class BuyerAgent {
       ...base,
       status: confirmed ? "confirmed" : "submitted",
       ...explorer(sent.txHash),
-      label: confirmed ? "Paid on Cardano Preprod (testnet)" : "Broadcast to Cardano Preprod; confirmation pending",
+      label: confirmed ? PAID_ON_CARDANO : "Broadcast to Cardano Preprod; confirmation pending",
       executedAt: new Date().toISOString(),
     };
     this.runs.transition(run, "EXECUTED", sent.txHash);
@@ -249,7 +268,14 @@ export class BuyerAgent {
       // A real API may have accepted the payout before failing: lock, never retry blindly.
       this.payoutLedger.markUnknown(key, 0n);
       run.error = error instanceof Error ? error.message : String(error);
-      run.payout = { ...base, status: "unknown", label: "Payout outcome unknown: reconcile with CashXChain before paying again", executedAt: new Date().toISOString() };
+      const payoutId = error instanceof PayoutUnknownError ? error.payoutId : undefined;
+      run.payout = {
+        ...base,
+        status: "unknown",
+        ...(payoutId ? { reference: payoutId } : {}),
+        label: `Payout outcome unknown: reconcile with CashXChain (Idempotency-Key payout-${key}) before paying again`,
+        executedAt: new Date().toISOString(),
+      };
       return this.runs.transition(run, "PAYOUT_UNKNOWN", run.error);
     }
     this.payoutLedger.markPaid(key, 0n);
@@ -294,15 +320,21 @@ export class BuyerAgent {
     this.lastTx = { hash, at: Date.now() };
   }
 
+  /** Blockfrost when configured; tests inject a stub. */
+  private chainView(): ChainView | undefined {
+    if (!this.chain && this.config.BLOCKFROST_PROJECT_ID) this.chain = blockfrostChainView(this.config);
+    return this.chain;
+  }
+
   /** Runs inside the wallet queue, before the next tx is built. Bounded: never blocks forever. */
   private async syncWallet(): Promise<void> {
     const last = this.lastTx;
     if (!last) return;
     const { timeoutMs, pollMs, graceMs } = this.walletSync;
-    if (!this.chain && this.config.BLOCKFROST_PROJECT_ID) this.chain = blockfrostChainView(this.config);
-    if (this.chain) {
+    const chain = this.chainView();
+    if (chain) {
       const deadline = Date.now() + timeoutMs;
-      while (!(await this.chain.hasTransaction(last.hash).catch(() => false)) && Date.now() < deadline) await sleep(pollMs);
+      while (!(await chain.hasTransaction(last.hash).catch(() => false)) && Date.now() < deadline) await sleep(pollMs);
     }
     const grace = last.at + graceMs - Date.now();
     if (grace > 0) await sleep(grace);
@@ -313,7 +345,7 @@ export class BuyerAgent {
     const fingerprint = run.fingerprint!;
     let payments = 0;
     let signedAmount: bigint | undefined;
-    let signedTx: string | undefined;
+    let signed: Signed | undefined;
 
     const client = new x402Client()
       .setSpendControls({
@@ -331,7 +363,7 @@ export class BuyerAgent {
       .onAfterPaymentCreation(async ({ selectedRequirements, paymentPayload }) => {
         payments += 1;
         signedAmount = BigInt(selectedRequirements.amount);
-        signedTx = signedTxHash(paymentPayload.payload.transaction);
+        signed = decodeSigned(paymentPayload.payload.transaction);
       })
       // Core runs this only after our hold was taken and signing threw: nothing was sent.
       .onPaymentCreationFailure(async () => {
@@ -350,7 +382,9 @@ export class BuyerAgent {
         body: JSON.stringify({ invoice }),
       });
     } catch (error) {
-      return this.failPayment(run, fingerprint, signedAmount, error, signedTx);
+      // The request died after signing: the facilitator may have broadcast it.
+      if (signed) this.noteTx(signed.txHash);
+      return this.failPayment(run, fingerprint, signedAmount, error, signed);
     }
 
     const http = new x402HTTPClient(client);
@@ -365,26 +399,27 @@ export class BuyerAgent {
       // Verify rejections carry no PAYMENT-RESPONSE; core puts the facilitator's reason in PAYMENT-REQUIRED `error`.
       const reason = settle?.errorReason ?? paymentRequiredError(http, response);
       const detail = `HTTP ${response.status}${reason ? `, ${reason}` : ""}`;
-      // A settle response with a tx means the facilitator broadcast it; a verify rejection did not.
-      if (settle?.transaction) this.noteTx(settle.transaction);
-      return this.failPayment(run, fingerprint, signedAmount, new Error(detail), settle?.transaction || signedTx);
+      // Only a verify rejection (402 without PAYMENT-RESPONSE) proves nothing was broadcast. A failed
+      // settle can still land (A7: nginx 504, empty tx hash, tx on chain), so the next tx waits for it.
+      const verifyRejected = response.status === 402 && settle === undefined;
+      const maybeSent = settle?.transaction || signed?.txHash;
+      if (!verifyRejected && maybeSent) this.noteTx(maybeSent);
+      return this.failPayment(run, fingerprint, signedAmount, new Error(detail), signed, settle?.transaction);
     }
     // A proof needs an on-chain tx hash for a payment we actually signed.
     if (!settle.transaction || signedAmount === undefined) {
-      return this.failPayment(run, fingerprint, signedAmount, new Error("settle reported success without a transaction hash"), signedTx);
+      if (signed) this.noteTx(signed.txHash);
+      return this.failPayment(run, fingerprint, signedAmount, new Error("settle reported success without a transaction hash"), signed);
+    }
+    // A proof for some other tx proves nothing about ours: look up the one we signed instead.
+    if (signed && settle.transaction !== signed.txHash) {
+      this.noteTx(signed.txHash);
+      const detail = `settle reported tx ${settle.transaction}, but the signed tx is ${signed.txHash}`;
+      return this.failPayment(run, fingerprint, signedAmount, new Error(detail), signed);
     }
 
     this.ledger.markPaid(fingerprint, signedAmount!);
-    run.payment = {
-      network: CARDANO_NETWORK,
-      buyerAddress: this.buyerAddress,
-      sellerAddress: this.config.SELLER_ADDRESS!,
-      asset: "lovelace",
-      amount: signedAmount!.toString(),
-      transactionHash: settle.transaction,
-      explorerUrl: `${this.config.EXPLORER_TX_URL}${settle.transaction}`,
-      settledAt: new Date().toISOString(),
-    };
+    run.payment = this.paymentProof(settle.transaction, { address: this.config.SELLER_ADDRESS!, lovelace: signedAmount! });
     this.noteTx(settle.transaction);
     this.runs.transition(run, "PAID", settle.transaction);
     // Paid either way: a settled request without a usable report is a failed delivery, and the
@@ -393,25 +428,143 @@ export class BuyerAgent {
     if (!isReadinessReport(report)) {
       throw new Error(`paid (tx ${settle.transaction}), but the seller returned no readable report; the invoice stays locked as paid`);
     }
+    // Run ids (our Idempotency-Key) are public: a report cached for another invoice must not decide this one.
+    if (report.invoiceFingerprint !== fingerprint) {
+      throw new Error(`paid (tx ${settle.transaction}), but the report is for a different invoice; the invoice stays locked as paid`);
+    }
     return report;
   }
 
-  /** A signed tx may already be on-chain: never re-sign blindly, lock the invoice instead. */
-  private failPayment(run: Run, fingerprint: string, signedAmount: bigint | undefined, error: unknown, tx?: string): undefined {
+  /**
+   * A signed tx may already be on-chain: never re-sign blindly, lock the invoice instead. The tx to
+   * look up is the one the facilitator reported, else the one we signed.
+   */
+  private failPayment(run: Run, fingerprint: string, signedAmount: bigint | undefined, error: unknown, signed?: Signed, reported?: string): undefined {
     run.error = error instanceof Error ? error.message : String(error);
     if (signedAmount !== undefined) {
+      const tx = reported || signed?.txHash;
       this.ledger.markUnknown(fingerprint, signedAmount);
-      run.settlement = {
+      const settlement = {
         ...(tx ? { transactionHash: tx, explorerUrl: `${this.config.EXPLORER_TX_URL}${tx}` } : {}),
         reason: run.error,
       };
+      run.settlement = settlement;
       this.runs.transition(run, "SETTLEMENT_UNKNOWN", tx ? `tx ${tx}: ${run.error}` : run.error);
+      // Only the TTL of the tx we signed can prove expiry; a different hash from the facilitator cannot.
+      const ttlSlot = signed && tx === signed.txHash ? signed.ttlSlot : undefined;
+      if (tx) this.watchReport(run, fingerprint, { txHash: tx, payTo: this.config.SELLER_ADDRESS!, lovelace: signedAmount, ttlSlot }, settlement);
     } else {
       this.runs.transition(run, "FAILED", run.error);
     }
     return undefined;
   }
+
+  private paymentProof(tx: string, paid: TxOutput): PaymentProof {
+    return {
+      network: CARDANO_NETWORK,
+      buyerAddress: this.buyerAddress,
+      sellerAddress: paid.address,
+      asset: "lovelace",
+      amount: paid.lovelace.toString(),
+      transactionHash: tx,
+      explorerUrl: `${this.config.EXPLORER_TX_URL}${tx}`,
+      settledAt: new Date().toISOString(),
+    };
+  }
+
+  /** SETTLEMENT_UNKNOWN: paid on chain locks the invoice as paid; proven expired unlocks it. */
+  private watchReport(run: Run, fingerprint: string, want: Expected, settlement: NonNullable<Run["settlement"]>): void {
+    this.reconcile(run, want, {
+      paid: output => {
+        this.ledger.resolveUnknown(fingerprint, "paid");
+        run.payment = this.paymentProof(want.txHash, output);
+        run.settlement = { ...settlement, resolved: "on_chain" };
+        run.error = `paid on-chain (tx ${want.txHash}), but the facilitator did not deliver the report; invoice locked as paid`;
+        this.runs.transition(run, "FAILED", run.error);
+      },
+      expired: tip => {
+        this.ledger.resolveUnknown(fingerprint, "expired");
+        run.settlement = { ...settlement, resolved: "expired" };
+        run.error = `${expiredNote(want, tip)}; nothing paid, the invoice is unlocked`;
+        this.runs.transition(run, "FAILED", run.error);
+      },
+    });
+  }
+
+  /** Cardano PAYOUT_UNKNOWN: paid on chain is EXECUTED; proven expired reopens the draft. */
+  private watchPayout(run: Run, key: string, want: Expected, unknown: PayoutResult): void {
+    this.reconcile(run, want, {
+      paid: () => {
+        this.payoutLedger.resolveUnknown(key, "paid");
+        run.payout = { ...unknown, status: "confirmed", label: PAID_ON_CARDANO };
+        this.runs.transition(run, "EXECUTED", "payout confirmed on-chain after an unclear submit");
+      },
+      expired: tip => {
+        this.payoutLedger.resolveUnknown(key, "expired");
+        run.payout = undefined;
+        run.error = expiredNote(want, tip);
+        this.runs.transition(run, "DRAFT_READY", `Payout never landed, nothing paid; approve again: ${run.error}`);
+      },
+    });
+  }
+
+  /**
+   * Resolves an unknown outcome from chain evidence, off the wallet queue and off the request: polls
+   * every `pollMs` for up to `windowMs` on an unref'd timer and stops once decided. Without a tx
+   * lookup, or if nothing is decided in time, the run stays unknown and locked.
+   */
+  private reconcile(run: Run, want: Expected, on: { paid(output: TxOutput): void; expired(tip: bigint): void }): void {
+    const chain = this.chainView();
+    if (!chain?.txOutputs) return;
+    const state = run.state;
+    const { pollMs, windowMs } = this.reconcileTiming;
+    const deadline = Date.now() + windowMs;
+    const tick = async (): Promise<void> => {
+      const found = await chainEvidence(chain, want).catch((): Evidence => ({ kind: "pending" }));
+      if (run.state !== state) return; // decided elsewhere
+      if (found.kind === "paid") return on.paid(found.output);
+      if (found.kind === "expired") return on.expired(found.tip);
+      if (found.kind === "mismatch") {
+        return this.runs.transition(run, state, `tx ${want.txHash} is on chain, but no output pays exactly ${want.lovelace} lovelace to ${want.payTo}; stays locked`);
+      }
+      if (Date.now() + pollMs > deadline) {
+        return this.runs.transition(run, state, `tx ${want.txHash} not found on chain within the check window; stays locked, check the explorer before paying again`);
+      }
+      schedule();
+    };
+    const schedule = () => void setTimeout(() => void tick().catch(error => console.warn(`chain check of ${want.txHash} failed: ${error}`)), pollMs).unref();
+    schedule();
+  }
 }
+
+/** What an unknown tx must show on chain to count as paid. */
+interface Expected {
+  txHash: string;
+  payTo: string;
+  lovelace: bigint;
+  /** Validity end (TTL slot) of this exact tx, decoded from what we signed; unset: never proven expired. */
+  ttlSlot?: bigint;
+}
+
+type Evidence = { kind: "paid"; output: TxOutput } | { kind: "mismatch" } | { kind: "expired"; tip: bigint } | { kind: "pending" };
+
+/**
+ * One chain check. The tip is read before the tx: if an index that is already past the tx's
+ * validity end (plus a margin) does not have it, no block on that chain can include it any more.
+ */
+async function chainEvidence(chain: ChainView, want: Expected): Promise<Evidence> {
+  const tip = want.ttlSlot !== undefined ? await chain.tipSlot?.().catch(() => undefined) : undefined;
+  const outputs = await chain.txOutputs?.(want.txHash);
+  if (outputs) {
+    const output = outputs.find(o => o.address === want.payTo && o.lovelace === want.lovelace);
+    return output ? { kind: "paid", output } : { kind: "mismatch" };
+  }
+  if (want.ttlSlot !== undefined && tip !== undefined && tip >= want.ttlSlot + EXPIRY_MARGIN_SLOTS) return { kind: "expired", tip };
+  return { kind: "pending" };
+}
+
+const expiredNote = (want: Expected, tip: bigint) =>
+  `tx ${want.txHash} can no longer land: its validity ended at slot ${want.ttlSlot}, the chain tip is at slot ${tip} without it`;
 
 /** Reason from a 402's PAYMENT-REQUIRED header (verify failure), if the seller sent one. */
 function paymentRequiredError(http: x402HTTPClient, response: Response): string | undefined {
@@ -423,10 +576,15 @@ function paymentRequiredError(http: x402HTTPClient, response: Response): string 
   }
 }
 
-/** Hash of the tx we signed, so an unknown settlement can still be looked up on the explorer. */
-function signedTxHash(transaction: unknown): string | undefined {
+/** Hash and validity end (TTL slot) of a tx we signed. */
+type Signed = { txHash: string; ttlSlot?: bigint };
+
+/** Decodes the tx we signed, so an unknown outcome can still be looked up, and proven expired. */
+function decodeSigned(transaction: unknown): Signed | undefined {
   try {
-    return typeof transaction === "string" ? decodeCardanoTransaction(transaction).txHash : undefined;
+    if (typeof transaction !== "string") return undefined;
+    const { txHash, ttlSlot } = decodeCardanoTransaction(transaction);
+    return { txHash, ttlSlot };
   } catch {
     return undefined; // undecodable: rely on the facilitator's settle response
   }

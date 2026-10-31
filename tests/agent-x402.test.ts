@@ -3,14 +3,23 @@ import { once } from "node:events";
 import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import express, { type Express, type Response } from "express";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { decodeCardanoTransaction, type ClientCardanoSignInput, type ClientCardanoSigner } from "@x402/cardano";
 import { ExactCardanoScheme } from "@x402/cardano/exact/client";
 import type { PaymentPayload, PaymentRequirements } from "@x402/core/types";
 import { decodePaymentResponseHeader, wrapFetchWithPayment, x402Client } from "@x402/fetch";
 import { BuyerAgent, type PayoutRails } from "../src/agent.js";
-import { isDefinitiveSubmitRejection, type ChainSubmitter, type ChainView, type FiatPayoutClient, type FiatPayoutRequest } from "../src/payout.js";
-import { CRYPTO_PAYEE, payoutKey } from "../src/routing.js";
+import {
+  blockfrostChainView,
+  isDefinitiveSubmitRejection,
+  type ChainSubmitter,
+  type ChainView,
+  type FiatPayoutClient,
+  type FiatPayoutRequest,
+  type TxOutput,
+} from "../src/payout.js";
+import { CRYPTO_PAYEE, findPayee, payeeDirectory, payoutKey } from "../src/routing.js";
+import { PayoutUnknownError } from "../src/payout-cashxchain.js";
 import { CARDANO_NETWORK, loadConfig } from "../src/config.js";
 import { RunStore, type Run } from "../src/runs.js";
 import { mountSeller, READINESS_PATH } from "../src/seller.js";
@@ -49,7 +58,7 @@ const adaInvoice: Invoice = {
 };
 
 type Env = Record<string, string>;
-type Reply = (res: Response, call: number) => void;
+type Reply = (res: Response, call: number, body?: FacilitatorRequest) => void;
 interface FacilitatorRequest {
   x402Version: number;
   paymentPayload: PaymentPayload;
@@ -140,8 +149,8 @@ function stubSubmitter(): StubSubmitter {
   return submitter;
 }
 
-// Smallest tx the SDK decoder accepts: [body {0: inputs, 1: outputs, 2: fee}, witnesses {}, valid, no aux].
-function decodableTx(): string {
+// Smallest tx the SDK decoder accepts: [body {0: inputs, 1: outputs, 2: fee, 3: ttl?}, witnesses {}, valid, no aux].
+function decodableTx(ttlSlot?: number): string {
   const cbor = (v: unknown): Buffer => {
     const head = (major: number, n: number) =>
       n < 24 ? Buffer.from([(major << 5) | n])
@@ -159,12 +168,21 @@ function decodableTx(): string {
     [0, [[Buffer.alloc(32, 0xab), 1]]],
     [1, [[Buffer.concat([Buffer.from([0x60]), Buffer.alloc(28, 0x11)]), 2_000_000]]],
     [2, 170_000],
+    ...(ttlSlot === undefined ? [] : [[3, ttlSlot] as const]),
   ]);
   return cbor([body, new Map(), true, null]).toString("base64");
 }
 
 const verifyOk: Reply = res => void res.json({ isValid: true, payer: BUYER });
-const settleOk: Reply = res => void res.json({ success: true, transaction: TX, network: CARDANO_NETWORK, payer: BUYER });
+/** Like the real facilitator, settle reports the hash of the tx it was given; stub bytes that don't decode get TX. */
+function settledHash(body?: FacilitatorRequest): string {
+  try {
+    return decodeCardanoTransaction(String(body?.paymentPayload.payload.transaction)).txHash;
+  } catch {
+    return TX;
+  }
+}
+const settleOk: Reply = (res, _call, body) => void res.json({ success: true, transaction: settledHash(body), network: CARDANO_NETWORK, payer: BUYER });
 const settleFailed = (errorReason: string, status = 200): Reply => res =>
   void res.status(status).json({ success: false, errorReason, transaction: TX, network: CARDANO_NETWORK, payer: BUYER });
 // Shape from @x402/cardano README "Settlement and settlement_pending".
@@ -207,12 +225,12 @@ async function startFacilitator(events: string[]) {
   app.post("/verify", (req, res) => {
     events.push("verify");
     fac.verifyCalls.push(req.body);
-    fac.verify(res, fac.verifyCalls.length);
+    fac.verify(res, fac.verifyCalls.length, req.body);
   });
   app.post("/settle", (req, res) => {
     events.push("settle");
     fac.settleCalls.push(req.body);
-    fac.settle(res, fac.settleCalls.length);
+    fac.settle(res, fac.settleCalls.length, req.body);
   });
   const { server, url } = await listen(app);
   fac.url = url;
@@ -233,10 +251,20 @@ const env = (facilitatorUrl: string, overrides: Env = {}): Env => ({
 });
 
 /** Replaces the seller's report on its way out; `send` is the original res.json. */
-type Tamper = (res: Response, send: (body: unknown) => Response) => Response;
+type Tamper = (res: Response, send: (body: unknown) => Response, report: ReadinessReport) => Response;
 
 async function startStack(
-  opts: { seller?: Env; buyer?: Env; tamperReport?: Tamper; chain?: ChainView; walletSync?: PayoutRails["walletSync"]; fiat?: FiatPayoutClient } = {},
+  opts: {
+    seller?: Env;
+    buyer?: Env;
+    tamperReport?: Tamper;
+    /** Settle succeeds, then the connection to the buyer drops: the paid response never arrives. */
+    loseSettledResponse?: boolean;
+    chain?: ChainView;
+    walletSync?: PayoutRails["walletSync"];
+    reconcile?: PayoutRails["reconcile"];
+    fiat?: FiatPayoutClient;
+  } = {},
 ) {
   const events: string[] = [];
   const handled: ReadinessReport[] = [];
@@ -246,12 +274,16 @@ async function startStack(
   app.use(express.json());
   // Probe: the readiness handler calls res.json itself; the x402 middleware buffers what it writes.
   app.use((_req, res, next) => {
+    if (opts.loseSettledResponse) {
+      const end = res.end.bind(res);
+      res.end = ((...args: Parameters<typeof end>) => (res.getHeader("payment-response") ? (res.socket?.destroy(), res) : end(...args))) as typeof res.end;
+    }
     const json = res.json.bind(res);
     res.json = (body?: unknown) => {
       if ((body as ReadinessReport | undefined)?.verdict) {
         events.push("handler");
         handled.push(body as ReadinessReport);
-        if (opts.tamperReport) return opts.tamperReport(res, json);
+        if (opts.tamperReport) return opts.tamperReport(res, json, body as ReadinessReport);
       }
       return json(body);
     };
@@ -265,7 +297,13 @@ async function startStack(
   const signer = stubSigner();
   const submitter = stubSubmitter();
   // No grace by default so tests stay fast; wallet-sync tests set their own.
-  const agent = new BuyerAgent(config, runs, signer, { submitter, fiat: opts.fiat, chain: opts.chain, walletSync: { graceMs: 0, ...opts.walletSync } });
+  const agent = new BuyerAgent(config, runs, signer, {
+    submitter,
+    fiat: opts.fiat,
+    chain: opts.chain,
+    walletSync: { graceMs: 0, ...opts.walletSync },
+    reconcile: opts.reconcile,
+  });
   const run = async (inv: Invoice = invoice): Promise<Run> => {
     const r = runs.create(JSON.stringify(inv));
     await agent.process(r);
@@ -541,6 +579,33 @@ describe("buyer agent over real x402 (stub signer + stub facilitator)", () => {
     expect(s.signer.calls).toHaveLength(1);
   });
 
+  it("paid but the report is for a different invoice -> FAILED, payment kept, invoice locked", async () => {
+    const s = await startStack({ tamperReport: (_res, send, report) => send({ ...report, invoiceFingerprint: "f".repeat(64) }) });
+    const run = await s.run();
+
+    expect(states(run)).toEqual(["CREATED", "EXTRACTED", "PRECHECKED", "PAYING", "PAID", "FAILED"]);
+    expect(run.error).toBe(`paid (tx ${TX}), but the report is for a different invoice; the invoice stays locked as paid`);
+    expect(run.report).toBeUndefined();
+    expect(run.draft).toBeUndefined();
+    expect(s.agent.spentLovelace).toBe(PRICE);
+    expect((await s.run()).error).toContain("already paid");
+  });
+
+  it("settle success for a tx other than the one we signed -> SETTLEMENT_UNKNOWN on our tx, no proof", async () => {
+    const s = await startStack();
+    s.signer.transaction = decodableTx();
+    s.fac.settle = res => void res.json({ success: true, transaction: TX, network: CARDANO_NETWORK, payer: BUYER });
+    const run = await s.run();
+
+    const signed = decodeCardanoTransaction(s.signer.transaction).txHash;
+    expect(run.state).toBe("SETTLEMENT_UNKNOWN");
+    expect(run.error).toBe(`settle reported tx ${TX}, but the signed tx is ${signed}`);
+    expect(run.settlement?.transactionHash).toBe(signed);
+    expect(run.payment).toBeUndefined();
+    expect(run.report).toBeUndefined();
+    expect(s.agent.spentLovelace).toBe(PRICE);
+  });
+
   it("two concurrent runs for the same invoice sign only once", async () => {
     const s = await startStack();
     const [a, b] = await Promise.all([s.run(), s.run()]);
@@ -759,8 +824,22 @@ describe("invoice payout after human approval", () => {
 
     expect(run.state).toBe("PAYOUT_UNKNOWN");
     expect(run.payout).toMatchObject({ rail: "cxc_fiat", status: "unknown" });
+    expect(run.payout?.reference).toBeUndefined();
+    expect(run.payout?.label).toBe(`Payout outcome unknown: reconcile with CashXChain (Idempotency-Key ${fiat.calls[0]?.idempotencyKey}) before paying again`);
     expect(s.agent.approve(run)).toMatchObject({ ok: false });
     expect(fiat.calls).toHaveLength(1);
+  });
+
+  it("fiat: an unknown outcome on a payout CashXChain already created keeps its id for reconciliation", async () => {
+    const fiat = stubFiat();
+    const s = await startStack({ fiat });
+    const run = await s.run();
+    fiat.fail = new PayoutUnknownError("network error while polling", "po_8Kq2");
+    await approve(s.agent, run);
+
+    expect(run.state).toBe("PAYOUT_UNKNOWN");
+    expect(run.payout).toMatchObject({ status: "unknown", reference: "po_8Kq2" });
+    expect(run.payout?.label).toContain(`Idempotency-Key payout-${payoutKey(findPayee(payeeDirectory(SUPPLIER_WALLET), invoice.supplier)!, invoice)}`);
   });
 
   it("crypto: node refuses the payout before broadcast -> back to DRAFT_READY, nothing counted, approve again pays", async () => {
@@ -895,6 +974,40 @@ describe("wallet sync between transactions from the buyer wallet", () => {
     expect(s.signer.calls).toHaveLength(2);
   });
 
+  const maybeBroadcast: Array<{ name: string; settle: Reply }> = [
+    { name: "settle times out at the gateway (A7: 504, empty tx hash)", settle: res => void res.status(504).send("<html>504 Gateway Time-out</html>") },
+    { name: "the settle response is lost", settle: res => void res.socket?.destroy() },
+    { name: "settle reports success without a tx hash", settle: res => void res.json({ success: true, transaction: "", network: CARDANO_NETWORK, payer: BUYER }) },
+  ];
+
+  it.each(maybeBroadcast)("$name: the tx may have landed, so the next payment waits for the one we signed", async ({ settle }) => {
+    const seen: string[] = [];
+    const s = await startStack({ chain: { hasTransaction: async hash => (seen.push(hash), true) } });
+    s.signer.transaction = decodableTx();
+    const signed = decodeCardanoTransaction(s.signer.transaction).txHash;
+    s.fac.settle = settle;
+    expect((await s.run()).state).toBe("SETTLEMENT_UNKNOWN");
+    expect(seen).toEqual([]);
+
+    s.fac.settle = settleOk;
+    expect((await s.run(second)).state).toBe("DRAFT_READY");
+    expect(seen[0]).toBe(signed);
+  });
+
+  it("settled, but the response to the buyer is lost: the next payment waits for the tx we signed", async () => {
+    const seen: string[] = [];
+    const s = await startStack({ loseSettledResponse: true, chain: { hasTransaction: async hash => (seen.push(hash), true) } });
+    s.signer.transaction = decodableTx();
+    const signed = decodeCardanoTransaction(s.signer.transaction).txHash;
+    const run = await s.run();
+    expect(run.state).toBe("SETTLEMENT_UNKNOWN");
+    expect(s.fac.settleCalls).toHaveLength(1);
+    expect(seen).toEqual([]);
+
+    expect((await s.run(second)).state).toBe("SETTLEMENT_UNKNOWN"); // still losing responses; it waited first
+    expect(seen[0]).toBe(signed);
+  });
+
   it("a verify rejection was never broadcast, so it is not waited for", async () => {
     let lookups = 0;
     const s = await startStack({ chain: { hasTransaction: async () => (lookups++, true) }, walletSync: { graceMs: 10_000 } });
@@ -938,11 +1051,11 @@ describe("seller x402 contract (direct x402 client)", () => {
     const client = new x402Client().setSpendControls({ allowedAssets: [{ network: CARDANO_NETWORK, asset: "lovelace" }] });
     client.register("cardano:*", new ExactCardanoScheme(signer));
     const fetchWithPayment = wrapFetchWithPayment(fetch, client);
-    return (idempotencyKey: string) =>
+    return (idempotencyKey: string, body: Invoice = invoice) =>
       fetchWithPayment(`${url}${READINESS_PATH}`, {
         method: "POST",
         headers: { "content-type": "application/json", "idempotency-key": idempotencyKey },
-        body: JSON.stringify({ invoice }),
+        body: JSON.stringify({ invoice: body }),
       });
   };
 
@@ -973,5 +1086,354 @@ describe("seller x402 contract (direct x402 client)", () => {
     expect(other.verdict).toBe("blocked");
     expect(duplicateCheck(other)).toBe("fail");
     expect(s.signer.calls).toHaveLength(3);
+  });
+
+  it("a key already used for another invoice gets 409 and is never settled", async () => {
+    const s = await startStack();
+    const pay = payDirect(s.sellerUrl, s.signer);
+    expect((await pay("key-1")).status).toBe(200);
+
+    const clash = await pay("key-1", { ...invoice, id: "INV-2026-9999", amountMinor: 1_000 });
+    expect(clash.status).toBe(409);
+    expect(await clash.json()).toEqual({ error: "Idempotency-Key already used for a different invoice" });
+    expect(s.fac.settleCalls).toHaveLength(1);
+  });
+});
+
+describe("unknown outcomes resolved from chain evidence", () => {
+  const TTL = 100_000_000; // validity end (slot) of the decodable tx we sign
+  const fast = { pollMs: 2, windowMs: 5_000 };
+  const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+  // A7, 2026-10-31: the hosted facilitator's settle answered nginx 504 after ~65 s; the tx had landed.
+  const settle504: Reply = res => void res.status(504).send("<html><head><title>504 Gateway Time-out</title></head></html>");
+  const until = (check: () => void) => vi.waitFor(check, { timeout: 2_000, interval: 2 });
+
+  interface StubChain extends ChainView {
+    /** Every lookup in order: a tx hash, or "tip". */
+    lookups: string[];
+    txs: Map<string, TxOutput[]>;
+    tip: bigint;
+    /** Runs on each tip read, before it returns (e.g. the indexer catching up). */
+    onTip?: () => void;
+  }
+  const stubChain = (): StubChain => {
+    const chain: StubChain = {
+      lookups: [],
+      txs: new Map(),
+      tip: 0n,
+      hasTransaction: async () => true, // wallet sync is not under test here
+      async txOutputs(hash) {
+        chain.lookups.push(hash);
+        return chain.txs.get(hash);
+      },
+      async tipSlot() {
+        chain.lookups.push("tip");
+        chain.onTip?.();
+        return chain.tip;
+      },
+    };
+    return chain;
+  };
+  const txLookups = (chain: StubChain) => chain.lookups.filter(l => l !== "tip").length;
+  /** No more lookups once the check has stopped. */
+  const stopped = async (chain: StubChain) => {
+    const seen = chain.lookups.length;
+    await sleep(40);
+    expect(chain.lookups.length).toBe(seen);
+  };
+
+  /** A report payment whose settle answered 504 after we signed a decodable tx with a TTL. */
+  async function unknownReport(chain: StubChain, reconcile = fast) {
+    const s = await startStack({ chain, reconcile });
+    s.signer.transaction = decodableTx(TTL);
+    s.fac.settle = settle504;
+    const run = await s.run();
+    const tx = decodeCardanoTransaction(s.signer.transaction).txHash;
+    expect(run.state).toBe("SETTLEMENT_UNKNOWN");
+    expect(run.settlement?.transactionHash).toBe(tx);
+    expect(s.agent.spentLovelace).toBe(PRICE);
+    return { s, run, tx };
+  }
+
+  it("SETTLEMENT_UNKNOWN, tx on chain with exactly the price to the seller -> FAILED with an on-chain proof, spend counted once, invoice locked as paid", async () => {
+    const chain = stubChain();
+    const { s, run, tx } = await unknownReport(chain);
+    chain.txs.set(tx, [
+      { address: SELLER, lovelace: PRICE },
+      { address: BUYER, lovelace: 7_831_419n },
+    ]);
+    await until(() => expect(run.state).toBe("FAILED"));
+
+    const note = `paid on-chain (tx ${tx}), but the facilitator did not deliver the report; invoice locked as paid`;
+    expect(states(run).slice(-2)).toEqual(["SETTLEMENT_UNKNOWN", "FAILED"]);
+    expect(lastNote(run)).toBe(note);
+    expect(run.error).toBe(note);
+    expect(run.payment).toEqual({
+      network: CARDANO_NETWORK,
+      buyerAddress: BUYER,
+      sellerAddress: SELLER,
+      asset: "lovelace",
+      amount: "2000000",
+      transactionHash: tx,
+      explorerUrl: `https://preprod.cardanoscan.io/transaction/${tx}`,
+      settledAt: expect.stringMatching(/^\d{4}-\d\d-\d\dT/),
+    });
+    expect(run.settlement).toMatchObject({ transactionHash: tx, resolved: "on_chain" });
+    expect(run.report).toBeUndefined();
+    expect(s.agent.spentLovelace).toBe(PRICE);
+
+    const again = await s.run();
+    expect(again.state).toBe("FAILED");
+    expect(again.error).toContain("report for this invoice already paid");
+    expect(s.signer.calls).toHaveLength(1);
+    expect(s.agent.spentLovelace).toBe(PRICE);
+  });
+
+  it.each([
+    { name: "goes to another address", outputs: [{ address: ATTACKER, lovelace: PRICE }] },
+    { name: "is 1 lovelace short", outputs: [{ address: SELLER, lovelace: PRICE - 1n }] },
+    { name: "is 1 lovelace over", outputs: [{ address: SELLER, lovelace: PRICE + 1n }] },
+  ])("tx on chain, but its output $name -> stays SETTLEMENT_UNKNOWN with a note; the check stops", async ({ outputs }) => {
+    const chain = stubChain();
+    const { s, run, tx } = await unknownReport(chain);
+    chain.txs.set(tx, outputs);
+    await until(() => expect(lastNote(run)).toBe(`tx ${tx} is on chain, but no output pays exactly 2000000 lovelace to ${SELLER}; stays locked`));
+
+    expect(run.state).toBe("SETTLEMENT_UNKNOWN");
+    expect(run.payment).toBeUndefined();
+    expect(run.settlement?.resolved).toBeUndefined();
+    await stopped(chain);
+    expect((await s.run()).error).toContain("unknown settlement");
+    expect(s.signer.calls).toHaveLength(1);
+    expect(s.agent.spentLovelace).toBe(PRICE);
+  });
+
+  it("a tx that never shows up stays SETTLEMENT_UNKNOWN and locked; the check ends with the window", async () => {
+    const chain = stubChain();
+    chain.tip = BigInt(TTL) + 599n; // past the validity end, but not yet by the margin
+    const { s, run, tx } = await unknownReport(chain, { pollMs: 2, windowMs: 100 });
+    await until(() => expect(lastNote(run)).toBe(`tx ${tx} not found on chain within the check window; stays locked, check the explorer before paying again`));
+
+    expect(run.state).toBe("SETTLEMENT_UNKNOWN");
+    expect(txLookups(chain)).toBeGreaterThan(1);
+    await stopped(chain);
+    expect((await s.run()).error).toContain("unknown settlement");
+    expect(s.signer.calls).toHaveLength(1);
+    expect(s.agent.spentLovelace).toBe(PRICE);
+  });
+
+  it("polling stops once resolved", async () => {
+    const chain = stubChain();
+    const { run, tx } = await unknownReport(chain);
+    const txOutputs = chain.txOutputs!.bind(chain);
+    let calls = 0;
+    chain.txOutputs = async hash => (++calls === 3 ? [{ address: SELLER, lovelace: PRICE }] : txOutputs(hash));
+    await until(() => expect(run.state).toBe("FAILED"));
+
+    await stopped(chain);
+    expect(calls).toBe(3);
+    expect(run.settlement).toMatchObject({ transactionHash: tx, resolved: "on_chain" });
+  });
+
+  it("reads the tip before the tx: a tx indexed in between counts as paid, never as expired", async () => {
+    const chain = stubChain();
+    const { s, run, tx } = await unknownReport(chain);
+    chain.onTip = () => {
+      chain.tip = BigInt(TTL) + 10_000n;
+      chain.txs.set(tx, [{ address: SELLER, lovelace: PRICE }]);
+    };
+    await until(() => expect(run.state).toBe("FAILED"));
+
+    expect(run.settlement?.resolved).toBe("on_chain");
+    expect(run.payment?.transactionHash).toBe(tx);
+    expect(s.agent.spentLovelace).toBe(PRICE);
+  });
+
+  it("proven expired (tip past the TTL by the margin, tx absent) -> FAILED, refunded, the invoice can be paid again", async () => {
+    const chain = stubChain();
+    chain.tip = BigInt(TTL) + 600n;
+    const s = await startStack({ chain, reconcile: fast });
+    s.signer.transaction = decodableTx(TTL);
+    // A verify rejection: the seller holds the signed tx, the handler never ran (A7, 2026-10-30).
+    s.fac.verify = res => void res.json({ isValid: false, invalidReason: "invalid_exact_cardano_payload_input_not_available", payer: BUYER });
+    const run = await s.run();
+    const tx = decodeCardanoTransaction(s.signer.transaction).txHash;
+    expect(run.state).toBe("SETTLEMENT_UNKNOWN");
+    await until(() => expect(run.state).toBe("FAILED"));
+
+    expect(run.error).toBe(
+      `tx ${tx} can no longer land: its validity ended at slot ${TTL}, the chain tip is at slot ${TTL + 600} without it; nothing paid, the invoice is unlocked`,
+    );
+    expect(run.settlement).toMatchObject({ transactionHash: tx, resolved: "expired" });
+    expect(run.payment).toBeUndefined();
+    expect(s.agent.spentLovelace).toBe(0n);
+    await stopped(chain);
+
+    s.fac.verify = verifyOk;
+    expect((await s.run()).state).toBe("DRAFT_READY");
+    expect(s.signer.calls).toHaveLength(2);
+    expect(s.agent.spentLovelace).toBe(PRICE);
+  });
+
+  it("a hash the facilitator reported is never proven expired with the TTL of the tx we signed", async () => {
+    const chain = stubChain();
+    chain.tip = BigInt(TTL) + 100_000n;
+    const s = await startStack({ chain, reconcile: { pollMs: 2, windowMs: 100 } });
+    s.signer.transaction = decodableTx(TTL);
+    s.fac.settle = settleFailed("exact_cardano_settlement_failed"); // reports TX, not the hash we signed
+    const run = await s.run();
+    expect(run.settlement?.transactionHash).toBe(TX);
+    await until(() => expect(lastNote(run)).toMatch(/not found on chain within the check window/));
+
+    expect(run.state).toBe("SETTLEMENT_UNKNOWN");
+    expect(chain.lookups).not.toContain("tip");
+    expect(s.agent.spentLovelace).toBe(PRICE);
+  });
+
+  it("no chain lookup configured -> stays SETTLEMENT_UNKNOWN, nothing scheduled", async () => {
+    // A check that ran would end its short window with a note.
+    const s = await startStack({ chain: { hasTransaction: async () => true }, reconcile: { pollMs: 2, windowMs: 10 } });
+    s.signer.transaction = decodableTx(TTL);
+    s.fac.settle = settle504;
+    const run = await s.run();
+    await sleep(40);
+    expect(run.state).toBe("SETTLEMENT_UNKNOWN");
+    expect(run.timeline.filter(t => t.state === "SETTLEMENT_UNKNOWN")).toHaveLength(1);
+  });
+
+  /** A Cardano payout whose submit timed out after we signed a decodable tx with a TTL. */
+  async function unknownPayout(chain: StubChain) {
+    const s = await startStack({ chain, reconcile: fast });
+    const run = await s.run(adaInvoice);
+    s.signer.transaction = decodableTx(TTL);
+    s.submitter.fail = new Error("submitTx timed out after 120000ms");
+    await approve(s.agent, run);
+    const tx = decodeCardanoTransaction(s.signer.transaction).txHash;
+    expect(run.state).toBe("PAYOUT_UNKNOWN");
+    expect(run.payout).toMatchObject({ status: "unknown", reference: tx });
+    expect(s.agent.paidOutLovelace).toBe(3_500_000n);
+    return { s, run, tx };
+  }
+
+  it("Cardano PAYOUT_UNKNOWN, tx on chain to the payee -> EXECUTED, counted once, the invoice stays paid", async () => {
+    const chain = stubChain();
+    const { s, run, tx } = await unknownPayout(chain);
+    chain.txs.set(tx, [
+      { address: SUPPLIER_WALLET, lovelace: 3_500_000n },
+      { address: BUYER, lovelace: 1_234_567n },
+    ]);
+    await until(() => expect(run.state).toBe("EXECUTED"));
+
+    expect(states(run).slice(-2)).toEqual(["PAYOUT_UNKNOWN", "EXECUTED"]);
+    expect(lastNote(run)).toBe("payout confirmed on-chain after an unclear submit");
+    expect(run.payout).toMatchObject({
+      rail: "cardano_preprod",
+      status: "confirmed",
+      label: "Paid on Cardano Preprod (testnet)",
+      amountMinor: 3_500_000,
+      destination: SUPPLIER_WALLET,
+      reference: tx,
+      explorerUrl: `https://preprod.cardanoscan.io/transaction/${tx}`,
+    });
+    expect(s.agent.paidOutLovelace).toBe(3_500_000n);
+    await stopped(chain);
+
+    // The same invoice extracted differently: a new report, but the same payout key.
+    s.submitter.fail = undefined;
+    const again = await s.run({ ...adaInvoice, id: " nns 2026-118 " });
+    expect(again.state).toBe("DRAFT_READY");
+    await approve(s.agent, again);
+    expect(again.state).toBe("FAILED");
+    expect(again.error).toBe("payout refused before signing: payout for this invoice already paid");
+    expect(s.submitter.calls).toHaveLength(1);
+    expect(s.agent.paidOutLovelace).toBe(3_500_000n);
+  });
+
+  it("Cardano PAYOUT_UNKNOWN, tx on chain to another address -> stays PAYOUT_UNKNOWN with a note", async () => {
+    const chain = stubChain();
+    const { run, tx } = await unknownPayout(chain);
+    chain.txs.set(tx, [{ address: SWAPPED_WALLET, lovelace: 3_500_000n }]);
+    await until(() => expect(lastNote(run)).toBe(`tx ${tx} is on chain, but no output pays exactly 3500000 lovelace to ${SUPPLIER_WALLET}; stays locked`));
+    expect(run.state).toBe("PAYOUT_UNKNOWN");
+    expect(run.payout?.status).toBe("unknown");
+    await stopped(chain);
+  });
+
+  it("Cardano PAYOUT_UNKNOWN proven expired -> DRAFT_READY, nothing counted; approving again pays", async () => {
+    const chain = stubChain();
+    chain.tip = BigInt(TTL) + 600n;
+    const { s, run, tx } = await unknownPayout(chain);
+    await until(() => expect(run.state).toBe("DRAFT_READY"));
+
+    expect(lastNote(run)).toBe(
+      `Payout never landed, nothing paid; approve again: tx ${tx} can no longer land: its validity ended at slot ${TTL}, the chain tip is at slot ${TTL + 600} without it`,
+    );
+    expect(run.payout).toBeUndefined();
+    expect(s.agent.paidOutLovelace).toBe(0n);
+
+    s.submitter.fail = undefined;
+    await approve(s.agent, run);
+    expect(run.state).toBe("EXECUTED");
+    expect(s.submitter.calls).toHaveLength(2);
+    expect(s.agent.paidOutLovelace).toBe(3_500_000n);
+  });
+});
+
+describe("blockfrostChainView against Blockfrost's documented shapes", () => {
+  // Bodies follow the Blockfrost OpenAPI (tx_content_utxo, block_content); quantities are strings.
+  const output = (address: string, amount: Array<{ unit: string; quantity: string }>, index: number, collateral = false) => ({
+    address,
+    amount,
+    output_index: index,
+    data_hash: null,
+    inline_datum: null,
+    collateral,
+    reference_script_hash: null,
+    consumed_by_tx: null,
+  });
+
+  async function blockfrost(tip: { slot: number | null }) {
+    const app = express();
+    const keys: Array<string | undefined> = [];
+    app.use((req, _res, next) => {
+      keys.push(req.header("project_id"));
+      next();
+    });
+    app.get("/txs/:hash/utxos", (req, res) => {
+      if (req.params.hash === PAYOUT_TX) return void res.status(500).json({ status_code: 500, error: "Internal Server Error" });
+      if (req.params.hash !== TX) return void res.status(404).json({ status_code: 404, error: "Not Found", message: "The requested component has not been found." });
+      res.json({
+        hash: TX,
+        inputs: [],
+        outputs: [
+          output(SELLER, [{ unit: "lovelace", quantity: "2000000" }], 0),
+          output(BUYER, [{ unit: "lovelace", quantity: "7831419" }, { unit: `${"ab".repeat(28)}74657374`, quantity: "12" }], 1),
+          output(ATTACKER, [{ unit: "lovelace", quantity: "5000000" }], 2, true),
+        ],
+      });
+    });
+    app.get("/txs/:hash", (_req, res) => void res.status(404).json({ status_code: 404, error: "Not Found" }));
+    app.get("/blocks/latest", (_req, res) => void res.json({ time: 1793407700, height: 5355200, hash: "cd".repeat(32), epoch: 280, epoch_slot: 12, size: 3, tx_count: 1, ...tip }));
+    const { url } = await listen(app);
+    return { chain: blockfrostChainView(loadConfig({ BLOCKFROST_PREPROD_URL: url, BLOCKFROST_PROJECT_ID: "preprodTestKey" })), keys };
+  }
+
+  it("txOutputs: lovelace per output, collateral outputs left out; 404 is not indexed; other errors throw", async () => {
+    const { chain, keys } = await blockfrost({ slot: 137_638_100 });
+    expect(await chain.txOutputs!(TX)).toEqual([
+      { address: SELLER, lovelace: 2_000_000n },
+      { address: BUYER, lovelace: 7_831_419n },
+    ]);
+    expect(await chain.txOutputs!("00".repeat(32))).toBeUndefined();
+    await expect(chain.txOutputs!(PAYOUT_TX)).rejects.toThrow(`Blockfrost /txs/${PAYOUT_TX}/utxos failed: 500`);
+    expect(await chain.hasTransaction("00".repeat(32))).toBe(false);
+    expect(await chain.tipSlot!()).toBe(137_638_100n);
+    expect(keys.length).toBe(5);
+    expect(keys.every(key => key === "preprodTestKey")).toBe(true);
+  });
+
+  it("tipSlot: a tip without a slot throws instead of guessing", async () => {
+    const { chain } = await blockfrost({ slot: null });
+    await expect(chain.tipSlot!()).rejects.toThrow();
   });
 });

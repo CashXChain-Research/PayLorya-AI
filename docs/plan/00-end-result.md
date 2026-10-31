@@ -125,7 +125,7 @@ sequenceDiagram
 | Field extraction | **Real** Claude API call. Amounts are parsed deterministically |
 | IBAN / BIC / ABA checks, duplicate detection | **Real**, deterministic code |
 | Corridors, rails, fees, FX, ETA | **Simulated** (`demo-fixture`, "Simulated route/fees") |
-| Supplier payout | **Not executed**. No CashXChain payout endpoint is called |
+| Supplier payout | After human approval: tADA on Cardano **Preprod**, or fiat via the CashXChain **sandbox** (test ledger, no real money) |
 | Compliance | The report is a data-quality and routing check, **not** an AML, sanctions or KYB decision |
 
 ## 6. Acceptance tests
@@ -191,12 +191,11 @@ write it into your PR description). Additive changes to shared files are fine af
 
 | Workstream | Status | Blocker |
 | --- | --- | --- |
-| A Live x402 payment | **Milestone 1 done** (#8): tx `4e959d66…a87b2` on the live URL, evidence committed. Done: A1, A2, A3, A5, A6, remote tooling. Next: invoice payout core (Cardano route, approve endpoint, route interface; decision A). A7 live safety run is on the laptop session. A8: keep 1 confirmation (32 s) | – |
-| B Agent experience and UI | Now owned by a separate Claude session. `main` has the "AI CFO" UI (#7, approval is client-side only). `feat/agent-ux` (Codex) holds extraction harness, readiness checks and tests and conflicts with #7 in `public/index.html` and `src/fixtures.ts` | UI choice |
-| C Cloudflare | **Live** at https://cxc-agentpay.cashxchain.workers.dev with all four secrets (`x402Ready`, `aiReady`). CI green. Open: protect `POST /api/runs` (token or rate limit), lower the budget. The GitHub check "Workers Builds" fails instantly (the deploy itself works) | – |
-| D Submission | Drafts on `main` (README, PITCH, DEMO-SCRIPT, SUBMISSION). The repo is already public, and a history scan found no secrets. Open: switch the story to "agent checks, pays the check via x402, pays the invoice on approval"; video ≤ 2.5 min; Devfolio; license | invoice payout, UI |
-| CashXChain fiat route | Owned by a separate Claude session. Sandbox payouts per the docs; secret `CASHXCHAIN_API_KEY` (`cxc_sk_sandbox_…`) | sandbox account, test funds, key |
-| Invoice payout core (decision A) | Branch `claude/happy-brahmagupta-267ekd`: vendor registry routing, approve/reject endpoints, real Cardano Preprod payout, fiat via `FiatPayoutClient` (simulated until the CashXChain client lands), redesigned UI. 122 tests green, not run live | `SUPPLIER_CARDANO_ADDRESS` on Cloudflare; one live payout; CashXChain branch to plug in as `FiatPayoutClient` |
+| A Live x402 payment | **Milestone 1 done** (#8). Payout core (#11), caps and approval token (#18) merged. A7 live: 2 PASS, injection ended `SETTLEMENT_UNKNOWN` on a facilitator 504 with the tx on chain (#17). **A8 decided:** `CARDANO_L1_CONFIRMATIONS=0` (block inclusion). Next PR adds: chain reconciliation of unknown states, wallet sync for every maybe-broadcast tx, report bound to the invoice, approvals fail-closed, rate limits. Open: redeploy, `APPROVE_TOKEN` secret, one live tADA payout, `remote:safety` re-run | deploy (laptop) |
+| B Agent experience and UI | UI owned by a separate Claude session: TypeScript app with Inbox, Assistant, Agent settings, PDF upload (#19, #20); it sends the approval token. Non-UI parts of `feat/agent-ux` ported: `npm run extract`, extraction error handling, readiness checks. Not ported: samples `over_ceiling` / `no_corridor` | – |
+| C Cloudflare | **Live** at https://cxc-agentpay.cashxchain.workers.dev. Rate limits on `POST /api/runs` are in code. Open: deploy current `main`, set `APPROVE_TOKEN` (approvals are disabled without it), check `/api/health` `limits.clientIdFrom`. The GitHub check "Workers Builds" fails instantly (the deploy itself works) | deploy |
+| D Submission | Drafts on `main` (README, PITCH, DEMO-SCRIPT, SUBMISSION) plus `docs/TECHNICAL.md`. Open: story "agent checks, pays the check via x402, pays the invoice on approval"; video ≤ 2.5 min; Devfolio | – |
+| CashXChain fiat route | Merged: real sandbox payouts via `/v1/banking/*`, `CASHXCHAIN_API_KEY` set on Cloudflare. Open: one live sandbox payout on the deployment | deploy |
 
 ## 10. Rules for everyone (humans and agents)
 
@@ -225,12 +224,12 @@ write it into your PR description). Additive changes to shared files are fine af
 | Risk | Fallback | Owner |
 | --- | --- | --- |
 | Hosted facilitator unreachable or incompatible | `LOCAL_FACILITATOR=true` (in-process verify and broadcast via Blockfrost) | A |
-| Settlement slow on stage (waits for 1 confirmation) | Measure. Consider `CARDANO_L1_CONFIRMATIONS=0` (block inclusion) for the demo. Keep a pre-recorded run | A, D |
+| Settlement slow on stage | Decided (A8): `CARDANO_L1_CONFIRMATIONS=0` (block inclusion). Unknown outcomes reconcile from chain within 20 min. Keep a pre-recorded run | A, D |
 | UTxO conflict between concurrent payments | Separate buyer wallets per environment. Serialize payments per wallet in the agent | A |
 | Cloudflare Containers blocked (plan, Docker, limits) for more than ~2 h | Run on the laptop and expose it with `cloudflared tunnel` (still Cloudflare) | C |
 | Claude API unavailable during the demo | Structured JSON samples skip the model entirely | B |
 | Blockfrost rate limits | Keep demo volume low. A second Blockfrost project for the cloud if needed | C |
-| Public `POST /api/runs` lets anyone spend the server's buyer wallet (testnet, capped by `SESSION_BUDGET_LOVELACE`) | Keep the budget small and the wallet lightly funded. Top up before judging | C, A |
+| Public `POST /api/runs` lets anyone spend the server's buyer wallet (testnet, capped by `SESSION_BUDGET_LOVELACE`) | Rate limits (10/min per IP, 120/h overall) and a text-length gate. Keep the wallet lightly funded. Top up before judging | C, A |
 | Milestone 1 depends on the deploy (keys only on Cloudflare) | C deploys first. The remote tooling is ready before the URL is | C, A |
 | Container sleeps or redeploys: in-memory runs and spend ledger reset | Warm up before judging. Document it as a known limitation | C |
 
