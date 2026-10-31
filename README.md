@@ -228,10 +228,15 @@ Use a separate cloud buyer wallet; keep credentials out of git and screenshots.
 
 ## API
 
+**Public API** for your own systems and AI agents: account API keys, scopes, idempotency, an MCP server
+(`/mcp`, with OAuth sign-in for claude.ai connectors) and webhooks. Docs: [docs/API.md](docs/API.md), on
+the site at [`/developers`](https://paylorya.valentin.is/developers), spec at [`/openapi.json`](public/openapi.json).
+
 | Endpoint | Role | Description |
 | --- | --- | --- |
 | `POST /v1/payment-readiness` | Seller, x402-paid | Body `{ invoice }`, header `Idempotency-Key`. Returns the readiness report after settlement |
-| `/api/v1/*` | Dashboard API (session) | Workspace, documents, chat (SSE), payments, budgets, payees, connections. Contract: [`web/src/dashboard/types.ts`](web/src/dashboard/types.ts) |
+| `/api/v1/*` | Dashboard (session) and public API (`Bearer ply_sk_…`) | Workspace, documents, chat (SSE), payments, budgets, payees, connections. Contract: [`web/src/dashboard/types.ts`](web/src/dashboard/types.ts) |
+| `/mcp` | MCP server | Streamable HTTP; API key or OAuth (`/authorize`, `/token`, `/register`, `/.well-known/*`) |
 | `/api/auth/*` | Better Auth | Email code, Google, password |
 | `POST /api/runs`, `GET /api/runs/:id` | Demo agent | Invoice run with timeline, payment proof, report, draft |
 | `GET /api/health` | Both | Config status, buyer/seller address, spend |

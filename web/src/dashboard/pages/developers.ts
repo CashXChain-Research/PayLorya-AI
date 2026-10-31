@@ -55,7 +55,7 @@ function developersSection(): string {
       <section class="card">
         <div class="card-head"><div><h2>MCP</h2><p class="muted small">For AI assistants and agents that speak the Model Context Protocol.</p></div></div>
         ${copyRow(`${origin}/mcp`, "Copy MCP endpoint")}
-        <p class="fine">Point your MCP client at this endpoint. The API docs explain how to connect.</p>
+        <p class="fine">In Claude: Settings › Connectors › Add custom connector, paste this URL, then sign in and allow it. It shows up here as a key; revoke it to disconnect. Other clients can send a key as <span class="mono">Authorization: Bearer</span>.</p>
         <div class="form-foot"><span></span><a class="btn ghost sm" href="/developers.html" target="_blank" rel="noopener">${icon("external", 15)}API docs</a></div>
       </section>
     </div>

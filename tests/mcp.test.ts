@@ -209,7 +209,8 @@ describe("MCP server at /mcp", () => {
 
     const none = await post({});
     expect(none.status).toBe(401);
-    expect(none.headers.get("www-authenticate")).toBe('Bearer realm="PayLorya AI"');
+    // resource_metadata leads OAuth clients (claude.ai connectors) to the sign-in (src/cfo/oauth.ts).
+    expect(none.headers.get("www-authenticate")).toBe(`Bearer realm="PayLorya AI", resource_metadata="${base}/.well-known/oauth-protected-resource/mcp"`);
     expect((await none.json()).code).toBe("missing_key");
     const bad = await post({ authorization: `Bearer ply_sk_${"A".repeat(40)}` });
     expect(bad.status).toBe(401);

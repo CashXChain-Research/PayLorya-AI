@@ -4,6 +4,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { bearerToken, hashKey, KEY_PATTERN } from "./api-keys.js";
+import { mcpChallenge } from "./oauth.js";
 import type { PublicMessage } from "./chat.js";
 import { SUPPORTED_CURRENCIES } from "./fx.js";
 import type { PaymentStatus, Store } from "./store.js";
@@ -285,16 +286,17 @@ function mcpServer(rest: Rest): McpServer {
 /**
  * MCP over Streamable HTTP at /mcp, stateless: each POST gets its own server and transport, so any
  * container can answer and nothing outlives the request. Auth is the REST API's key
- * (Authorization: Bearer ply_sk_…); no OAuth.
+ * (Authorization: Bearer ply_sk_…), or the same kind of key issued by OAuth (src/cfo/oauth.ts).
  */
-export function mountMcp(app: Express, store: Store): void {
+export function mountMcp(app: Express, store: Store, resource?: URL): void {
   app.all("/mcp", async (req, res) => {
     try {
       const token = bearerToken(req.header("authorization"));
       const found = token && KEY_PATTERN.test(token) ? await store.apiKeyByHash(hashKey(token)) : undefined;
       if (!found || !(await store.workspaceById(found.ws))) {
         // RFC 6750: no error code when no token was sent at all.
-        res.setHeader("www-authenticate", token ? 'Bearer realm="PayLorya AI", error="invalid_token"' : 'Bearer realm="PayLorya AI"');
+        // With OAuth on, resource_metadata tells the client where to sign in (RFC 9728).
+        res.setHeader("www-authenticate", resource ? mcpChallenge(resource, Boolean(token)) : token ? 'Bearer realm="PayLorya AI", error="invalid_token"' : 'Bearer realm="PayLorya AI"');
         res
           .status(401)
           .json(

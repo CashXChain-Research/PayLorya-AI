@@ -10,6 +10,7 @@ import { catalog, fetchBalances, networkOf, prepareConnection, supportsWrite, ty
 import { accountLabel } from "./stripe.js";
 import { bearerToken, hashKey, KEY_PATTERN, keyRefusal, newKey, RateLimiter, SCOPES, type ApiKey } from "./api-keys.js";
 import { KeyRefused, type CxcKeys } from "./cxc-keys.js";
+import { mountOAuth } from "./oauth.js";
 import type { Funder } from "./funder.js";
 import { CXC_SANDBOX_SIGNUP, type CxcLinker } from "./cxc-link.js";
 import { SUPPORTED_CURRENCIES } from "./fx.js";
@@ -37,6 +38,8 @@ export interface CfoDeps {
   funder?: Funder;
   /** Stripe.js key for linking bank accounts (with connections.stripe). */
   stripePublishableKey?: string;
+  /** Public URL (PUBLIC_BASE_URL): the OAuth issuer for MCP clients. */
+  baseUrl?: string;
 }
 
 export const STALE_PAGE = "PayLorya AI was updated while this page was open. Reload the page and try again: nothing was changed.";
@@ -710,5 +713,7 @@ export function mountCfo(app: Express, deps: CfoDeps): void {
     }
   });
   app.use("/api/v1", api);
-  mountMcp(app, store);
+  // OAuth sign-in for MCP clients that cannot send a key header (claude.ai connectors).
+  const resource = deps.baseUrl ? mountOAuth(app, { store, auth, baseUrl: deps.baseUrl }) : undefined;
+  mountMcp(app, store, resource);
 }

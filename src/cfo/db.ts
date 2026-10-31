@@ -194,6 +194,25 @@ const MIGRATIONS: string[][] = [
        PRIMARY KEY (key_id, idem_key)
      )`,
   ],
+  // OAuth for MCP clients (src/cfo/oauth.ts): registered clients, and sign-ins from request to spent code.
+  // The access token is an api_keys row; nothing secret is kept here (codes only as SHA-256).
+  [
+    `CREATE TABLE oauth_clients (client_id TEXT PRIMARY KEY, info_json TEXT NOT NULL, created_at TEXT NOT NULL)`,
+    `CREATE TABLE oauth_grants (
+       id TEXT PRIMARY KEY,
+       client_id TEXT NOT NULL,
+       redirect_uri TEXT NOT NULL,
+       code_challenge TEXT NOT NULL,
+       state TEXT,
+       scopes_json TEXT NOT NULL,
+       created_at TEXT NOT NULL,
+       expires_at TEXT NOT NULL,
+       code_hash TEXT UNIQUE,
+       workspace_id TEXT,
+       user_id TEXT,
+       used_at TEXT
+     )`,
+  ],
 ];
 
 export async function migrate(sql: Sql): Promise<void> {
