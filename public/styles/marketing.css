@@ -27,9 +27,9 @@ h1, h2, h3 { text-wrap: balance; }
   background: var(--surface); box-shadow: var(--shadow-chip); color: var(--ink-2); font-size: 13.5px; font-weight: 500;
   transition: box-shadow .25s var(--ease), transform .25s var(--ease);
 }
-.badge:hover { box-shadow: var(--shadow); transform: translateY(-1px); }
+a.badge:hover { box-shadow: var(--shadow); transform: translateY(-1px); }
 .badge svg { color: var(--ink-3); transition: transform .25s var(--ease); }
-.badge:hover svg { transform: translateX(2px); }
+a.badge:hover svg { transform: translateX(2px); }
 .hero h1 { margin: 0 auto; max-width: 1000px; font-size: clamp(40px, 6.6vw, 88px); line-height: 1.02; letter-spacing: -.05em; font-weight: 700; }
 .hero h1 span { display: block; color: var(--ink-3); }
 .lead { margin: 28px auto 0; max-width: 660px; font-size: clamp(17px, 1.7vw, 21px); line-height: 1.5; color: var(--ink-2); text-wrap: balance; }
