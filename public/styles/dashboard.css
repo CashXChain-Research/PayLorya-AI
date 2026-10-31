@@ -969,3 +969,7 @@ a.file-chip:hover { box-shadow: var(--shadow); }
 @media (prefers-reduced-motion: reduce) {
   .chart .fc-line { stroke-dashoffset: 0; animation: none; }
 }
+/* CashXChain sub-account panel (Connections) */
+.cxc-acc { list-style: none; padding: 0; margin: 8px 0; display: flex; gap: 16px; flex-wrap: wrap; }
+.cxc-acc li { display: flex; gap: 6px; align-items: baseline; }
+.cxc-acc li span { color: var(--ink-3); font-size: 12px; font-weight: 600; }

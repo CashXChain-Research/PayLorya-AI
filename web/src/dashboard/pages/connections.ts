@@ -2,7 +2,7 @@
 import { esc, short } from "../../shared/dom.js";
 import { del, get, patch, post } from "../api.js";
 import type { Ctx } from "../state.js";
-import type { Access, CatalogEntry, Connection, ConnectionCreate, ConnectionKind } from "../types.js";
+import type { Access, CatalogEntry, Connection, ConnectionCreate, ConnectionKind, CxcState } from "../types.js";
 import { ago, balance, confirmDialog, copyText, dialog, empty, fieldError, icon, pageHead, sk, toast, usd, val } from "../ui.js";
 
 const KIND_ICON: Record<ConnectionKind, string> = {
@@ -54,6 +54,34 @@ function connCard(c: Connection, i: number): string {
   </article>`;
 }
 
+const CXC_NEXT: Record<string, (email: string) => string> = {
+  needs_signup: email => `Sign up at the CashXChain sandbox with <b>${esc(email)}</b>, sign in once, then link.`,
+  needs_signin: email => `<b>${esc(email)}</b> has a CashXChain account that was never signed in to. Sign in once, then link.`,
+  other_platform: email => `<b>${esc(email)}</b> already belongs to another CashXChain platform. Use another email, or end that grant in CashXChain first.`,
+  error: () => "CashXChain could not be reached or refused the link. Try again.",
+};
+
+/** Your CashXChain sub-account: a sandbox managed account attached by your sign-in email. */
+function cxcPanel(s: CxcState): string {
+  if (!s.platform) return "";
+  const l = s.link;
+  if (l?.status === "linked") {
+    const accounts = s.accounts?.length
+      ? `<ul class="cxc-acc">${s.accounts.map(a => `<li><span>${esc(a.currency)}</span><b>${esc(a.available ?? "–")}</b></li>`).join("")}</ul>`
+      : s.accountsError
+        ? `<span class="muted small">${esc(s.accountsError)}</span>`
+        : `<span class="muted small">No currency accounts yet.</span>`;
+    return `<div class="callout info">${icon("zap", 18)}<div><b>CashXChain sub-account linked</b> <span class="pill t-neutral">sandbox</span><br>
+      <span class="mono small">${esc(l.accountId ?? "")}</span> · KYB ${esc(l.kybStatus ?? "unknown")} · ${esc(l.email)}<br>
+      ${accounts}
+      <span class="fine">Your CashXChain connection reads this account. Payouts from it need CashXChain's money permission for this platform${l.canMoveMoney ? " (granted)" : " (not granted yet)"}.</span></div></div>`;
+  }
+  const next = l ? (CXC_NEXT[l.status] ?? CXC_NEXT.error!)(l.email) : "Linking your CashXChain sandbox sub-account…";
+  return `<div class="callout${l?.status === "error" ? " bad" : ""}">${icon("link", 18)}<div><b>CashXChain sub-account not linked yet</b><br>${next}
+    ${l?.detail ? `<br><span class="fine">${esc(l.detail)}</span>` : ""}
+    <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><a class="btn ghost xs" href="${esc(s.signupUrl)}" target="_blank" rel="noopener">${icon("external", 14)}CashXChain sign-up</a><button type="button" class="btn primary xs" data-cxc-link>${icon("link", 14)}Link now</button></div></div></div>`;
+}
+
 async function addDialog(entry: CatalogEntry): Promise<Connection | null> {
   let made: Connection | null = null;
   await dialog({
@@ -93,10 +121,31 @@ export async function renderConnections(view: HTMLElement, ctx: Ctx): Promise<vo
   let conns: Connection[] = [];
   let catalog: CatalogEntry[] = [];
   view.innerHTML = `${pageHead("Connections", "Wallets and accounts your AI CFO can see, and the ones it may pay from.", `<a class="btn primary sm" href="#add" id="c-add-top">${icon("plus", 16, 2.4)}Add connection</a>`)}
+    <div id="c-cxc"></div>
     <section class="conn-grid" id="c-grid">${Array.from({ length: 3 }, () => `<div class="card">${sk("50%", 18)}<div style="height:14px"></div>${sk("30%", 12)}<div style="height:28px"></div>${sk("60%", 26)}<div style="height:22px"></div>${sk("100%", 38, 12)}</div>`).join("")}</section>
     <section class="catalog" id="add"><div class="section-h"><h2>Add a connection</h2><p class="muted">Read-only by default. Grant write access only where you want the agent to be able to pay from.</p></div><div class="cat-grid" id="c-cat"></div></section>`;
   const grid = view.querySelector<HTMLElement>("#c-grid")!;
   const catEl = view.querySelector<HTMLElement>("#c-cat")!;
+  const cxcEl = view.querySelector<HTMLElement>("#c-cxc")!;
+  const paintCxc = (s: CxcState) => {
+    cxcEl.innerHTML = cxcPanel(s);
+  };
+  void get<CxcState>("/api/v1/cashxchain", true).then(s => ctx.alive() && paintCxc(s), () => undefined);
+  cxcEl.addEventListener("click", async e => {
+    const b = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-cxc-link]");
+    if (!b) return;
+    b.disabled = true;
+    b.classList.add("loading");
+    try {
+      const s = await post<CxcState>("/api/v1/cashxchain/link");
+      if (!ctx.alive()) return;
+      paintCxc(s);
+      toast(s.link?.status === "linked" ? "CashXChain sub-account linked" : "Not linked yet: see the note", s.link?.status === "linked" ? "ok" : undefined);
+    } catch {
+      b.disabled = false;
+      b.classList.remove("loading");
+    }
+  });
 
   const paint = () => {
     grid.innerHTML = conns.length

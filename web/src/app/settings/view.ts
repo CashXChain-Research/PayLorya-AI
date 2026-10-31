@@ -119,7 +119,7 @@ function html(): string {
               <button type="button" role="radio" data-mode="auto" aria-checked="false" aria-label="Auto-approve small payouts">Auto-approve<span class="seg-more">&nbsp;small payouts</span></button>
             </div>
             <p class="seg-note" id="seg-note">${NOTE.ask}</p>
-            <div class="callout c-warn" id="appr-off" hidden>${I.alert}<div><b>Approvals are switched off on this server</b>Nothing can be approved, by you or automatically.</div></div>
+            <div class="callout c-warn" id="appr-off" hidden>${I.alert}<div><b>Approvals are switched off on this server</b>The operator has not set APPROVE_TOKEN yet, so nothing can be approved, by you or automatically. Fix: <code>npx wrangler secret put APPROVE_TOKEN</code>, then redeploy.</div></div>
             <div class="auto-fold" id="auto-fold"><div><div class="auto-in">
               <div class="amt-grid">${FIELDS.map(fieldHtml).join("")}</div>
               <div class="token-hint" id="token-hint" hidden>

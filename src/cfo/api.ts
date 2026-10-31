@@ -5,6 +5,7 @@ import { budgetsWithSpend, forecast, overview } from "./analytics.js";
 import type { Auth, SessionUser } from "./auth.js";
 import { runChatTurn, toPublic, type Attachment, type ChatDeps, type ChatEvent } from "./chat.js";
 import { catalog, fetchBalances, prepareConnection, supportsWrite, type ConnectionEnv } from "./connections.js";
+import { CXC_SANDBOX_SIGNUP, type CxcLinker } from "./cxc-link.js";
 import { SUPPORTED_CURRENCIES } from "./fx.js";
 import { ingestDocument, type Extractor } from "./ingest.js";
 import { Payments } from "./payments.js";
@@ -21,6 +22,8 @@ export interface CfoDeps {
   aiDailyLimit: number;
   /** Tests inject a fake model client; production uses the SDK default. */
   chatClient?: ChatDeps["client"];
+  /** CashXChain sandbox sub-account per workspace (platform master key); absent without one. */
+  cxc?: CxcLinker;
 }
 
 const MAX_FILE_BYTES = 15 * 1024 * 1024;
@@ -111,6 +114,8 @@ export function mountCfo(app: Express, deps: CfoDeps): void {
         return;
       }
       const ws = await store.workspaceForUser(user.id, `${user.name.split(" ")[0] || "My"}'s company`);
+      // A new account gets its CashXChain sub-account in the background (no-op once attempted).
+      deps.cxc?.ensure(ws, user);
       res.locals.cfo = { user, ws } satisfies Ctx;
       next();
     } catch (error) {
@@ -169,16 +174,59 @@ export function mountCfo(app: Express, deps: CfoDeps): void {
     createdAt: c.createdAt,
   });
 
+  // A linked sub-account is the workspace's CashXChain: its own accounts and balances, not the platform's.
+  const envFor = async (ws: string): Promise<ConnectionEnv> => {
+    const workspace = await store.workspace(ws);
+    const sub = workspace && deps.cxc?.clientFor(workspace);
+    return sub ? { ...deps.connections, cashxchain: sub } : deps.connections;
+  };
   const refresh = async (ws: string, c: ConnectionRow) => {
     try {
-      await store.updateConnection(ws, c.id, { balances: await fetchBalances(deps.connections, c), error: null });
+      await store.updateConnection(ws, c.id, { balances: await fetchBalances(await envFor(ws), c), error: null });
     } catch (error) {
       await store.updateConnection(ws, c.id, { error: error instanceof Error ? error.message : String(error) });
     }
     return (await store.connection(ws, c.id))!;
   };
 
-  api.get("/connections/catalog", async (_req, res) => res.json(catalog(deps.connections)));
+  // CashXChain sub-account ------------------------------------------------------------------
+  const cxcState = async (wsId: string) => {
+    const workspace = await store.workspace(wsId);
+    const sub = workspace && deps.cxc?.clientFor(workspace);
+    let accounts: Array<{ id: string; currency: string; status: string; available?: string }> | undefined;
+    let accountsError: string | undefined;
+    if (sub) {
+      try {
+        const listed = (await sub.listAccounts()).accounts;
+        accounts = await Promise.all(
+          listed.map(async a => {
+            const balance = (await sub.balance(a.id).catch(() => [])).find(b => b.currency === a.currency);
+            return { id: a.id, currency: a.currency, status: a.status, ...(balance ? { available: balance.available } : {}) };
+          }),
+        );
+      } catch (error) {
+        accountsError = error instanceof Error ? error.message : String(error);
+      }
+    }
+    return {
+      platform: Boolean(deps.cxc?.ready),
+      environment: "sandbox" as const,
+      signupUrl: CXC_SANDBOX_SIGNUP,
+      link: workspace?.cashxchain ?? null,
+      ...(accounts ? { accounts } : {}),
+      ...(accountsError ? { accountsError } : {}),
+    };
+  };
+  api.get("/cashxchain", async (_req, res) => res.json(await cxcState(ctx(res).ws.id)));
+  // Retry after the owner signed up at CashXChain with the same email.
+  api.post("/cashxchain/link", async (_req, res) => {
+    const { user, ws } = ctx(res);
+    if (!deps.cxc?.ready) throw new HttpError(503, "CashXChain sub-accounts are not configured on this server (CASHXCHAIN_MASTER_KEY, sandbox)");
+    await deps.cxc.link(ws, user);
+    res.json(await cxcState(ws.id));
+  });
+
+  api.get("/connections/catalog", async (_req, res) => res.json(catalog(await envFor(ctx(res).ws.id))));
   api.get("/connections", async (_req, res) => {
     const ws = ctx(res).ws.id;
     // Balances older than a minute are refreshed on read, in parallel.
@@ -188,7 +236,7 @@ export function mountCfo(app: Express, deps: CfoDeps): void {
   });
   api.post("/connections", json, async (req, res) => {
     const ws = ctx(res).ws.id;
-    const prepared = prepareConnection(deps.connections, req.body ?? {});
+    const prepared = prepareConnection(await envFor(ws), req.body ?? {});
     if ("error" in prepared) throw new HttpError(400, prepared.error);
     const duplicate = (await store.connections(ws)).find(c => c.kind === prepared.kind && c.address === prepared.address);
     if (duplicate) throw new HttpError(409, `${duplicate.label} is already connected`);

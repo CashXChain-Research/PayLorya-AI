@@ -27,6 +27,8 @@ function storeToken(token: string | undefined): void {
 export const tokenRequired = (): boolean => health.approvalTokenRequired === true || health.approvals === "operator-token";
 /** The server has approvals switched off (no operator token configured). */
 export const approvalsDisabled = (): boolean => health.approvals === "disabled";
+/** What to tell anyone who hits it: the fix is server configuration, not this browser. */
+export const APPROVALS_OFF = "Approvals are off: the server has no APPROVE_TOKEN yet. The operator runs `npx wrangler secret put APPROVE_TOKEN` and redeploys; then each payment asks for that token once per tab.";
 /** True when the server wants a token and this tab has none yet (auto-approve then waits). */
 export const tokenMissing = (): boolean => tokenRequired() && !storedToken();
 
@@ -74,7 +76,7 @@ export async function ensureOperatorToken(): Promise<boolean> {
  */
 export async function decideRun(id: string, decision: Decision, opts: { interactive?: boolean } = {}): Promise<PostResult> {
   const interactive = opts.interactive ?? true;
-  if (approvalsDisabled()) return { ok: false, error: "Approvals are switched off on this server", status: 503 };
+  if (approvalsDisabled()) return { ok: false, error: APPROVALS_OFF, status: 503 };
   let token = storedToken();
   let asked = false;
   if (tokenRequired() && !token) {

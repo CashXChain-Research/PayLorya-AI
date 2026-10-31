@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { CxcLink } from "./cxc-link.js";
 import type { AgentLimits, Autonomy, PolicyDecision, Rail } from "./policy.js";
 import type { Files, Sql, SqlRow, SqlValue } from "./sql.js";
 
@@ -16,6 +17,8 @@ export interface Workspace {
   autonomy: Autonomy;
   limits: AgentLimits;
   createdAt: string;
+  /** CashXChain sandbox sub-account; unset until the first attach attempt. */
+  cashxchain?: CxcLink;
 }
 
 export interface Balance {
@@ -189,6 +192,10 @@ export class Store {
       now(),
     );
     return toWorkspace((await this.get("SELECT * FROM workspaces WHERE owner_user_id = ?", userId))!);
+  }
+
+  async setCxcLink(id: string, link: CxcLink): Promise<void> {
+    await this.run("UPDATE workspaces SET cxc_link_json = ? WHERE id = ?", JSON.stringify(link), id);
   }
 
   async workspace(id: string): Promise<Workspace | undefined> {
@@ -640,6 +647,7 @@ function toWorkspace(r: Row): Workspace {
       knownPayeesOnly: Number(r.known_payees_only) === 1,
     },
     createdAt: String(r.created_at),
+    ...(r.cxc_link_json ? { cashxchain: JSON.parse(String(r.cxc_link_json)) as CxcLink } : {}),
   };
 }
 

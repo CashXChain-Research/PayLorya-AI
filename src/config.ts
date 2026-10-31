@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { CXC_SANDBOX_KEY } from "./cashxchain.js";
+import { CXC_SANDBOX_KEY, CXC_SANDBOX_MASTER_KEY } from "./cashxchain.js";
 
 // Network is fixed on purpose: this build only ever touches Cardano Preprod.
 export const CARDANO_NETWORK = "cardano:preprod" as const;
@@ -64,11 +64,10 @@ const EnvSchema = z.object({
   MAX_RUNS: z.coerce.number().int().positive().default(500),
 
   // AI (ANTHROPIC_BASE_URL can point at a Cloudflare AI Gateway; the SDK reads it from env)
-  // CashXChain fiat payouts (sandbox only). Unset: fiat payouts use the simulated stand-in.
-  CASHXCHAIN_API_KEY: optional.refine(
-    v => v === undefined || CXC_SANDBOX_KEY.test(v),
-    "must be a CashXChain sandbox key (cxc_sk_sandbox_… or cxc_rk_sandbox_…); live keys are refused",
-  ),
+  // CashXChain fiat payouts (sandbox only). Unset or refused: fiat payouts use the simulated stand-in.
+  CASHXCHAIN_API_KEY: optional,
+  // CashXChain platform master key (sandbox only): a managed sub-account per AI CFO account.
+  CASHXCHAIN_MASTER_KEY: optional,
 
   ANTHROPIC_API_KEY: optional,
   CLAUDE_MODEL: z.string().default("claude-opus-5-5"),
@@ -91,10 +90,25 @@ export type Config = z.infer<typeof EnvSchema> & {
   x402Ready: boolean;
   aiReady: boolean;
   cxcReady: boolean;
+  /** Why a configured CashXChain key was not used (live or unknown format); the key itself is dropped. */
+  cxcRefused: { apiKey?: string; masterKey?: string };
 };
+
+const REFUSED = "not a CashXChain sandbox key; live keys are refused (this build only reaches api.sandbox.cashxchain.com)";
+
+/** A CashXChain key of the expected sandbox format, else undefined: a wrong key never crashes the server. */
+function sandboxKey(value: string | undefined, format: RegExp, name: string, refused: Record<string, string>, field: string): string | undefined {
+  if (value === undefined || format.test(value)) return value;
+  refused[field] = `${name}: ${REFUSED}`;
+  console.warn(`${name} ignored: ${REFUSED}`);
+  return undefined;
+}
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const parsed = EnvSchema.parse(env);
+  const cxcRefused: Config["cxcRefused"] = {};
+  parsed.CASHXCHAIN_API_KEY = sandboxKey(parsed.CASHXCHAIN_API_KEY, CXC_SANDBOX_KEY, "CASHXCHAIN_API_KEY", cxcRefused, "apiKey");
+  parsed.CASHXCHAIN_MASTER_KEY = sandboxKey(parsed.CASHXCHAIN_MASTER_KEY, CXC_SANDBOX_MASTER_KEY, "CASHXCHAIN_MASTER_KEY", cxcRefused, "masterKey");
   const baseUrl = parsed.PUBLIC_BASE_URL ?? `http://localhost:${parsed.PORT}`;
   return {
     ...parsed,
@@ -103,6 +117,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     x402Ready: Boolean(parsed.SELLER_ADDRESS && parsed.BUYER_MNEMONIC && parsed.BLOCKFROST_PROJECT_ID),
     aiReady: Boolean(parsed.ANTHROPIC_API_KEY),
     cxcReady: Boolean(parsed.CASHXCHAIN_API_KEY),
+    cxcRefused,
   };
 }
 

@@ -249,3 +249,23 @@ export type ChatEvent =
   | { type: "tool"; name: string; status: "start" | "done"; summary: string }
   | { type: "done"; message: ChatMessage } // the stored assistant message
   | { type: "error"; message: string };
+
+/** GET /api/v1/cashxchain and POST /api/v1/cashxchain/link (src/cfo/api.ts, src/cfo/cxc-link.ts). */
+export interface CxcState {
+  /** The server has a platform master key (sandbox). */
+  platform: boolean;
+  environment: "sandbox";
+  signupUrl: string;
+  link: {
+    status: "linked" | "needs_signup" | "needs_signin" | "other_platform" | "error";
+    accountId?: string;
+    grantId?: string;
+    kybStatus?: string;
+    canMoveMoney?: boolean;
+    email: string;
+    detail?: string;
+    updatedAt: string;
+  } | null;
+  accounts?: Array<{ id: string; currency: string; status: string; available?: string }>;
+  accountsError?: string;
+}

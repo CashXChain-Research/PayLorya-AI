@@ -86,3 +86,21 @@ src/cfo/
   per day. The default is 150.
 - **Not advice**: reports are financial analysis, not tax, legal or investment advice, and they are
   not an AML or KYB decision.
+
+## CashXChain sub-accounts (sandbox)
+
+With `CASHXCHAIN_MASTER_KEY` (a sandbox platform master key, `cxc_mk_sandbox_…`), every AI CFO
+account gets a CashXChain sub-account: a [Platform managed account](https://docs.cashxchain.com/docs/api/platform).
+`src/cfo/cxc-link.ts`.
+
+- CashXChain cannot create an account for someone. The business signs up at
+  `auth.sandbox.cashxchain.com/register` itself and signs in once; the platform then attaches it by
+  email (`POST /v1/accounts`). So on its first request a new workspace is attached with the owner's
+  sign-in email. Without a CashXChain account under that email the link waits as `needs_signup`
+  (or `needs_signin` / `other_platform`); the Connections page explains it and offers "Link now".
+- Linked: the workspace's CashXChain connection reads the sub-account's own accounts and balances
+  (`Cxc-Account` header). `GET /api/v1/cashxchain`, `POST /api/v1/cashxchain/link`.
+- Payouts from a sub-account need CashXChain's money permission on the master key
+  (`can_delegate_money`, staff-only) and grant scopes beyond the default; until then payouts keep
+  using the platform's own sandbox account (`CASHXCHAIN_API_KEY`).
+- Sandbox only: live keys are dropped at startup (`/api/health` → `cashxchain.refused`).
