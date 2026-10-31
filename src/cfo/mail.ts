@@ -24,7 +24,8 @@ export function codeEmail(code: string, purpose: CodePurpose, minutes: number) {
   // Inline styles only: mail clients drop <style>. The code is digits, nothing else is user input.
   const html = `<!doctype html><html><body style="margin:0;padding:24px;background:#f4f4f6;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#111">
 <table role="presentation" width="100%" style="max-width:480px;margin:0 auto;background:#fff;border-radius:12px;padding:28px">
-<tr><td style="font-size:18px;font-weight:700;color:#000066;padding-bottom:16px">${PRODUCT}</td></tr>
+<tr><td style="font-size:18px;font-weight:700;color:#000066;padding-bottom:16px;border-bottom:3px solid #005577">PayFlow <span style="color:#005577">AI</span></td></tr>
+<tr><td style="height:16px"></td></tr>
 <tr><td style="font-size:15px;line-height:1.5;padding-bottom:16px">${lead}</td></tr>
 <tr><td style="font-size:32px;font-weight:700;letter-spacing:8px;color:#000066;padding:12px 0 20px;font-family:SFMono-Regular,Menlo,Consolas,monospace">${code}</td></tr>
 <tr><td style="font-size:13px;line-height:1.5;color:#555">The code expires in ${minutes} minutes. ${ignore}</td></tr>
