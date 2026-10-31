@@ -448,16 +448,26 @@ export function mountCfo(app: Express, deps: CfoDeps): void {
     if (body.documentId && !await store.document(ws, body.documentId)) throw new HttpError(400, "document not found");
     res.status(201).json(await deps.payments.draft(ws, { ...body, requestedBy: "user" }));
   });
-  // The owner's wallet signed (CIP-30 signTx) the tADA payout shown on the payment, or declined it.
-  const Signature = z.union([
-    z.object({ txHash: z.string().regex(/^[0-9a-f]{64}$/), witnessSet: z.string().regex(/^(?:[0-9a-fA-F]{2}){1,16384}$/) }),
-    z.object({ declined: z.literal(true) }),
-  ]);
+  // tADA payout from the owner's wallet: the wallet's funds in, the transaction to sign out (CIP-30).
+  const hex = (max: number) => z.string().regex(/^(?:[0-9a-fA-F]{2})+$/).max(max);
+  const WalletFunds = z.object({
+    utxos: z.array(hex(40_000)).max(500),
+    changeAddress: hex(256),
+    addresses: z.array(hex(256)).max(200).default([]),
+  });
+  api.post("/payments/:id/transaction", json, async (req, res) => {
+    const result = await deps.payments.prepareTransaction(ctx(res).ws.id, req.params.id as string, WalletFunds.parse(req.body));
+    if (!result.ok) throw new HttpError(result.status, result.error);
+    res.json(result.value);
+  });
+  // The wallet signed that transaction (witness set, signTx partial), or the owner declined.
+  const Signature = z.union([z.object({ txHash: z.string().regex(/^[0-9a-f]{64}$/), witnessSet: hex(32_768) }), z.object({ declined: z.literal(true) })]);
   api.post("/payments/:id/signature", json, async (req, res) => {
     const ws = ctx(res).ws.id;
-    const result = await deps.payments.signature(ws, req.params.id as string, Signature.parse(req.body));
+    const body = Signature.parse(req.body);
+    const result = "declined" in body ? await deps.payments.declineSignature(ws, req.params.id as string) : await deps.payments.submitSignature(ws, req.params.id as string, body);
     if (!result.ok) throw new HttpError(result.status, result.error);
-    res.status(202).json({ ok: true });
+    res.json(result.value);
   });
   api.post("/payments/:id/:decision", async (req, res) => {
     const ws = ctx(res).ws.id;

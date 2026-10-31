@@ -50,7 +50,7 @@ export async function refreshBadges(): Promise<void> {
   try {
     const payments = await get<Payment[]>("/api/v1/payments", true);
     // Approvals and tADA payouts waiting for a wallet signature.
-    state.approvals = payments.filter(p => p.status === "pending_approval" || (p.status === "executing" && Boolean(p.signRequest))).length;
+    state.approvals = payments.filter(p => p.status === "pending_approval" || p.status === "awaiting_signature").length;
     emitState();
   } catch {
     // badge only

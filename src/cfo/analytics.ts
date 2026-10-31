@@ -47,7 +47,7 @@ export async function openInvoices(store: Store, ws: string, direction: "money_o
 }
 
 function unpaid(docs: DocumentRow[], payments: Payment[], direction: "money_out" | "money_in"): DocumentRow[] {
-  const paid = new Set(payments.filter(p => p.status === "executed" || p.status === "executing").map(p => p.documentId));
+  const paid = new Set(payments.filter(p => p.status === "executed" || p.status === "executing" || p.status === "awaiting_signature").map(p => p.documentId));
   return docs
     .filter(d => d.status === "processed" && d.kind === "invoice" && d.amountMinor && d.currency && !paid.has(d.id))
     .filter(d => (d.extracted?.direction ?? "money_out") === direction)

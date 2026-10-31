@@ -178,6 +178,49 @@ describe("a workspace connects its own CashXChain account by API key", () => {
   });
 });
 
+describe("a CashXChain payout cut off by a restart", () => {
+  it("goes back to approval; approving again replays the same payout and never pays twice", async () => {
+    const s = await start();
+    const me = await s.user("owner@brenner.example");
+    await me("POST", "/api/v1/connections", { kind: "cashxchain", apiKey: FAKE_KEY, access: "read_write" });
+    const payee = (await me("POST", "/api/v1/payees", { name: "Brenner GmbH", iban: "DE89370400440532013000" })).json;
+    const draft = (await me("POST", "/api/v1/payments", { payeeId: payee.id, amountMinor: 12_000, currency: "EUR", reason: "INV-1042" })).json;
+    if (draft.status === "pending_approval") await me("POST", `/api/v1/payments/${draft.id}/approve`);
+    await settle(async () => (await me("GET", "/api/v1/payments")).json[0].status === "executed");
+    const first = (await me("GET", "/api/v1/payments")).json[0];
+
+    // The payout went through, but the restart came before its outcome was stored.
+    const ws = (await me("GET", "/api/v1/me")).json.workspace.id;
+    await s.deps.store.updatePayment(ws, draft.id, { status: "executing", reference: undefined, executedAt: undefined });
+    await s.deps.payments.sweep();
+    expect((await me("GET", "/api/v1/payments")).json[0]).toMatchObject({ status: "pending_approval", error: expect.stringMatching(/never twice/) });
+
+    expect((await me("POST", `/api/v1/payments/${draft.id}/approve`)).status).toBe(200);
+    await settle(async () => (await me("GET", "/api/v1/payments")).json[0].status === "executed");
+    expect(s.fake.payoutCreates()).toHaveLength(2); // the same request twice…
+    expect(s.fake.state.payouts.size).toBe(1); // …one payout at CashXChain
+    expect((await me("GET", "/api/v1/payments")).json[0].reference).toBe(first.reference);
+  });
+
+  it("refuses to resume when the payee or amount changed since the first attempt", async () => {
+    const s = await start();
+    const me = await s.user("owner@brenner.example");
+    await me("POST", "/api/v1/connections", { kind: "cashxchain", apiKey: FAKE_KEY, access: "read_write" });
+    const payee = (await me("POST", "/api/v1/payees", { name: "Brenner GmbH", iban: "DE89370400440532013000" })).json;
+    const draft = (await me("POST", "/api/v1/payments", { payeeId: payee.id, amountMinor: 12_000, currency: "EUR", reason: "INV-1042" })).json;
+    if (draft.status === "pending_approval") await me("POST", `/api/v1/payments/${draft.id}/approve`);
+    await settle(async () => (await me("GET", "/api/v1/payments")).json[0].status === "executed");
+    const ws = (await me("GET", "/api/v1/me")).json.workspace.id;
+    await s.deps.store.updatePayment(ws, draft.id, { status: "executing" });
+    await s.deps.payments.sweep();
+    await me("PATCH", `/api/v1/payees/${payee.id}`, { name: "Brenner Maschinenbau GmbH" });
+    await me("POST", `/api/v1/payments/${draft.id}/approve`);
+    await settle(async () => (await me("GET", "/api/v1/payments")).json[0].status === "failed");
+    expect((await me("GET", "/api/v1/payments")).json[0].error).toMatch(/changed since an earlier attempt/);
+    expect(s.fake.payoutCreates()).toHaveLength(1);
+  });
+});
+
 describe("no shared CashXChain account for workspaces", () => {
   it("a connection without a key (made before keys were required) reads nothing and cannot pay", async () => {
     const s = await start({ CASHXCHAIN_API_KEY: "cxc_sk_sandbox_platformDemo1" });
