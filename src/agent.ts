@@ -108,7 +108,7 @@ export class BuyerAgent {
       run.report = report;
 
       if (report.verdict === "ready_for_review") {
-        run.route = this.route(invoice);
+        run.route = this.route(run, invoice);
         if (run.route.status === "blocked") return this.runs.transition(run, "BLOCKED", run.route.reason);
         run.draft = draftFrom(invoice, report, run.route);
         const ready = run.draft.executable ? "nothing executed" : `not executable: ${run.route.reason}`;
@@ -139,20 +139,25 @@ export class BuyerAgent {
     return { ok: true };
   }
 
-  private route(invoice: Invoice): RouteDecision {
-    return decideRoute(invoice, this.payees, { payoutMaxLovelace: this.config.PAYOUT_MAX_LOVELACE });
+  /** A run may carry its own verified payee directory (an AI CFO workspace's); else the demo directory. */
+  private directory(run: Run): VerifiedPayee[] {
+    return run.payees ?? this.payees;
+  }
+
+  private route(run: Run, invoice: Invoice): RouteDecision {
+    return decideRoute(invoice, this.directory(run), { payoutMaxLovelace: this.config.PAYOUT_MAX_LOVELACE });
   }
 
   private async execute(run: Run): Promise<void> {
     try {
       const invoice = run.invoice!;
       // Re-derive the route at execution time: only the directory decides where money goes.
-      const route = this.route(invoice);
+      const route = this.route(run, invoice);
       if (route.status !== "selected" || route.destination !== run.draft!.route.destination) {
         throw new Error("payout route changed since the draft; nothing executed");
       }
       // decideRoute selected this payee, so the record exists. Payouts key on it, not on extracted text.
-      const payee = findPayee(this.payees, invoice.supplier)!;
+      const payee = findPayee(this.directory(run), invoice.supplier)!;
       const key = payoutKey(payee, invoice);
       if (route.rail === "cardano_preprod") await this.withWallet(() => this.payOnCardano(run, invoice, route.destination!, key));
       else await this.payViaCxc(run, invoice, route.destination!, payee, key);

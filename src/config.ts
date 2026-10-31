@@ -56,6 +56,12 @@ const EnvSchema = z.object({
 
   ANTHROPIC_API_KEY: optional,
   CLAUDE_MODEL: z.string().default("claude-opus-5-5"),
+
+  // AI CFO product (accounts, dashboard). SQLite file under DATA_DIR; the secret signs sessions.
+  BETTER_AUTH_SECRET: optional.refine(v => v === undefined || v.length >= 32, "at least 32 characters"),
+  DATA_DIR: z.string().default("data"),
+  // Model calls (document reads + chat messages) per workspace per day: a cost guard for open signups.
+  CFO_AI_DAILY_LIMIT: z.coerce.number().int().positive().default(150),
 });
 
 // Every env key the app reads; cloudflare/env.ts must forward all of them except PORT.
