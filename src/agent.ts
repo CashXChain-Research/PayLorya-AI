@@ -3,9 +3,11 @@ import { ExactCardanoScheme } from "@x402/cardano/exact/client";
 import { wrapFetchWithPayment, x402Client, x402HTTPClient } from "@x402/fetch";
 import { blockfrostProvider, CARDANO_NETWORK, type Config } from "./config.js";
 import { extractInvoice } from "./extract.js";
-import { filterOffers, precheck, SpendLedger, type SpendPolicy } from "./policy.js";
+import { PayoutRefusedError, PayoutUnknownError, type PayoutRequest, type PayoutResult, type PayoutRoute, type PayoutRouteKind, type Vendor } from "./payout.js";
+import { filterOffers, PayoutLedger, precheck, SpendLedger, type SpendPolicy } from "./policy.js";
 import { invoiceFingerprint } from "./readiness.js";
 import type { Run, RunStore } from "./runs.js";
+import { DEMO_VENDORS, matchVendor } from "./vendors.js";
 import { READINESS_PATH } from "./seller.js";
 import { InvoiceSchema, type Invoice, type PaymentDraft, type ReadinessReport } from "./types.js";
 
@@ -17,12 +19,16 @@ export class BuyerAgent {
   private readonly signer: ClientCardanoSigner;
   private readonly policy: SpendPolicy;
   private readonly ledger: SpendLedger;
+  private readonly payouts: PayoutLedger;
+  private readonly routes: Partial<Record<PayoutRouteKind, PayoutRoute>>;
+  private readonly vendors: Vendor[];
   private walletQueue: Promise<void> = Promise.resolve();
 
   constructor(
     private readonly config: Config,
     private readonly runs: RunStore,
     signer?: ClientCardanoSigner, // tests inject a stub; production derives it from BUYER_MNEMONIC
+    options: { routes?: Partial<Record<PayoutRouteKind, PayoutRoute>>; vendors?: Vendor[] } = {},
   ) {
     if (!(signer || config.BUYER_MNEMONIC) || !config.SELLER_ADDRESS) throw new Error("BUYER_MNEMONIC and SELLER_ADDRESS required");
     this.signer =
@@ -39,6 +45,9 @@ export class BuyerAgent {
       maxPaymentsPerRun: config.MAX_PAYMENTS_PER_RUN,
     };
     this.ledger = new SpendLedger(this.policy);
+    this.payouts = new PayoutLedger({ maxLovelace: config.PAYOUT_MAX_LOVELACE, budgetLovelace: config.PAYOUT_BUDGET_LOVELACE });
+    this.routes = options.routes ?? {};
+    this.vendors = options.vendors ?? DEMO_VENDORS;
   }
 
   get buyerAddress(): string {
@@ -65,8 +74,13 @@ export class BuyerAgent {
       run.report = report;
 
       if (report.verdict === "ready_for_review") {
-        run.draft = draftFrom(invoice, report);
-        this.runs.transition(run, "DRAFT_READY", "Awaiting human approval; nothing executed");
+        run.draft = this.draft(invoice, report);
+        const { payout, blockedReason } = run.draft;
+        this.runs.transition(
+          run,
+          "DRAFT_READY",
+          payout && !blockedReason ? `Awaiting approval; Approve pays via ${payout.route}` : `Awaiting review; not payable: ${blockedReason}`,
+        );
       } else {
         this.runs.transition(run, report.verdict === "blocked" ? "BLOCKED" : "NEEDS_INFO", report.verdict);
       }
@@ -74,6 +88,103 @@ export class BuyerAgent {
       run.error = error instanceof Error ? error.message : String(error);
       if (run.state !== "SETTLEMENT_UNKNOWN") this.runs.transition(run, "FAILED", run.error);
     }
+  }
+
+  /**
+   * Human approval of a ready draft. Checks run synchronously; on success the payout runs in the
+   * background (`done`). The destination always comes from vendor master data, matched again here.
+   */
+  approve(run: Run): { ok: true; done: Promise<void> } | { ok: false; reason: string } {
+    if (run.state !== "DRAFT_READY" && run.state !== "PAYOUT_FAILED") {
+      return { ok: false, reason: `run is ${run.state}; only a ready draft can be approved` };
+    }
+    const { invoice, fingerprint } = run;
+    if (!invoice || !fingerprint || !run.payment || run.report?.verdict !== "ready_for_review") {
+      return { ok: false, reason: "no paid and passed readiness check for this run" };
+    }
+    const match = matchVendor(invoice, this.vendors);
+    if (!match.ok) return { ok: false, reason: match.reason };
+    const { vendor } = match;
+    const route = this.routes[vendor.route];
+    if (!route) return { ok: false, reason: `the ${vendor.route} payout route is not configured` };
+    const held = this.payouts.reserve(fingerprint, invoice.currency, invoice.amountMinor);
+    if (!held.ok) return held;
+
+    run.payout = {
+      route: route.kind,
+      status: "pending",
+      vendorId: vendor.id,
+      payee: payeeLabel(vendor),
+      amountMinor: invoice.amountMinor,
+      currency: invoice.currency,
+      approvedAt: new Date().toISOString(),
+    };
+    this.runs.transition(run, "PAYING_OUT", `approved; paying ${vendor.name} via ${route.kind}`);
+    const request: PayoutRequest = {
+      runId: run.id,
+      idempotencyKey: `payout-${fingerprint}`,
+      invoice,
+      vendor,
+      amountMinor: invoice.amountMinor,
+      currency: invoice.currency,
+    };
+    // The Cardano route spends the buyer wallet, so it queues behind x402 payments.
+    const pay = route.kind === "cardano" ? this.withWallet(() => route.pay(request)) : Promise.resolve().then(() => route.pay(request));
+    const done = pay.then(
+      result => this.payoutDone(run, fingerprint, route.kind, result),
+      error => this.payoutFailed(run, fingerprint, error),
+    );
+    return { ok: true, done };
+  }
+
+  private payoutDone(run: Run, fingerprint: string, kind: PayoutRouteKind, result: PayoutResult): void {
+    if (result.route !== kind || !result.reference) {
+      return this.payoutFailed(run, fingerprint, new PayoutUnknownError("payout route returned an incomplete result", result.reference || undefined));
+    }
+    this.payouts.markPaid(fingerprint);
+    Object.assign(run.payout!, {
+      status: result.status,
+      reference: result.reference,
+      explorerUrl: result.explorerUrl,
+      simulated: result.simulated,
+      completedAt: result.completedAt,
+    });
+    this.runs.transition(run, "PAID_OUT", result.reference);
+  }
+
+  private payoutFailed(run: Run, fingerprint: string, error: unknown): void {
+    const reason = error instanceof Error ? error.message : String(error);
+    if (error instanceof PayoutRefusedError) {
+      this.payouts.release(fingerprint);
+      Object.assign(run.payout!, { status: "refused", reason });
+      this.runs.transition(run, "PAYOUT_FAILED", `nothing sent: ${reason}`);
+      return;
+    }
+    // Anything else may have reached the rail: lock the invoice, keep whatever reference exists.
+    this.payouts.markUnknown(fingerprint);
+    const reference = error instanceof PayoutUnknownError ? error.reference : undefined;
+    Object.assign(run.payout!, { status: "unknown", reason, ...(reference ? { reference } : {}) });
+    this.runs.transition(run, "PAYOUT_UNKNOWN", reference ? `${reference}: ${reason}` : reason);
+  }
+
+  private draft(invoice: Invoice, report: ReadinessReport): PaymentDraft {
+    const base = {
+      status: "awaiting_human_approval" as const,
+      invoiceId: invoice.id,
+      supplier: invoice.supplier,
+      amountMinor: invoice.amountMinor,
+      currency: invoice.currency,
+      routeQuote: report.routeQuote,
+    };
+    const match = matchVendor(invoice, this.vendors);
+    if (!match.ok) return { ...base, executable: false, blockedReason: match.reason, note: "Not payable by the agent; handle by hand." };
+    const { vendor } = match;
+    const payout = { route: vendor.route, vendorId: vendor.id, payee: payeeLabel(vendor) };
+    if (!this.routes[vendor.route]) {
+      const blockedReason = `the ${vendor.route} payout route is not configured`;
+      return { ...base, executable: false, payout, blockedReason, note: "Not payable by the agent; handle by hand." };
+    }
+    return { ...base, executable: true, payout, note: "Approve pays this invoice once, to the vendor's registered account. Nothing is paid before." };
   }
 
   private async extract(input: string): Promise<Invoice> {
@@ -216,15 +327,10 @@ function isReadinessReport(body: unknown): body is ReadinessReport {
   return typeof r === "object" && r !== null && VERDICTS.has(r.verdict) && Array.isArray(r.checks) && r.payoutExecuted === false;
 }
 
-function draftFrom(invoice: Invoice, report: ReadinessReport): PaymentDraft {
-  return {
-    status: "awaiting_human_approval",
-    executable: false,
-    invoiceId: invoice.id,
-    supplier: invoice.supplier,
-    amountMinor: invoice.amountMinor,
-    currency: invoice.currency,
-    routeQuote: report.routeQuote,
-    note: "Draft only. No CashXChain payout endpoint is called from this demo.",
-  };
+/** Short, non-sensitive label of where a vendor gets paid. */
+function payeeLabel(vendor: Vendor): string {
+  if (vendor.route === "cardano") return `${vendor.cardanoAddress!.slice(0, 15)}…${vendor.cardanoAddress!.slice(-6)}`;
+  const bank = vendor.bank ?? {};
+  if (bank.iban) return `IBAN ${bank.iban.slice(0, 4)} …${bank.iban.slice(-4)}`;
+  return `account …${(bank.accountNumber ?? "").slice(-4)}`;
 }

@@ -40,6 +40,10 @@ const EnvSchema = z.object({
   // Demo business limits (minor units of the invoice currency)
   DEMO_AMOUNT_CEILING_MINOR: z.coerce.number().int().positive().default(5_000_000),
 
+  // Invoice payouts after human approval. ADA payouts spend the buyer wallet, so they are capped.
+  PAYOUT_MAX_LOVELACE: z.coerce.bigint().default(5_000_000n),
+  PAYOUT_BUDGET_LOVELACE: z.coerce.bigint().default(20_000_000n),
+
   // AI (ANTHROPIC_BASE_URL can point at a Cloudflare AI Gateway; the SDK reads it from env)
   ANTHROPIC_API_KEY: optional,
   CLAUDE_MODEL: z.string().default("claude-opus-5-5"),

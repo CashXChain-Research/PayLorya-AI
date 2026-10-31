@@ -68,6 +68,25 @@ app.get("/api/runs", (_req, res) => {
   );
 });
 
+// Human approval: pays the invoice once via the route vendor master data names (202, then poll).
+app.post("/api/runs/:id/approve", (req, res) => {
+  const run = runs.get(req.params.id);
+  if (!run) {
+    res.status(404).json({ error: "run not found" });
+    return;
+  }
+  if (!agent) {
+    res.status(503).json({ error: "x402 not configured" });
+    return;
+  }
+  const approval = agent.approve(run);
+  if (!approval.ok) {
+    res.status(409).json({ error: approval.reason });
+    return;
+  }
+  res.status(202).json({ id: run.id, state: run.state, payout: run.payout });
+});
+
 app.get("/api/runs/:id", (req, res) => {
   const run = runs.get(req.params.id);
   if (!run) {
