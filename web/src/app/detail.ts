@@ -1,9 +1,10 @@
 import { $, esc, money } from "../shared/dom.js";
 import { getRun, type Decision, type Run } from "./api.js";
 import { decideRun } from "./approval.js";
+import { confirmPayment } from "./confirm.js";
 import { health, loadHealth } from "./health.js";
 import { loadList } from "./list.js";
-import { markAttempted, onAutoChange } from "./settings/auto-state.js";
+import { onAutoChange } from "./settings/auto-state.js";
 import { approvalBlock } from "./settings/policy.js";
 import { getSettings, onSettings } from "./settings/store.js";
 import { TERMINAL, stageHtml, stagesFor } from "./stages.js";
@@ -116,18 +117,19 @@ async function act(button: HTMLButtonElement): Promise<void> {
     renderDetail(shown!);
     return;
   }
+  // Approving always goes through the confirmation window; it shows the proof first.
+  if (decision === "approve") {
+    await confirmPayment(id);
+    if (selected === id) await select(id);
+    return;
+  }
   const buttons = [...$("detail").querySelectorAll<HTMLButtonElement>("[data-act]")];
   const was = buttons.map(b => b.disabled);
   for (const b of buttons) b.disabled = true;
   button.classList.add("loading");
-  // A click takes over from auto-approve for this draft.
-  if (decision === "approve") markAttempted(id);
   try {
     const res = await decideRun(id, decision);
-    if (!res.ok) {
-      if (decision === "approve" && (res.status === 0 || res.status === 401)) markAttempted(id, false);
-      if (res.status !== 401) toast(res.error); // decideRun already said why
-    }
+    if (!res.ok && res.status !== 401) toast(res.error); // decideRun already said why
   } catch {
     toast("Could not reach the agent.");
   }

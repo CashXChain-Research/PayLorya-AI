@@ -229,8 +229,8 @@ function payCard(run: Run, decided: boolean): string {
           ? `<p class="auto-note"><i></i><span>Within your ${esc(autoLimitText(d.currency, settings))} auto-approve limit. Approving automatically…</span></p>`
           : `<p class="fine">${esc(d.note)}</p>`;
     const approve = block
-      ? `<button class="btn primary" type="button" data-act="approve" disabled aria-describedby="guard-${esc(run.id)}">${I.lock} Approve and pay</button>`
-      : `<button class="btn primary" type="button" data-act="approve">${I.lock} Approve and pay</button>`;
+      ? `<button class="btn primary" type="button" data-act="approve" disabled aria-describedby="guard-${esc(run.id)}">${I.lock} Review and pay</button>`
+      : `<button class="btn primary" type="button" data-act="approve">${I.lock} Review and pay</button>`;
     foot = `<div class="actions">${approve}<button class="btn ghost" type="button" data-act="reject">Reject</button></div>${note}`;
   } else {
     foot = `${callout("warn", "Cannot be paid yet", `${esc(rt.reason)}.`)}${s === "DRAFT_READY" ? `<div class="actions"><button class="btn ghost" type="button" data-act="reject">Reject</button></div>` : ""}`;

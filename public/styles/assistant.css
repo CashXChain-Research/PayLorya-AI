@@ -5,6 +5,9 @@
 @keyframes ax-dot { 0%, 60%, 100% { transform: translateY(0); opacity: .35; } 30% { transform: translateY(-3px); opacity: 1; } }
 @keyframes ax-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
 
+/* Layout: the chat, and the wallets panel beside it (above it on narrow screens). */
+.ax-grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 20px; align-items: start; }
+
 /* Card */
 .card.chat {
   position: relative; display: flex; flex-direction: column; padding: 0; overflow: hidden;
@@ -128,6 +131,20 @@
 .stamp.warn { color: var(--warn); }
 .ap .stamp.warn svg { width: 16px; height: 16px; }
 
+/* Claude's replies (markdown.ts, chat.ts) */
+.b > .m-p:first-child { margin-top: 0; }
+.m-h { font-weight: 600; }
+.m-list { margin: 8px 0 0; padding-left: 22px; }
+.b > .m-list:first-child { margin-top: 0; }
+.m-list li + li { margin-top: 4px; }
+.m-list li::marker { color: var(--ink-3); }
+.b code { padding: 1px 6px; border-radius: 6px; background: var(--surface); font: 12.5px var(--mono); overflow-wrap: anywhere; }
+.m-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin-top: 10px; color: var(--ink-3); font-size: 11.5px; font-weight: 500; }
+.b .m-tools code { padding: 2px 8px; border-radius: 999px; color: var(--ink-3); font-size: 11px; }
+.chip.pay, .b .chip.pay { background: var(--primary); color: var(--on-primary); box-shadow: 0 4px 12px var(--primary-glow); }
+.chip.pay svg, .chip.pay:hover svg { color: currentColor; }
+.chip.pay:hover, .b .chip.pay:hover { background: var(--primary); box-shadow: 0 6px 16px var(--primary-glow); }
+
 /* Answers */
 .m-rows { list-style: none; margin: 10px 0 0; padding: 0; display: grid; }
 .m-rows li { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; padding: 10px 0; border-top: 1px solid var(--line); }
@@ -213,16 +230,93 @@
 .attach.loading::before { content: ""; width: 14px; height: 14px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: spin .8s linear infinite; }
 .compose .chat-drop b { font-size: 17px; }
 
+/* Wallets and budget (wallets.ts): the panel next to the chat, and the same content as a chat card. */
+.wal-panel {
+  position: sticky; top: 80px; padding: 18px 20px 20px; border-radius: var(--r-xl); background: var(--surface); box-shadow: var(--shadow);
+  max-height: clamp(520px, calc(100dvh - 210px), 980px); overflow-y: auto; scrollbar-width: thin;
+}
+.wal-panel[hidden] { display: none; }
+.wal-strip { display: none; }
+.wal-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.wal-head h2 { margin: 0; font-size: 16px; font-weight: 600; letter-spacing: -.015em; }
+.wal-btn { width: 32px; height: 32px; flex: none; display: grid; place-items: center; border: 0; border-radius: 10px; background: none; color: var(--ink-3); cursor: pointer; transition: background .2s, color .2s; }
+.wal-btn:hover { background: var(--field); color: var(--ink); }
+.wal-btn.spin svg { animation: spin .8s linear infinite; }
+#wal-content { margin-top: 10px; }
+#wal-content > .sk { height: 30px; }
+.wal-sec + .wal-sec { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+.wal-sec h3 { display: flex; align-items: center; gap: 6px; margin: 0 0 6px; font-size: 12px; font-weight: 600; color: var(--ink-3); text-transform: uppercase; letter-spacing: .06em; }
+.wal-sec h3 .sim { margin-left: 0; text-transform: none; letter-spacing: 0; }
+.wal-tag { padding: 1px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 11px; text-transform: none; letter-spacing: 0; }
+.wal-row { display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 6px 0; }
+.wal-ic { width: 32px; height: 32px; flex: none; display: grid; place-items: center; border-radius: 10px; }
+.wal-ic.brand { background: var(--brand-soft); color: var(--brand); }
+.wal-ic.accent { background: var(--accent-soft); color: var(--accent); }
+.wal-ic.cur { font-size: 10.5px; font-weight: 700; letter-spacing: .02em; }
+.wal-who { display: grid; min-width: 0; }
+.wal-who b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 600; }
+.wal-sub { color: var(--ink-3); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wal-addr { grid-column: 2 / -1; min-width: 0; margin-top: -4px; }
+.wal-addr .addr-v { color: var(--ink-2); font-size: 11.5px; }
+.wal-addr .addr-b { width: 24px; height: 24px; }
+.wal-amt { text-align: right; white-space: nowrap; font-size: 15px; font-weight: 700; letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
+.wal-amt small { margin-left: 4px; color: var(--ink-3); font-size: 11.5px; font-weight: 600; }
+.wal-empty { margin: 4px 0; color: var(--ink-2); font-size: 13px; }
+.wal-m { margin-top: 10px; }
+.wal-sec h3 + .wal-m { margin-top: 4px; }
+.wal-m-top { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; }
+.wal-m-top span { color: var(--ink-2); }
+.wal-m-top b { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.wal-m-top small { color: var(--ink-3); font-size: 12px; font-weight: 500; }
+.wal .meter { height: 5px; margin-top: 6px; }
+.wal .meter i.hi { background: var(--warn); }
+.wal-m-sub { display: block; margin-top: 4px; color: var(--ink-3); font-size: 12px; }
+.wal-edit { margin-top: 14px; }
+.wal-card { padding: 18px 20px; border-radius: 22px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--line), var(--shadow); }
+.wal-card .wal-head { margin-bottom: 10px; }
+.wal-card .meter { background: var(--field); }
+
+/* Long addresses: shortened, copy and show all (ui.ts addrHtml) */
+.addr { display: inline-flex; align-items: center; gap: 2px; min-width: 0; max-width: 100%; }
+.addr.full { display: flex; flex-wrap: wrap; align-items: flex-start; }
+.addr-v { min-width: 0; overflow-wrap: anywhere; }
+.addr-b { width: 26px; height: 26px; flex: none; display: grid; place-items: center; border: 0; border-radius: 8px; background: none; color: var(--ink-3); cursor: pointer; transition: background .2s, color .2s; }
+.addr-b:hover { background: var(--field-hover); color: var(--ink); }
+.addr-b.copied { color: var(--accent); animation: pop .45s var(--spring); }
+.addr-b[aria-expanded="true"] { color: var(--brand); }
+
+/* Below the two-column width: the panel folds into a strip above the chat. */
+@media (max-width: 1180px) {
+  .ax-grid { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .wal-panel { order: -1; position: static; max-height: none; overflow: visible; padding: 0; border-radius: 20px; }
+  .wal-strip {
+    display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 14px 8px 8px; border: 0; border-radius: inherit;
+    background: none; color: var(--ink); text-align: left; cursor: pointer;
+  }
+  .wal-strip b { font-size: 14px; font-weight: 600; white-space: nowrap; }
+  .wal-sum { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; color: var(--ink-2); font-size: 13px; font-variant-numeric: tabular-nums; }
+  .wal-strip > svg { flex: none; color: var(--ink-3); transition: transform .35s var(--ease); }
+  .wal-panel.open .wal-strip > svg { transform: rotate(180deg); }
+  .wal-body { display: none; padding: 0 16px 16px; }
+  .wal-panel.open .wal-body { display: block; animation: fade .3s var(--ease); }
+  /* The strip carries the title; the panel refreshes on its own. */
+  .wal-body .wal-head h2 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .wal-body .wal-btn { display: none; }
+  .wal-body #wal-content { margin-top: 4px; }
+  /* nav 64 + head ~110 + strip 48 + gap 12 */
+  .card.chat { height: clamp(480px, calc(100dvh - 270px), 980px); }
+}
+
 /* Phones and small tablets: the chat fills the space between the nav and the tab bar. */
 @media (max-width: 860px) {
-  /* nav 64 + head ~110 + tab bar ~96 */
-  .card.chat { height: max(420px, calc(100dvh - 280px)); }
+  /* nav 64 + head ~110 + strip ~60 + tab bar ~96 */
+  .card.chat { height: max(420px, calc(100dvh - 340px)); }
 }
 @media (max-width: 560px) {
   #view-assistant .page-head { margin-bottom: 14px; }
   #view-assistant .page-head p { display: none; }
-  /* nav 64 + head ~50 + tab bar ~96 */
-  .card.chat { height: max(400px, calc(100dvh - 216px)); border-radius: 24px; }
+  /* nav 64 + head ~50 + strip ~56 + tab bar ~96 */
+  .card.chat { height: max(400px, calc(100dvh - 272px)); border-radius: 24px; }
   .chat-head { padding: 12px 16px; gap: 10px; }
   .chat-av { width: 34px; height: 34px; border-radius: 11px; }
   .chat-id span { font-size: 12px; line-height: 1.35; }
