@@ -24,8 +24,76 @@ import {
 } from "../ui.js";
 
 
+/** The person closed the approval dialog: nothing was decided. */
+export class NotConfirmed extends Error {
+  constructor() {
+    super("Not approved");
+  }
+}
+
+/** The account a payment pays to, as the person must see it before approving. */
+function accountLines(a: Partial<Payee> | undefined): string[] {
+  return [
+    a?.iban ? `IBAN ${a.iban}` : "",
+    a?.bic ? `BIC ${a.bic}` : "",
+    a?.routingNumber ? `ABA routing ${a.routingNumber}, account ${a.accountNumber ?? "?"}` : "",
+    a?.cardanoAddress ? `Cardano ${a.cardanoAddress}` : "",
+  ].filter(Boolean);
+}
+
+/**
+ * Approving moves money, so it never happens on one click: this dialog shows what will be paid, to
+ * which account, and the policy checks, read fresh from the server. An unsaved payee or an account
+ * that differs from the saved one also needs an explicit tick. The confirmed amount goes with the
+ * approval, and the server refuses it if the payment changed in between.
+ */
+async function confirmApproval(id: string): Promise<Payment> {
+  const [all, payees] = await Promise.all([get<Payment[]>("/api/v1/payments"), get<Payee[]>("/api/v1/payees").catch(() => [] as Payee[])]);
+  const p = all.find(x => x.id === id);
+  if (!p) throw new Error("This payment no longer exists");
+  if (p.status !== "pending_approval" && p.status !== "blocked") throw new Error(`This payment is already ${statusText(p)}`);
+  const saved = p.payeeId ? payees.find(x => x.id === p.payeeId) : undefined;
+  const lines = accountLines(saved ?? p.destination);
+  const risky = !saved || p.policy.checks.some(c => c.id === "account" || (c.id === "payee" && c.status !== "pass"));
+  const total = amount(p.amountMinor, p.currency);
+  const ok = await dialog({
+    title: "Approve this payment?",
+    submit: `Approve and pay ${total}`,
+    wide: true,
+    body: `<dl class="appr-sum">
+        <dt>Amount</dt><dd><b class="appr-amt">${esc(total)}</b>${p.currency === "USD" ? "" : ` <span class="muted small">≈ ${esc(usd(p.usdMinor))} indicative</span>`}</dd>
+        <dt>To</dt><dd><b>${esc(p.payeeName)}</b> ${saved ? `<span class="pill t-ok">saved payee</span>` : `<span class="pill t-warn">not a saved payee</span>`}</dd>
+        <dt>Account</dt><dd>${lines.length ? lines.map(l => `<div class="mono appr-acct">${esc(l)}</div>`).join("") : `<span class="muted">No account details</span>`}</dd>
+        <dt>Rail</dt><dd>${railChip(p.rail)}</dd>
+        <dt>Reason</dt><dd>${esc(p.reason)}</dd>
+      </dl>
+      <div class="appr-checks">${checksList(p)}</div>
+      ${
+        risky
+          ? `<div class="field appr-field"><label class="appr-tick"><input type="checkbox" name="verified"> <span>I checked this account with ${esc(p.payeeName)} through a channel I trust, not from the invoice, an email or a chat message.</span></label></div>`
+          : ""
+      }
+      <p class="muted small">${p.rail === "cardano_preprod" ? "Next, you sign the payout in your wallet." : "The payout starts as soon as you approve."} Test money only: CashXChain sandbox and Cardano Preprod.</p>`,
+    onSubmit: form => {
+      if (risky && !(form.elements.namedItem("verified") as HTMLInputElement | null)?.checked) return fieldError(form, "verified", "Tick this to confirm you checked the account");
+      return true;
+    },
+  });
+  if (!ok) throw new NotConfirmed();
+  return p;
+}
+
+const statusText = (p: Payment): string => p.status.replace(/_/g, " ");
+
 export async function decide(id: string, action: "approve" | "reject"): Promise<Payment> {
-  const p = await post<Payment>(`/api/v1/payments/${encodeURIComponent(id)}/${action}`);
+  let shown: Payment | undefined;
+  try {
+    shown = action === "approve" ? await confirmApproval(id) : undefined;
+  } catch (error) {
+    if (!(error instanceof NotConfirmed)) toast(error instanceof Error ? error.message : String(error), "error");
+    throw error;
+  }
+  const p = await post<Payment>(`/api/v1/payments/${encodeURIComponent(id)}/${action}`, shown ? { amountMinor: shown.amountMinor, currency: shown.currency } : {});
   toast(
     action === "approve"
       ? p.status === "executed"

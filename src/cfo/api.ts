@@ -9,7 +9,7 @@ import { KeyRefused, type CxcKeys } from "./cxc-keys.js";
 import { CXC_SANDBOX_SIGNUP, type CxcLinker } from "./cxc-link.js";
 import { SUPPORTED_CURRENCIES } from "./fx.js";
 import { ingestDocument, type Extractor } from "./ingest.js";
-import { Payments } from "./payments.js";
+import { DraftRefused, Payments } from "./payments.js";
 import type { ConnectionRow, DocumentRow, Store, Workspace } from "./store.js";
 
 export interface CfoDeps {
@@ -446,7 +446,12 @@ export function mountCfo(app: Express, deps: CfoDeps): void {
     const body = PaymentCreate.parse(req.body);
     if (!await store.payee(ws, body.payeeId)) throw new HttpError(400, "payee not found");
     if (body.documentId && !await store.document(ws, body.documentId)) throw new HttpError(400, "document not found");
-    res.status(201).json(await deps.payments.draft(ws, { ...body, requestedBy: "user" }));
+    try {
+      res.status(201).json(await deps.payments.draft(ws, { ...body, requestedBy: "user" }));
+    } catch (error) {
+      if (error instanceof DraftRefused) throw new HttpError(409, error.message);
+      throw error;
+    }
   });
   // tADA payout from the owner's wallet: the wallet's funds in, the transaction to sign out (CIP-30).
   const hex = (max: number) => z.string().regex(/^(?:[0-9a-fA-F]{2})+$/).max(max);
@@ -469,11 +474,19 @@ export function mountCfo(app: Express, deps: CfoDeps): void {
     if (!result.ok) throw new HttpError(result.status, result.error);
     res.json(result.value);
   });
-  api.post("/payments/:id/:decision", async (req, res) => {
+  // Approving names the amount the person confirmed in the approval dialog; without it nothing is paid.
+  const ApprovalBody = z.object({ amountMinor: z.number().int().positive(), currency: z.string().min(3).max(5) }).strict();
+  api.post("/payments/:id/:decision", json, async (req, res) => {
     const ws = ctx(res).ws.id;
     const decision = req.params.decision;
     if (decision !== "approve" && decision !== "reject") throw new HttpError(404, "not found");
-    const result = decision === "approve" ? await deps.payments.approve(ws, req.params.id as string) : await deps.payments.reject(ws, req.params.id as string);
+    let seen: z.infer<typeof ApprovalBody> | undefined;
+    if (decision === "approve") {
+      const parsed = ApprovalBody.safeParse(req.body);
+      if (!parsed.success) throw new HttpError(400, "Approve from the confirmation dialog: the request must name the confirmed amountMinor and currency");
+      seen = parsed.data;
+    }
+    const result = seen ? await deps.payments.approve(ws, req.params.id as string, seen) : await deps.payments.reject(ws, req.params.id as string);
     if (!result.ok) throw new HttpError(409, result.error);
     res.json(result.payment);
   });

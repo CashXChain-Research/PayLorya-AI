@@ -8,7 +8,7 @@ import { CODE_MINUTES, createAuth } from "./auth.js";
 import { migrate } from "./db.js";
 import { CxcKeys } from "./cxc-keys.js";
 import { CxcLinker } from "./cxc-link.js";
-import { claudeExtractor } from "./ingest.js";
+import { claudeExtractor, resumeDocuments } from "./ingest.js";
 import { resendMailer, type Mailer } from "./mail.js";
 import { Payments, type PaymentEngine } from "./payments.js";
 import { evolutionKit, type TxKit } from "./wallet-signer.js";
@@ -74,7 +74,7 @@ export async function createCfo(
     void payments.sweep();
     setInterval(() => void payments.sweep(), 60_000).unref();
   }
-  return {
+  const deps = {
     store,
     auth,
     payments,
@@ -93,4 +93,11 @@ export async function createCfo(
     aiDailyLimit: config.CFO_AI_DAILY_LIMIT,
     cxc: new CxcLinker(store, config.CASHXCHAIN_MASTER_KEY ? new CashXChainClient({ apiKey: config.CASHXCHAIN_MASTER_KEY }) : undefined),
   };
+  if (!opts.noSweep) {
+    // Documents a restart cut off mid-read: read again (reads deps.extract at run time, so tests can swap it).
+    const resume = () => void resumeDocuments(store, deps.extract).catch(error => console.error("document resume failed", error));
+    resume();
+    setInterval(resume, 60_000).unref();
+  }
+  return deps;
 }

@@ -124,13 +124,49 @@ export function claudeExtractor(model: string): Extractor {
 const isDate = (s: string | null | undefined): s is string => !!s && /^\d{4}-\d{2}-\d{2}$/.test(s);
 
 /** Reads a stored document and derives its ledger entries. Never throws: failures mark the document failed. */
+// Documents being read in this process. One marked "processing" that is not here was cut off by a restart.
+const reading = new Set<string>();
+// Documents the restart sweep already resumed in this process: each gets one more try.
+const resumed = new Set<string>();
+
 export async function ingestDocument(store: Store, ws: string, documentId: string, extract: Extractor): Promise<void> {
+  const key = `${ws}:${documentId}`;
+  reading.add(key);
   try {
     await ingestOnce(store, ws, documentId, extract);
   } catch (error) {
     console.error("document ingestion failed", error);
     await store.failDocument(ws, documentId, "Could not store the result; upload the document again").catch(() => undefined);
+  } finally {
+    reading.delete(key);
   }
+}
+
+/** A document cut off longer ago than this is failed instead of read again: no endless retries. */
+export const RESUME_WINDOW_MS = 30 * 60_000;
+
+/**
+ * Documents a restart (a deploy, the container waking up) cut off while they were being read stay
+ * "processing" for ever otherwise. Read each one again once; past RESUME_WINDOW_MS, fail it with a
+ * clear message instead. Runs at start and every minute; `graceMs` spares uploads still in flight.
+ */
+export async function resumeDocuments(store: Store, extract: Extractor, now = Date.now(), graceMs = 2 * 60_000): Promise<string[]> {
+  const picked: string[] = [];
+  for (const { ws, id, createdAt } of await store.documentsProcessing()) {
+    const key = `${ws}:${id}`;
+    const age = now - Date.parse(createdAt);
+    if (reading.has(key) || resumed.has(key) || !(age >= graceMs)) continue;
+    resumed.add(key);
+    picked.push(id);
+    if (age > RESUME_WINDOW_MS) {
+      await store.failDocument(ws, id, "Reading was interrupted by a server restart. Upload the document again.");
+      await store.log(ws, "system", "failed to read document", "interrupted by a server restart", { type: "document", id });
+      continue;
+    }
+    await store.log(ws, "system", "resumed reading document", "interrupted by a server restart", { type: "document", id });
+    void ingestDocument(store, ws, id, extract);
+  }
+  return picked;
 }
 
 async function ingestOnce(store: Store, ws: string, documentId: string, extract: Extractor): Promise<void> {

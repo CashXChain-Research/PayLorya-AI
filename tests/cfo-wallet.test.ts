@@ -129,7 +129,7 @@ async function approvedAdaPayment(me: Call) {
   await me("POST", "/api/v1/connections", { kind: "cardano_wallet", address: WALLET, access: "read_write" });
   const payee = (await me("POST", "/api/v1/payees", { name: "Nordwind Node Services", cardanoAddress: PAYEE })).json;
   const draft = (await me("POST", "/api/v1/payments", { payeeId: payee.id, amountMinor: 2_000_000, currency: "ADA", reason: "Node hosting" })).json;
-  if (draft.status === "pending_approval") expect((await me("POST", `/api/v1/payments/${draft.id}/approve`)).status).toBe(200);
+  if (draft.status === "pending_approval") expect((await me("POST", `/api/v1/payments/${draft.id}/approve`, { amountMinor: draft.amountMinor, currency: draft.currency })).status).toBe(200);
   await settle(async () => (await payment(me, draft.id)).status === "awaiting_signature");
   return draft.id as string;
 }
@@ -256,7 +256,7 @@ describe("tADA payouts from the workspace's own wallet: stored at every step, si
     expect(await s.deps.store.claimPayment(ws, draft.id, ["pending_approval"], "executing", new Date().toISOString())).toBe(true);
     await s.deps.payments.sweep();
     expect(await payment(me, draft.id)).toMatchObject({ status: "pending_approval", error: INTERRUPTED });
-    expect((await me("POST", `/api/v1/payments/${draft.id}/approve`)).status).toBe(200);
+    expect((await me("POST", `/api/v1/payments/${draft.id}/approve`, { amountMinor: draft.amountMinor, currency: draft.currency })).status).toBe(200);
     await settle(async () => (await payment(me, draft.id)).status === "awaiting_signature");
   });
 
@@ -266,7 +266,7 @@ describe("tADA payouts from the workspace's own wallet: stored at every step, si
     await me("POST", "/api/v1/connections", { kind: "cardano_wallet", address: WALLET, access: "read_write" });
     const payee = (await me("POST", "/api/v1/payees", { name: "Nordwind Node Services", cardanoAddress: PAYEE })).json;
     const draft = (await me("POST", "/api/v1/payments", { payeeId: payee.id, amountMinor: 2_000_000, currency: "ADA", reason: "Node hosting" })).json;
-    if (draft.status === "pending_approval") await me("POST", `/api/v1/payments/${draft.id}/approve`);
+    if (draft.status === "pending_approval") await me("POST", `/api/v1/payments/${draft.id}/approve`, { amountMinor: draft.amountMinor, currency: draft.currency });
     await settle(async () => (await payment(me, draft.id)).status === "pending_approval" && Boolean((await payment(me, draft.id)).error));
     expect((await payment(me, draft.id)).error).toBe(CHECK_TIMED_OUT);
     expect(s.state.built).toEqual([]);
