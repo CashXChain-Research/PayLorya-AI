@@ -315,8 +315,9 @@ export class Payments {
   async declineSignature(ws: string, id: string): Promise<Result<Payment>> {
     const p = await this.store.payment(ws, id);
     if (!p) return refuse(404, "payment not found");
-    if (!(await this.store.claimPayment(ws, id, ["awaiting_signature"], "rejected"))) return refuse(409, `This payment is not waiting for a signature (it is ${p.status})`);
-    await this.store.updatePayment(ws, id, { error: "Declined in the wallet: nothing was sent." });
+    if (!(await this.store.claimPayment(ws, id, ["awaiting_signature"], "rejected", undefined, "Declined in the wallet: nothing was sent."))) {
+      return refuse(409, `This payment is not waiting for a signature (it is ${p.status})`);
+    }
     await this.store.log(ws, "user", "declined payment", `${p.payeeName}: ${fmt(p.amountMinor, p.currency)} in their wallet`, { type: "payment", id });
     return { ok: true, value: (await this.store.payment(ws, id))! };
   }
@@ -377,18 +378,16 @@ export class Payments {
           else if (now > Date.parse(sent.validUntil) + EXPIRY_MARGIN_MS && (await kit.tipTime()) > Date.parse(sent.validUntil) + EXPIRY_MARGIN_MS && !(await kit.confirmed(sent.txHash))) {
             // The agent wallet's payout goes back to approval; one the owner signs goes back to signing.
             const byAgent = Boolean(p.cardano?.byAgent);
-            if (await this.store.claimPayment(ws, p.id, ["executing"], byAgent ? "pending_approval" : "awaiting_signature")) {
-              await this.store.updatePayment(ws, p.id, {
-                cardano: byAgent ? null : { ...p.cardano!, submitted: undefined },
-                error: `The transaction expired before it reached a block: nothing was sent. ${byAgent ? "Approve it again." : "Sign again."}`,
-              });
+            const expired = `The transaction expired before it reached a block: nothing was sent. ${byAgent ? "Approve it again." : "Sign again."}`;
+            if (await this.store.claimPayment(ws, p.id, ["executing"], byAgent ? "pending_approval" : "awaiting_signature", undefined, expired)) {
+              await this.store.updatePayment(ws, p.id, { cardano: byAgent ? null : { ...p.cardano!, submitted: undefined } });
               await this.store.log(ws, "system", "payment not sent", `${p.payeeName}: the transaction expired unconfirmed`, { type: "payment", id: p.id });
             }
           }
         } else if (p.status === "executing") {
-          if (await this.store.claimPayment(ws, p.id, ["executing"], "pending_approval")) {
+          if (await this.store.claimPayment(ws, p.id, ["executing"], "pending_approval", undefined, INTERRUPTED)) {
             // Nothing was signed (a signed payout would carry its transaction): nothing to follow.
-            await this.store.updatePayment(ws, p.id, { error: INTERRUPTED, ...(p.cardano?.byAgent ? { cardano: null } : {}) });
+            if (p.cardano?.byAgent) await this.store.updatePayment(ws, p.id, { cardano: null });
             await this.store.log(ws, "system", "payment interrupted", `${p.payeeName}: back to approval after a restart`, { type: "payment", id: p.id });
           }
         } else if (sent && !p.cardano?.confirmedAt && kit && now - Date.parse(p.executedAt ?? p.createdAt) < 24 * 3_600_000) {
@@ -553,7 +552,7 @@ export class Payments {
       return { ok: false, error: reason };
     }
     // Atomic claim: of two approvals at once, only one starts the payment.
-    if (!(await this.store.claimPayment(ws, id, ["pending_approval", "blocked"], "executing", new Date().toISOString()))) {
+    if (!(await this.store.claimPayment(ws, id, ["pending_approval", "blocked"], "executing", new Date().toISOString(), null))) {
       return { ok: false, error: "payment was already decided" };
     }
     // A note from an earlier attempt (a restart, a timeout, a block) no longer applies.
@@ -654,8 +653,7 @@ export class Payments {
       const late = new Promise<"late">(resolve => (timer = setTimeout(() => resolve("late"), this.wallets.checkTimeoutMs ?? 5 * 60_000)));
       const checked = await Promise.race([agent.process(run).then(() => "done" as const), late]).finally(() => clearTimeout(timer));
       if (checked === "late") {
-        if (await this.store.claimPayment(ws, id, ["executing"], "pending_approval")) {
-          await this.store.updatePayment(ws, id, { error: CHECK_TIMED_OUT });
+        if (await this.store.claimPayment(ws, id, ["executing"], "pending_approval", undefined, CHECK_TIMED_OUT)) {
           await this.store.log(ws, "system", "payment check timed out", `${p.payeeName}: back to approval, nothing paid`, { type: "payment", id });
         }
         return;

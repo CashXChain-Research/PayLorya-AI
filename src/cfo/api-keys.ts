@@ -18,13 +18,18 @@ export interface ApiKey {
 const ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 export const KEY_PATTERN = /^ply_sk_[0-9A-Za-z]{40}$/;
 
+/** `length` base62 characters from the CSPRNG, without modulo bias (bytes from 248 up are skipped). */
+export function randomBase62(length: number): string {
+  let out = "";
+  while (out.length < length) {
+    for (const b of randomBytes(length + 8)) if (b < 248 && out.length < length) out += ALPHABET[b % 62];
+  }
+  return out;
+}
+
 /** A new secret key: `ply_sk_` and 40 base62 characters (238 bits from the CSPRNG). */
 export function newKey(): { key: string; hash: string; prefix: string } {
-  let body = "";
-  while (body.length < 40) {
-    for (const b of randomBytes(48)) if (b < 248 && body.length < 40) body += ALPHABET[b % 62];
-  }
-  const key = `ply_sk_${body}`;
+  const key = `ply_sk_${randomBase62(40)}`;
   return { key, hash: hashKey(key), prefix: `${key.slice(0, 11)}…${key.slice(-4)}` };
 }
 

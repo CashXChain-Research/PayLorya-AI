@@ -17,12 +17,15 @@ import { SUPPORTED_CURRENCIES } from "./fx.js";
 import { ingestDocument, type Extractor } from "./ingest.js";
 import { mountMcp } from "./mcp.js";
 import { DraftRefused, Payments } from "./payments.js";
+import { WEBHOOK_EVENTS, WebhookRefused, type Webhooks } from "./webhooks.js";
 import type { ConnectionRow, DocumentRow, Store, Workspace } from "./store.js";
 
 export interface CfoDeps {
   store: Store;
   auth: Auth;
   payments: Payments;
+  /** Outbound webhooks (webhooks.ts). */
+  webhooks: Webhooks;
   connections: ConnectionEnv;
   extract: Extractor;
   model: string;
@@ -260,6 +263,37 @@ export function mountCfo(app: Express, deps: CfoDeps): void {
     if (!(await store.revokeApiKey(ws, req.params.id as string))) throw new HttpError(404, "API key not found or already revoked");
     await store.log(ws, "user", "revoked API key", String(req.params.id), { type: "api_key", id: String(req.params.id) });
     res.status(204).end();
+  });
+
+  // Webhooks (changing them is dashboard only: a key may list them) ------------------------
+  api.get("/webhooks", async (_req, res) => res.json(await store.webhooks(ctx(res).ws.id)));
+  api.post("/webhooks", json, async (req, res) => {
+    const ws = ctx(res).ws.id;
+    const body = z
+      .object({ url: z.string().trim().min(1), events: z.array(z.enum(WEBHOOK_EVENTS)).min(1).optional() })
+      .parse(req.body ?? {});
+    try {
+      const created = await deps.webhooks.create(ws, body);
+      await store.log(ws, "user", "added webhook", `${created.url} (${created.events.join(", ")})`, { type: "webhook", id: created.id });
+      // The signing secret is shown once: it is stored sealed, never shown again.
+      res.status(201).json(created);
+    } catch (error) {
+      if (error instanceof WebhookRefused) throw new HttpError(error.status, error.message);
+      throw error;
+    }
+  });
+  api.delete("/webhooks/:id", async (req, res) => {
+    const ws = ctx(res).ws.id;
+    const w = await store.webhook(ws, req.params.id as string);
+    if (!w || !(await store.deleteWebhook(ws, w.id))) throw new HttpError(404, "webhook not found");
+    await store.log(ws, "user", "removed webhook", w.url, { type: "webhook", id: w.id });
+    res.status(204).end();
+  });
+  // Sends a `ping` now and answers with the endpoint's reply (not retried).
+  api.post("/webhooks/:id/test", async (req, res) => {
+    const result = await deps.webhooks.ping(ctx(res).ws.id, req.params.id as string);
+    if (!result) throw new HttpError(404, "webhook not found");
+    res.json(result);
   });
 
   // Workspace ------------------------------------------------------------------------------

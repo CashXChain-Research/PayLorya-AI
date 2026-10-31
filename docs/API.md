@@ -361,10 +361,7 @@ environment. Other MCP clients that support Streamable HTTP take the same URL an
 | `get_activity` | Activity log. | `GET /activity` |
 | `ask_cfo` | Ask the AI CFO (`question`, optional `chatId`). With a key it cannot change budgets, and what it drafts waits for approval. | chat |
 
-## Webhooks (coming soon)
-
-> Webhooks are being rolled out: until they are, these endpoints answer 404 and the dashboard does not
-> show them. This is the contract they will follow.
+## Webhooks
 
 Get told when a payment is drafted or changes status, instead of polling. Add an endpoint in the
 dashboard (Developers): its URL must be HTTPS, and you can pick the events. The signing secret
@@ -376,7 +373,7 @@ testing them is human only.
 | `GET /webhooks` | read scope |
 | `POST /webhooks` `{url, events?}` → `{id, url, events, createdAt, secret}` | dashboard only |
 | `DELETE /webhooks/{id}` | dashboard only |
-| `POST /webhooks/{id}/test` (sends `ping`) | dashboard only |
+| `POST /webhooks/{id}/test` (sends `ping` now) → `{id, type, delivered, status, error?}` | dashboard only |
 
 | Event | When | `data` |
 | --- | --- | --- |
@@ -439,7 +436,8 @@ app.listen(3000);
 
 ### Delivery
 
-- Answer with any `2xx` to acknowledge. Anything else, or no answer, is retried with backoff, about 6
-  attempts in all.
+- Answer with any `2xx` within 10 seconds to acknowledge. Anything else (redirects are not followed),
+  or no answer, is retried: 6 attempts in all, at once and then after 1 min, 5 min, 30 min, 2 h and 6 h.
+- `GET /webhooks` shows each endpoint's `lastDeliveryAt` and `lastStatus` (`0`: no HTTP answer).
 - Retries can deliver the same event more than once: deduplicate on the event `id`.
 - Answer quickly and do slow work afterwards.

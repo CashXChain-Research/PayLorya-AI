@@ -280,8 +280,9 @@ function wireDevelopers(root: HTMLElement, ctx: Ctx): void {
       test.disabled = true;
       test.classList.add("loading");
       try {
-        const r = await post<{ ok?: boolean; error?: string } | undefined>(`/api/v1/webhooks/${encodeURIComponent(h.id)}/test`);
-        if (r && r.ok === false) toast(r.error || "Your endpoint did not accept the test event.", "error");
+        // The server sends the ping at once and reports the endpoint's answer (src/cfo/webhooks.ts, ping).
+        const r = await post<{ delivered: boolean; status: number; error?: string } | undefined>(`/api/v1/webhooks/${encodeURIComponent(h.id)}/test`);
+        if (r && !r.delivered) toast(`${hostOf(h.url)} did not accept the test event: ${r.error || `HTTP ${r.status}`}.`, "error");
         else toast(`Test event sent to ${hostOf(h.url)}`, "ok");
       } catch {
         // the API layer showed the reason
