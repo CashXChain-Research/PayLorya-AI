@@ -766,9 +766,13 @@ a.today-item:hover { background: var(--surface-2); }
 .settings { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; align-items: start; }
 .settings .kv { margin-top: 18px; }
 .acct { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
-.acct b, .acct span { display: block; }
-.acct b { font-size: 16px; font-weight: 600; }
-.acct span { color: var(--ink-2); font-size: 14px; overflow-wrap: anywhere; }
+/* Only the text next to the avatar: a bare ".acct span" also hit the avatar and broke its centering. */
+.acct-text { min-width: 0; }
+.acct-text b, .acct-text span { display: block; }
+.acct-text b { font-size: 16px; font-weight: 600; }
+.acct-text span { color: var(--ink-2); font-size: 14px; overflow-wrap: anywhere; }
+.settings .acct-kv { grid-template-columns: auto minmax(0, 1fr); gap: 4px 14px; margin-top: 4px; font-size: 13px; }
+.acct-kv dd { color: var(--ink-2); }
 
 /* Chat */
 body.full .main { max-width: none; padding: 0; height: 100vh; height: 100dvh; }

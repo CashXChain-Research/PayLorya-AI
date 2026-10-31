@@ -410,8 +410,8 @@ var ha={"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"},s=e=>String(
     </form>
     <section class="card">
       <div class="card-head"><h2>Account</h2></div>
-      <div class="acct">${ee(a.user.name||a.user.email,"lg")}<div><b>${s(a.user.name||"\u2014")}</b><span>${s(a.user.email)}</span></div></div>
-      <dl class="kv"><dt>User ID</dt><dd class="mono">${s(a.user.id)}</dd></dl>
+      <div class="acct">${ee(a.user.name||a.user.email,"lg")}<div class="acct-text"><b>${s(a.user.name||"\u2014")}</b><span>${s(a.user.email)}</span></div></div>
+      <dl class="kv acct-kv"><dt>User ID</dt><dd class="mono">${s(a.user.id)}</dd></dl>
       <div class="form-foot"><span></span><button class="btn ghost sm" type="button" id="s-out">${p("logout",16)}Sign out</button></div>
     </section>
     ${un(a)}
