@@ -39,29 +39,29 @@ export class Payments {
     private readonly engine: PaymentEngine,
   ) {}
 
-  private railWritable(ws: string, rail: Rail): boolean {
+  private async railWritable(ws: string, rail: Rail): Promise<boolean> {
     const kind = rail === "cardano_preprod" ? "cardano_agent_wallet" : rail === "cashxchain" ? "cashxchain" : undefined;
-    return this.store.connections(ws).some(c => c.kind === kind && c.access === "read_write");
+    return (await this.store.connections(ws)).some(c => c.kind === kind && c.access === "read_write");
   }
 
-  evaluate(ws: string, p: { requestedBy: "agent" | "user"; rail: Rail; usdMinor: number; payeeKnown: boolean }): PolicyDecision {
-    const workspace = this.store.workspace(ws)!;
+  async evaluate(ws: string, p: { requestedBy: "agent" | "user"; rail: Rail; usdMinor: number; payeeKnown: boolean }): Promise<PolicyDecision> {
+    const workspace = (await this.store.workspace(ws))!;
     return decidePayment(workspace.autonomy, workspace.limits, {
       ...p,
-      railWritable: this.railWritable(ws, p.rail),
-      agentExecutedThisMonthUsdMinor: this.store.agentExecutedSince(ws, monthStart()),
+      railWritable: await this.railWritable(ws, p.rail),
+      agentExecutedThisMonthUsdMinor: await this.store.agentExecutedSince(ws, monthStart()),
     });
   }
 
   /** Creates a payment with its policy decision. An "auto" decision starts execution right away. */
-  draft(ws: string, input: DraftInput): Payment {
-    const payee = input.payeeId ? this.store.payee(ws, input.payeeId) : findPayeeByName(this.store.payees(ws), input.payeeName);
+  async draft(ws: string, input: DraftInput): Promise<Payment> {
+    const payee = input.payeeId ? await this.store.payee(ws, input.payeeId) : findPayeeByName(await this.store.payees(ws), input.payeeName);
     const payeeName = payee?.name ?? input.payeeName?.trim() ?? "Unknown payee";
     const rail = railFor(input.currency);
     const usdMinor = toUsdMinor(input.amountMinor, input.currency);
-    const policy = this.evaluate(ws, { requestedBy: input.requestedBy, rail, usdMinor, payeeKnown: Boolean(payee) });
+    const policy = await this.evaluate(ws, { requestedBy: input.requestedBy, rail, usdMinor, payeeKnown: Boolean(payee) });
     const status = policy.decision === "blocked" ? "blocked" : policy.decision === "auto" ? "executing" : "pending_approval";
-    const payment = this.store.addPayment(ws, {
+    const payment = await this.store.addPayment(ws, {
       payeeId: payee?.id,
       payeeName,
       amountMinor: input.amountMinor,
@@ -75,56 +75,75 @@ export class Payments {
       policy,
     });
     const verb = status === "executing" ? "executing payment" : status === "blocked" ? "drafted blocked payment" : "drafted payment";
-    this.store.log(ws, input.requestedBy, verb, `${payeeName}: ${fmt(input.amountMinor, input.currency)} (${policy.decision})`, { type: "payment", id: payment.id });
+    await this.store.log(ws, input.requestedBy, verb, `${payeeName}: ${fmt(input.amountMinor, input.currency)} (${policy.decision})`, { type: "payment", id: payment.id });
     if (status === "executing") void this.execute(ws, payment.id);
     return payment;
   }
 
   /** Human approval. Re-checks the policy: access may have changed since the draft. */
-  approve(ws: string, id: string): { ok: true; payment: Payment } | { ok: false; error: string } {
-    const p = this.store.payment(ws, id);
+  async approve(ws: string, id: string): Promise<{ ok: true; payment: Payment } | { ok: false; error: string }> {
+    const p = await this.store.payment(ws, id);
     if (!p) return { ok: false, error: "payment not found" };
     if (p.status !== "pending_approval" && p.status !== "blocked") return { ok: false, error: `payment is ${p.status}` };
-    const payee = p.payeeId ? this.store.payee(ws, p.payeeId) : undefined;
-    const policy = this.evaluate(ws, { requestedBy: "user", rail: p.rail, usdMinor: p.usdMinor, payeeKnown: Boolean(payee) });
+    const payee = p.payeeId ? await this.store.payee(ws, p.payeeId) : undefined;
+    const policy = await this.evaluate(ws, { requestedBy: "user", rail: p.rail, usdMinor: p.usdMinor, payeeKnown: Boolean(payee) });
     if (policy.decision === "blocked") {
-      this.store.updatePayment(ws, id, { status: "blocked", policy });
+      await this.store.updatePayment(ws, id, { status: "blocked", policy });
       return { ok: false, error: policy.checks.find(c => c.status === "fail")?.message ?? "blocked by policy" };
     }
     if (!payee) return { ok: false, error: "Add the payee to your payee directory before paying" };
-    const payment = this.store.updatePayment(ws, id, { status: "executing", policy, decidedAt: new Date().toISOString() });
-    this.store.log(ws, "user", "approved payment", `${p.payeeName}: ${fmt(p.amountMinor, p.currency)}`, { type: "payment", id });
+    // Atomic claim: of two approvals at once, only one starts the payment.
+    if (!(await this.store.claimPayment(ws, id, ["pending_approval", "blocked"], "executing", new Date().toISOString()))) {
+      return { ok: false, error: "payment was already decided" };
+    }
+    const payment = await this.store.updatePayment(ws, id, { policy });
+    await this.store.log(ws, "user", "approved payment", `${p.payeeName}: ${fmt(p.amountMinor, p.currency)}`, { type: "payment", id });
     void this.execute(ws, id);
     return { ok: true, payment };
   }
 
-  reject(ws: string, id: string): { ok: true; payment: Payment } | { ok: false; error: string } {
-    const p = this.store.payment(ws, id);
+  async reject(ws: string, id: string): Promise<{ ok: true; payment: Payment } | { ok: false; error: string }> {
+    const p = await this.store.payment(ws, id);
     if (!p) return { ok: false, error: "payment not found" };
-    if (p.status !== "pending_approval" && p.status !== "blocked") return { ok: false, error: `payment is ${p.status}` };
-    const payment = this.store.updatePayment(ws, id, { status: "rejected", decidedAt: new Date().toISOString() });
-    this.store.log(ws, "user", "rejected payment", `${p.payeeName}: ${fmt(p.amountMinor, p.currency)}`, { type: "payment", id });
-    return { ok: true, payment };
+    if (!(await this.store.claimPayment(ws, id, ["pending_approval", "blocked"], "rejected", new Date().toISOString()))) {
+      return { ok: false, error: `payment is ${p.status}` };
+    }
+    await this.store.log(ws, "user", "rejected payment", `${p.payeeName}: ${fmt(p.amountMinor, p.currency)}`, { type: "payment", id });
+    return { ok: true, payment: (await this.store.payment(ws, id))! };
+  }
+
+  /** Never throws: it runs detached, so every failure ends up on the payment. */
+  private async execute(ws: string, id: string): Promise<void> {
+    try {
+      await this.executeOnce(ws, id);
+    } catch (error) {
+      console.error("payment execution failed", error);
+      try {
+        await this.store.updatePayment(ws, id, { status: "failed", error: "Internal error while executing; check the activity log before retrying" });
+      } catch {
+        // database unreachable: the run store still holds the outcome
+      }
+    }
   }
 
   /**
    * Runs the payment through the payout engine: paid x402 verification report, route to the
    * verified payee (this workspace's directory only), payout within the platform caps.
    */
-  private async execute(ws: string, id: string): Promise<void> {
-    const p = this.store.payment(ws, id)!;
-    const fail = (error: string) => {
-      this.store.updatePayment(ws, id, { status: "failed", error });
-      this.store.log(ws, "system", "payment failed", `${p.payeeName}: ${error}`, { type: "payment", id });
+  private async executeOnce(ws: string, id: string): Promise<void> {
+    const p = (await this.store.payment(ws, id))!;
+    const fail = async (error: string) => {
+      await this.store.updatePayment(ws, id, { status: "failed", error });
+      await this.store.log(ws, "system", "payment failed", `${p.payeeName}: ${error}`, { type: "payment", id });
     };
     const agent = this.engine.agent;
     if (!agent) return fail("The payment engine is not configured on this server");
-    const payee = p.payeeId ? this.store.payee(ws, p.payeeId) : undefined;
+    const payee = p.payeeId ? await this.store.payee(ws, p.payeeId) : undefined;
     if (!payee) return fail("Payee is not in the payee directory");
 
     const run = this.engine.runs.create(JSON.stringify(invoiceFor(p, payee)));
     run.payees = [verifiedPayee(payee)];
-    this.store.updatePayment(ws, id, { runId: run.id });
+    await this.store.updatePayment(ws, id, { runId: run.id });
     try {
       await agent.process(run);
       if (run.state !== "DRAFT_READY" || !run.draft?.executable) return fail(reasonOf(run));
@@ -141,7 +160,7 @@ export class Payments {
     }
     const payout = run.payout;
     const onChain = payout.rail === "cardano_preprod";
-    this.store.updatePayment(ws, id, {
+    await this.store.updatePayment(ws, id, {
       status: "executed",
       executedAt: payout.executedAt,
       reference: payout.reference,
@@ -151,7 +170,7 @@ export class Payments {
     });
     // Invoices already count as spend from their issue date; only payments without one are new spend.
     if (!p.documentId) {
-      this.store.addTransaction(ws, {
+      await this.store.addTransaction(ws, {
         date: payout.executedAt.slice(0, 10),
         description: `Payment to ${p.payeeName}: ${p.reason}`.slice(0, 200),
         counterparty: p.payeeName,
@@ -163,7 +182,7 @@ export class Payments {
         paymentId: id,
       });
     }
-    this.store.log(ws, "system", "payment executed", `${p.payeeName}: ${fmt(p.amountMinor, p.currency)}${payout.reference ? ` (${payout.reference})` : ""}`, {
+    await this.store.log(ws, "system", "payment executed", `${p.payeeName}: ${fmt(p.amountMinor, p.currency)}${payout.reference ? ` (${payout.reference})` : ""}`, {
       type: "payment",
       id,
     });

@@ -8,5 +8,5 @@
     "noEmit": true,
     "types": ["@cloudflare/workers-types"]
   },
-  "include": ["worker.ts", "env.ts"]
+  "include": ["worker.ts", "env.ts", "cfo-proxy.ts"]
 }

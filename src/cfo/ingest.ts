@@ -125,15 +125,24 @@ const isDate = (s: string | null | undefined): s is string => !!s && /^\d{4}-\d{
 
 /** Reads a stored document and derives its ledger entries. Never throws: failures mark the document failed. */
 export async function ingestDocument(store: Store, ws: string, documentId: string, extract: Extractor): Promise<void> {
-  const file = store.documentFile(ws, documentId);
+  try {
+    await ingestOnce(store, ws, documentId, extract);
+  } catch (error) {
+    console.error("document ingestion failed", error);
+    await store.failDocument(ws, documentId, "Could not store the result; upload the document again").catch(() => undefined);
+  }
+}
+
+async function ingestOnce(store: Store, ws: string, documentId: string, extract: Extractor): Promise<void> {
+  const file = await store.documentFile(ws, documentId);
   if (!file) return;
   let x: Extraction;
   try {
     x = await extract(documentBlock(file.mimeType, file.data, file.filename), file.filename);
   } catch (error) {
     const message = error instanceof IngestError ? error.message : `Could not read the document: ${error instanceof Error ? error.message : String(error)}`;
-    store.failDocument(ws, documentId, message);
-    store.log(ws, "system", "failed to read document", `${file.filename}: ${message}`, { type: "document", id: documentId });
+    await store.failDocument(ws, documentId, message);
+    await store.log(ws, "system", "failed to read document", `${file.filename}: ${message}`, { type: "document", id: documentId });
     return;
   }
   // Deterministic normalisation: currency must be known, amounts become integer minor units.
@@ -143,12 +152,12 @@ export async function ingestDocument(store: Store, ws: string, documentId: strin
   const issueDate = isDate(x.issueDate) ? x.issueDate : undefined;
   const dueDate = isDate(x.dueDate) ? x.dueDate : undefined;
 
-  store.deleteTransactionsForDocument(ws, documentId);
+  const entries: Parameters<Store["replaceDocumentTransactions"]>[2] = [];
   if (known && x.statementEntries.length) {
     for (const e of x.statementEntries) {
       if (!isDate(e.date) || !Number.isFinite(e.amount) || e.amount === 0) continue;
       const minor = majorToMinor(e.amount, currency);
-      store.addTransaction(ws, {
+      entries.push({
         date: e.date,
         description: e.description.slice(0, 200),
         counterparty: e.counterparty ?? undefined,
@@ -156,14 +165,12 @@ export async function ingestDocument(store: Store, ws: string, documentId: strin
         amountMinor: minor,
         currency,
         usdMinor: toUsdMinor(minor, currency),
-        source: "document",
-        documentId,
       });
     }
   } else if (known && amountMinor && (x.kind === "invoice" || x.kind === "receipt") && x.direction !== "none") {
     // Accrual view: an invoice counts on its issue date, paid or not; payables come from due dates.
     const signed = x.direction === "money_in" ? amountMinor : -amountMinor;
-    store.addTransaction(ws, {
+    entries.push({
       date: issueDate ?? new Date().toISOString().slice(0, 10),
       description: x.title.slice(0, 200),
       counterparty: x.counterparty ?? undefined,
@@ -171,12 +178,11 @@ export async function ingestDocument(store: Store, ws: string, documentId: strin
       amountMinor: signed,
       currency,
       usdMinor: toUsdMinor(signed, currency),
-      source: "document",
-      documentId,
     });
   }
+  await store.replaceDocumentTransactions(ws, documentId, entries);
 
-  store.completeDocument(ws, documentId, {
+  await store.completeDocument(ws, documentId, {
     kind: x.kind as DocumentKind,
     title: x.title.slice(0, 200),
     summary: x.summary.slice(0, 600),
@@ -195,6 +201,6 @@ export async function ingestDocument(store: Store, ws: string, documentId: strin
       notes: x.notes,
     },
   });
-  store.log(ws, "agent", "read document", x.title, { type: "document", id: documentId });
-  if (x.notes.length) store.log(ws, "agent", "flagged document", `${x.title}: ${x.notes.join("; ")}`.slice(0, 500), { type: "document", id: documentId });
+  await store.log(ws, "agent", "read document", x.title, { type: "document", id: documentId });
+  if (x.notes.length) await store.log(ws, "agent", "flagged document", `${x.title}: ${x.notes.join("; ")}`.slice(0, 500), { type: "document", id: documentId });
 }

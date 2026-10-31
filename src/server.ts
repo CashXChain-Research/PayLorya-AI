@@ -18,7 +18,15 @@ const limiter = new RunRateLimiter(config.RUNS_PER_MINUTE_PER_CLIENT, config.RUN
 const engine: PaymentEngine = { runs: new RunStore(config.MAX_RUNS) };
 const app = express();
 // Before express.json(): Better Auth reads the raw body, and the CFO API parses its own (larger) bodies.
-mountCfo(app, await createCfo(config, engine));
+try {
+  mountCfo(app, await createCfo(config, engine));
+} catch (error) {
+  // The public demo must keep working when the AI CFO's database is unreachable at start.
+  console.error("AI CFO disabled: could not open its database", error);
+  app.all(["/app", "/app/*splat", "/api/v1/*splat", "/api/auth/*splat"], (_req, res) => {
+    res.status(503).json({ error: "The AI CFO is temporarily unavailable. The demo at /demo still works." });
+  });
+}
 app.use(express.json({ limit: "256kb" }));
 // "/app" and "/about" resolve to their .html pages.
 app.use(express.static("public", { extensions: ["html"] }));

@@ -53,7 +53,8 @@ The product built on top of the hackathon payment engine. One app, one domain:
 
 ```
 src/cfo/
-  db.ts           SQLite (node:sqlite) and schema migrations
+  sql.ts          storage interface: D1 + R2 via the Worker (Cloudflare), SQLite + folder (local)
+  db.ts           schema migrations (same SQL on D1 and SQLite)
   auth.ts         Better Auth on the same database
   store.ts        all data access, scoped by workspace
   policy.ts       agent permission policy (pure)
@@ -71,9 +72,10 @@ src/cfo/
 
 ## Limits and honest notes
 
-- **Persistence**: SQLite lives on the container disk, which Cloudflare Containers do not persist. A
-  redeploy or a sleep deletes every account. Moving to Postgres or D1 is the next step; see
-  `docs/DEPLOY.md`.
+- **Storage**: D1 for data and R2 for files, durable across deploys. The container reaches them through
+  the Worker's outbound handler (`cloudflare/cfo-proxy.ts`), so no Cloudflare API token is involved.
+  The R2 bucket was created without an EU jurisdiction; recreate it with `--jurisdiction eu` before
+  storing customer documents.
 - **Money**:
   - tADA is testnet money.
   - CashXChain payouts are sandbox payouts, or simulated when no key is set.
