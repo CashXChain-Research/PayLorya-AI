@@ -15,4 +15,4 @@ export const AI = {
 };
 
 /** The PayFlow AI mark, as in the nav logo. */
-export const MARK = `<svg width="15" height="15" viewBox="0 0 64 64" aria-hidden="true"><path d="M22 12V52" stroke="#5cc0d6" stroke-width="10" stroke-linecap="round"/><path d="M22 14H35A11.5 11.5 0 0 1 35 37H22" fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+export const MARK = `<svg width="15" height="15" viewBox="0 0 64 64" aria-hidden="true"><path d="M22 50V14H35A11 11 0 0 1 35 36H22" fill="none" stroke="#fff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/><circle cx="46" cy="49" r="6.5" fill="#e8553a"/></svg>`;

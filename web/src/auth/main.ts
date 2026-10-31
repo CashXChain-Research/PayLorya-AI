@@ -9,6 +9,15 @@ interface ApiError {
   code?: string;
 }
 
+/** What /verify needs: where the code went and which kind it is. */
+interface Pending {
+  email: string;
+  /** "sign-in": a login or password-free sign-up. "email-verification": a sign-up with a password. */
+  purpose: "sign-in" | "email-verification";
+  /** Sign-up without a password: the name to create the account with. */
+  name?: string;
+}
+
 const form = document.querySelector<HTMLFormElement>("form[data-auth]");
 const mode = form?.dataset.auth as Mode | undefined;
 
@@ -16,32 +25,6 @@ const mode = form?.dataset.auth as Mode | undefined;
 function nextTarget(): string {
   const next = new URLSearchParams(location.search).get("next") ?? "";
   return /^\/app(?:[/?#]|$)/.test(next) ? next : "/app";
-}
-
-// The address a code was mailed to, handed from sign-up/login to /verify. Kept out of the URL.
-const VERIFY_EMAIL_KEY = "payflow-verify-email";
-
-function storedEmail(): string {
-  try {
-    return sessionStorage.getItem(VERIFY_EMAIL_KEY) ?? "";
-  } catch {
-    return "";
-  }
-}
-
-function storeEmail(email: string | undefined): void {
-  try {
-    if (email) sessionStorage.setItem(VERIFY_EMAIL_KEY, email);
-    else sessionStorage.removeItem(VERIFY_EMAIL_KEY);
-  } catch {
-    // storage blocked: /verify asks for the email
-  }
-}
-
-/** The server mailed a code (Resend configured): continue on the confirmation page. */
-function goVerify(email: string): void {
-  storeEmail(email);
-  location.assign(next === "/app" ? "/verify" : `/verify?next=${encodeURIComponent(next)}`);
 }
 
 // Carry ?next across the login <-> signup switch link.
@@ -52,6 +35,33 @@ if (next !== "/app") {
     url.searchParams.set("next", next);
     link.href = url.pathname + url.search;
   }
+}
+
+// Handed from sign-up/login to /verify in this tab only, never in the URL.
+const PENDING_KEY = "payflow-verify";
+
+function readPending(): Pending | undefined {
+  try {
+    const p = JSON.parse(sessionStorage.getItem(PENDING_KEY) ?? "null") as Pending | null;
+    return p && typeof p.email === "string" ? p : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function writePending(p: Pending | undefined): void {
+  try {
+    if (p) sessionStorage.setItem(PENDING_KEY, JSON.stringify(p));
+    else sessionStorage.removeItem(PENDING_KEY);
+  } catch {
+    // storage blocked: /verify asks for the email
+  }
+}
+
+/** A code is in the user's inbox: continue on the confirmation page. */
+function goVerify(p: Pending): void {
+  writePending(p);
+  location.assign(next === "/app" ? "/verify" : `/verify?next=${encodeURIComponent(next)}`);
 }
 
 // Already signed in: skip the form.
@@ -82,6 +92,15 @@ async function readError(res: Response): Promise<ApiError> {
   }
 }
 
+function postJson(url: string, body: unknown): Promise<Response> {
+  return fetch(url, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "content-type": "application/json", accept: "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
 function field(name: string): HTMLInputElement | null {
   return form?.querySelector<HTMLInputElement>(`[name="${name}"]`) ?? null;
 }
@@ -103,6 +122,49 @@ function setFormError(message: string): void {
   box.hidden = !message;
 }
 
+// ── Code or password ─────────────────────────────────────────────────────────────────────
+// With email codes on the server, sign-up and login send a code; a password is only used when the
+// customer chooses one. Without codes (no Resend key), the password is required as before.
+let codes = false;
+let usePassword = true;
+const passwordField = document.getElementById("password-field");
+const toggle = document.querySelector<HTMLAnchorElement>("[data-password-toggle]");
+const submitLabel = form?.querySelector<HTMLElement>('button[type="submit"] span');
+
+function applyMethod(): void {
+  if (passwordField) passwordField.hidden = !usePassword;
+  if (toggle) {
+    toggle.hidden = !codes;
+    toggle.textContent =
+      mode === "signup"
+        ? usePassword ? "Sign up with an email code instead" : "Add a password (optional)"
+        : usePassword ? "Use an email code instead" : "Log in with a password instead";
+  }
+  if (mode === "login" && submitLabel) submitLabel.textContent = usePassword ? "Log in" : "Email me a code";
+  if (!usePassword) setFieldError("password", "");
+}
+
+const ready: Promise<void> =
+  mode === "verify"
+    ? Promise.resolve()
+    : fetch("/api/auth-options", { headers: { accept: "application/json" } })
+        .then(res => (res.ok ? (res.json() as Promise<{ codes?: boolean }>) : {}))
+        .then(o => {
+          codes = Boolean((o as { codes?: boolean }).codes);
+        })
+        .catch(() => undefined) // unknown: passwords, as before
+        .then(() => {
+          usePassword = !codes;
+          applyMethod();
+        });
+
+toggle?.addEventListener("click", event => {
+  event.preventDefault();
+  usePassword = !usePassword;
+  applyMethod();
+  (usePassword ? field("password") : field("email"))?.focus();
+});
+
 function validate(): boolean {
   let ok = true;
   const name = field("name");
@@ -117,9 +179,10 @@ function validate(): boolean {
   if (email) {
     const bad = !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value.trim());
     setFieldError("email", bad ? "Enter a valid email address." : "");
+    if (bad) document.getElementById("email-field")?.removeAttribute("hidden");
     ok &&= !bad;
   }
-  if (password) {
+  if (password && usePassword && mode !== "verify") {
     const min = mode === "signup" ? 8 : 1;
     const bad = password.value.length < min;
     setFieldError("password", bad ? (mode === "signup" ? "Use at least 8 characters." : "Enter your password.") : "");
@@ -146,19 +209,19 @@ for (const button of document.querySelectorAll<HTMLButtonElement>("[data-reveal-
   });
 }
 
-// /verify: prefill the address the code went to, keep the code field digits-only, offer a new code.
+// ── /verify ──────────────────────────────────────────────────────────────────────────────
+const pending: Pending | undefined = mode === "verify" ? readPending() : undefined;
 if (mode === "verify") {
-  const email = storedEmail();
   const emailInput = field("email");
-  if (email && emailInput) {
-    emailInput.value = email;
+  if (pending && emailInput) {
+    emailInput.value = pending.email;
     const box = document.getElementById("email-field");
     if (box) box.hidden = true;
     const sub = document.getElementById("verify-sub");
     if (sub) {
       sub.textContent = "We sent a 6-digit code to ";
       const b = document.createElement("b");
-      b.textContent = email;
+      b.textContent = pending.email;
       sub.append(b, ". It expires in 10 minutes.");
     }
   }
@@ -178,12 +241,7 @@ if (mode === "verify") {
       }
       if (hint) hint.textContent = "Sending…";
       try {
-        const res = await fetch("/api/auth/email-otp/send-verification-otp", {
-          method: "POST",
-          credentials: "same-origin",
-          headers: { "content-type": "application/json", accept: "application/json" },
-          body: JSON.stringify({ email: address, type: "email-verification" }),
-        });
+        const res = await postJson("/api/auth/email-otp/send-verification-otp", { email: address, type: pending?.purpose ?? "sign-in" });
         if (hint) {
           hint.textContent = res.ok
             ? "We sent a new code. Earlier codes no longer work."
@@ -210,9 +268,26 @@ form?.addEventListener("input", event => {
   setFormError("");
 });
 
+/** One request per mode and method; what to do with a success is decided by the caller. */
+function request(email: string): Promise<Response> {
+  if (mode === "verify") {
+    const otp = field("code")?.value ?? "";
+    // No pending record (direct visit): a sign-in code, the common case.
+    return (pending?.purpose ?? "sign-in") === "sign-in"
+      ? postJson("/api/auth/sign-in/email-otp", { email, otp, ...(pending?.name ? { name: pending.name } : {}) })
+      : postJson("/api/auth/email-otp/verify-email", { email, otp });
+  }
+  if (!usePassword) return postJson("/api/auth/email-otp/send-verification-otp", { email, type: "sign-in" });
+  const password = field("password")?.value ?? "";
+  return mode === "signup"
+    ? postJson("/api/auth/sign-up/email", { email, password, name: field("name")?.value.trim() ?? "" })
+    : postJson("/api/auth/sign-in/email", { email, password });
+}
+
 form?.addEventListener("submit", async event => {
   event.preventDefault();
   setFormError("");
+  await ready;
   if (!validate()) return;
 
   const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]');
@@ -220,34 +295,27 @@ form?.addEventListener("submit", async event => {
   if (submit) submit.disabled = true;
 
   const email = field("email")?.value.trim() ?? "";
-  const body: Record<string, string> =
-    mode === "verify" ? { email, otp: field("code")?.value ?? "" } : { email, password: field("password")?.value ?? "" };
-  if (mode === "signup") body.name = field("name")?.value.trim() ?? "";
-  const endpoint =
-    mode === "verify" ? "/api/auth/email-otp/verify-email" : mode === "signup" ? "/api/auth/sign-up/email" : "/api/auth/sign-in/email";
-
   let leaving = false;
   try {
-    const res = await fetch(endpoint, {
-      method: "POST",
-      credentials: "same-origin",
-      headers: { "content-type": "application/json", accept: "application/json" },
-      body: JSON.stringify(body),
-    });
+    const res = await request(email);
     if (res.ok) {
       leaving = true; // keep the spinner while the next page loads
-      // With email confirmation on, sign-up creates the account but no session: the code comes next.
+      if (mode !== "verify" && !usePassword) {
+        const name = mode === "signup" ? field("name")?.value.trim() : undefined;
+        return goVerify({ email, purpose: "sign-in", ...(name ? { name } : {}) });
+      }
+      // A password sign-up with email confirmation on creates the account but no session yet.
       const data = (await res.json().catch(() => ({}))) as { token?: string | null };
-      if (mode === "signup" && data.token === null) return goVerify(email);
-      if (mode === "verify") storeEmail(undefined);
+      if (mode === "signup" && data.token === null) return goVerify({ email, purpose: "email-verification" });
+      if (mode === "verify") writePending(undefined);
       location.assign(next);
       return;
     }
     const err = await readError(res);
-    // Unconfirmed account: the server has just mailed a fresh code.
+    // A password account that never confirmed its email: the server has just mailed a fresh code.
     if (err.code === "EMAIL_NOT_VERIFIED") {
       leaving = true;
-      return goVerify(email);
+      return goVerify({ email, purpose: "email-verification" });
     }
     const message =
       (err.code && FRIENDLY[err.code]) ||

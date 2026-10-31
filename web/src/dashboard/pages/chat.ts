@@ -41,7 +41,7 @@ function userMsg(m: Pick<ChatMessage, "text" | "attachments">, localFiles?: Pend
 }
 function botMsg(m?: ChatMessage): string {
   const tools = m?.tools?.length ? `<div class="tools">${m.tools.map(t => toolChip(t.summary, false, t.name)).join("")}</div>` : `<div class="tools"></div>`;
-  return `<div class="msg bot"><span class="bot-av" aria-hidden="true">X</span><div class="msg-body">${tools}<div class="md">${m ? markdown(m.text) : '<span class="typing"><i></i><i></i><i></i></span>'}</div></div></div>`;
+  return `<div class="msg bot"><span class="bot-av" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 64 64"><path d="M22 50V14H35A11 11 0 0 1 35 36H22" fill="none" stroke="#fff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/><circle cx="46" cy="49" r="6.5" fill="#e8553a"/></svg></span><div class="msg-body">${tools}<div class="md">${m ? markdown(m.text) : '<span class="typing"><i></i><i></i><i></i></span>'}</div></div></div>`;
 }
 
 export async function renderChat(view: HTMLElement, ctx: Ctx): Promise<void> {
@@ -381,7 +381,7 @@ export async function renderChat(view: HTMLElement, ctx: Ctx): Promise<void> {
   /* Load */
   const pendingPrompt = takePendingPrompt();
   if (chatId) {
-    inner.innerHTML = `<div class="msg bot"><span class="bot-av">X</span><div class="msg-body">${sk("70%", 14)}<div style="height:8px"></div>${sk("50%", 14)}</div></div>`;
+    inner.innerHTML = `<div class="msg bot"><span class="bot-av" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 64 64"><path d="M22 50V14H35A11 11 0 0 1 35 36H22" fill="none" stroke="#fff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/><circle cx="46" cy="49" r="6.5" fill="#e8553a"/></svg></span><div class="msg-body">${sk("70%", 14)}<div style="height:8px"></div>${sk("50%", 14)}</div></div>`;
   } else emptyState();
   void loadThreads();
   if (chatId) {

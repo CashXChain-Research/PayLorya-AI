@@ -18,10 +18,13 @@ export type Auth = ReturnType<typeof createAuth>;
 export const CODE_MINUTES = 10;
 
 /**
- * Email + password accounts in the AI CFO database. Its tables come from db.ts migrations.
- * With a mailer, a new account must confirm its email with a 6-digit code before it gets a session:
- * sign-up mails the code, a sign-in while unconfirmed mails a fresh one, and
- * POST /api/auth/email-otp/verify-email signs the user in. Without a mailer nothing changes.
+ * Accounts in the AI CFO database (tables from db.ts migrations).
+ *
+ * With a mailer, signing up and signing in work with a 6-digit email code by default
+ * (/api/auth/email-otp/send-verification-otp type "sign-in", then /api/auth/sign-in/email-otp,
+ * which creates the account on first use). A password is optional: an account created with one
+ * confirms its email with a code first (/api/auth/email-otp/verify-email), and a code-only account
+ * can add one later (setPassword). Without a mailer: email + password only, as before.
  */
 export function createAuth(sql: Sql, opts: { baseUrl: string; secret?: string; mailer?: Mailer }) {
   const mailer = opts.mailer;
@@ -42,8 +45,8 @@ export function createAuth(sql: Sql, opts: { baseUrl: string; secret?: string; m
         expiresIn: CODE_MINUTES * 60,
         allowedAttempts: 5,
         storeOTP: "hashed",
-        // Codes confirm or sign in existing accounts; new accounts come only from the sign-up form.
-        disableSignUp: true,
+        // A code for an unknown email creates the account (sign-up without a password).
+        disableSignUp: false,
         async sendVerificationOTP({ email, otp, type }) {
           if (!mailer) return;
           // Never fail the request on a mail error: the account exists and the user can ask for a new code.
@@ -60,6 +63,18 @@ export function createAuth(sql: Sql, opts: { baseUrl: string; secret?: string; m
   });
   return {
     auth,
+    /** Whether email codes can be delivered (sign-in by code is offered). */
+    codes: Boolean(mailer),
+    async hasPassword(headers: IncomingHttpHeaders): Promise<boolean> {
+      const accounts = await auth.api.listUserAccounts({ headers: fromNodeHeaders(headers) });
+      return accounts.some(a => a.providerId === "credential");
+    },
+    /** Adds a password to a code-only account, or changes it when currentPassword is given. */
+    async setPassword(headers: IncomingHttpHeaders, newPassword: string, currentPassword?: string): Promise<void> {
+      const h = fromNodeHeaders(headers);
+      if (currentPassword) await auth.api.changePassword({ body: { currentPassword, newPassword }, headers: h });
+      else await auth.api.setPassword({ body: { newPassword }, headers: h });
+    },
     async userFrom(headers: IncomingHttpHeaders): Promise<SessionUser | undefined> {
       const session = await auth.api.getSession({ headers: fromNodeHeaders(headers) });
       if (!session) return undefined;

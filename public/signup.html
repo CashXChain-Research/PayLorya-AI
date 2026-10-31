@@ -9,7 +9,7 @@
 <script src="/assets/theme-init.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/styles/base.css">
 <link rel="stylesheet" href="/styles/auth.css">
 <script type="module" src="/assets/auth.js"></script>
@@ -17,7 +17,7 @@
 <body class="auth">
 <nav class="nav">
   <div class="wrap nav-in">
-    <a class="logo" href="/"><span class="mark">P</span>PayFlow<span class="tag">AI</span></a>
+    <a class="logo" href="/"><span class="mark" aria-hidden="true"><svg width="17" height="17" viewBox="0 0 64 64"><path d="M22 50V14H35A11 11 0 0 1 35 36H22" fill="none" stroke="#fff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/><circle cx="46" cy="49" r="6.5" fill="#e8553a"/></svg></span>PayFlow<span class="tag">AI</span></a>
     <div class="nav-right">
       <a class="nav-link" href="/demo">Live demo</a>
       <button class="theme-toggle" type="button" data-theme-toggle aria-label="Toggle dark mode" aria-pressed="false">
@@ -30,7 +30,7 @@
 
 <main class="auth-main">
   <section class="auth-card reveal" aria-labelledby="auth-h">
-    <span class="mark lg" aria-hidden="true">X</span>
+    <span class="mark lg" aria-hidden="true"><svg width="28" height="28" viewBox="0 0 64 64"><path d="M22 50V14H35A11 11 0 0 1 35 36H22" fill="none" stroke="#fff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/><circle cx="46" cy="49" r="6.5" fill="#e8553a"/></svg></span>
     <h1 id="auth-h">Create your account</h1>
     <p class="sub">Early access is free. Set up your AI CFO in minutes.</p>
 
@@ -55,10 +55,10 @@
         </div>
         <p class="err" id="email-err" hidden></p>
       </div>
-      <div class="field">
-        <label for="f-password">Password</label>
+      <div class="field" id="password-field" hidden>
+        <label for="f-password">Password (optional)</label>
         <div class="input has-btn">
-          <input id="f-password" name="password" type="password" autocomplete="new-password" aria-describedby="password-err password-hint" required minlength="8">
+          <input id="f-password" name="password" type="password" autocomplete="new-password" aria-describedby="password-err password-hint" minlength="8">
           <button class="pw-toggle" type="button" data-reveal-pw aria-label="Show password" aria-pressed="false">
             <svg class="eye" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
             <svg class="eye-off" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l18 18M10.6 5.1A9.8 9.8 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-3.2 4.1M6.6 6.6A16.6 16.6 0 0 0 2 12s3.6 7 10 7a9.6 9.6 0 0 0 5.4-1.6M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>
@@ -67,6 +67,7 @@
         <p class="hint" id="password-hint">At least 8 characters.</p>
         <p class="err" id="password-err" hidden></p>
       </div>
+      <a href="#" class="pw-opt" data-password-toggle hidden>Add a password (optional)</a>
       <button class="btn primary block" type="submit"><span>Create account</span><svg class="arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
     </form>
 
