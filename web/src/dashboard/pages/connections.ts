@@ -1,9 +1,10 @@
 // Connections: wallets and accounts with balances, access level, refresh, remove; add from catalog.
 import { esc, short } from "../../shared/dom.js";
-import { del, get, patch, post } from "../api.js";
+import { ApiError, del, get, patch, post } from "../api.js";
 import type { Ctx } from "../state.js";
 import type { Access, CatalogEntry, Connection, ConnectionCreate, ConnectionKind, CxcState } from "../types.js";
 import { ago, balance, confirmDialog, copyText, dialog, empty, fieldError, icon, pageHead, sk, toast, usd, val } from "../ui.js";
+import { linkBank } from "../stripe-bank.js";
 import { cardanoWallets, connectCardano, connectEvm, hasEvmWallet } from "../wallets.js";
 
 const KIND_ICON: Record<ConnectionKind, string> = {
@@ -74,7 +75,7 @@ function connCard(c: Connection, i: number): string {
         <button type="button" role="radio" aria-checked="${c.access === "read"}" data-access="read" ${c.supports.write ? "" : "disabled"}>${icon("eye", 14)}Read-only</button>
         <button type="button" role="radio" aria-checked="${c.access === "read_write"}" data-access="read_write" ${c.supports.write ? "" : "disabled"}>${icon("pay", 14)}Read &amp; write</button>
       </div>
-      ${c.supports.write ? (c.kind === "cardano_wallet" ? `<span class="fine">Read &amp; write: you sign each tADA payout in your wallet. No keys are stored.</span>` : "") : `<span class="fine">${c.kind === "cardano_agent_wallet" ? "Pays the x402 verification fees only; payouts leave from your own wallet." : "Watch-only: this connection cannot send payments."}</span>`}
+      ${c.supports.write ? (c.kind === "cardano_wallet" ? `<span class="fine">Read &amp; write: you sign each tADA payout in your wallet. No keys are stored.</span>` : "") : `<span class="fine">${c.kind === "cardano_agent_wallet" ? "Pays the x402 verification fees only; payouts leave from your own wallet." : c.kind === "bank" ? "Read-only through Stripe: balances only, no money moves." : "Watch-only: this connection cannot send payments."}</span>`}
     </div>
     <div class="conn-foot"><span class="muted small">Added ${esc(ago(c.createdAt))}</span>
       <span><button type="button" class="icon-btn" data-rename aria-label="Rename">${icon("edit", 16)}</button><button type="button" class="icon-btn" data-refresh aria-label="Refresh balances" title="Refresh balances">${icon("refresh", 16)}</button><button type="button" class="icon-btn danger-h" data-remove aria-label="Remove connection" title="Remove">${icon("trash", 16)}</button></span></div>
@@ -250,6 +251,26 @@ export async function renderConnections(view: HTMLElement, ctx: Ctx): Promise<vo
     const b = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-kind]");
     const entry = b && catalog.find(c => c.kind === b.dataset.kind);
     if (!entry || !entry.available) return;
+    if (entry.viaStripe) {
+      b.disabled = true;
+      try {
+        const added = await linkBank();
+        if (!ctx.alive()) return;
+        const first = added[0];
+        if (first) {
+          conns.push(...added);
+          paint();
+          toast(added.length === 1 ? `${first.label} connected` : `${added.length} bank accounts connected`, "ok");
+          grid.querySelector(`[data-id="${CSS.escape(first.id)}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+      } catch (error) {
+        // API errors already showed a toast; Stripe.js errors did not.
+        if (!(error instanceof ApiError) && error instanceof Error) toast(error.message, "error");
+      } finally {
+        b.disabled = false;
+      }
+      return;
+    }
     const c = await addDialog(entry);
     if (c && ctx.alive()) {
       conns.push(c);

@@ -1,5 +1,6 @@
 import { CXC_SANDBOX_KEY, type CashXChainClient } from "../cashxchain.js";
-import { majorToMinor, toUsdMinor } from "./fx.js";
+import { exponent, majorToMinor, toUsdMinor } from "./fx.js";
+import { accountBalances, StripeError, type StripeFc } from "./stripe.js";
 import type { Access, Balance, ConnectionKind, ConnectionRow } from "./store.js";
 
 export interface CatalogEntry {
@@ -13,6 +14,8 @@ export interface CatalogEntry {
   acceptsApiKey?: boolean;
   /** CashXChain: the key may be left out, because the workspace's linked sub-account is read instead. */
   linkedFallback?: boolean;
+  /** Bank: linked through Stripe Financial Connections (POST /connections/bank/session), not POST /connections. */
+  viaStripe?: boolean;
 }
 
 export interface ConnectionEnv {
@@ -24,6 +27,8 @@ export interface ConnectionEnv {
   linkedSubAccount?: boolean;
   /** True when this server can seal a workspace's own CashXChain API key (BETTER_AUTH_SECRET is set). */
   acceptsApiKey?: boolean;
+  /** Stripe Financial Connections (STRIPE_SECRET_KEY): read-only bank balances. */
+  stripe?: StripeFc;
   fetch?: typeof fetch;
 }
 
@@ -67,11 +72,12 @@ export function catalog(env: ConnectionEnv): CatalogEntry[] {
     },
     {
       kind: "bank",
-      name: "Bank account",
-      description: "Open banking connections to read balances and transactions. Coming soon.",
+      name: env.stripe && !env.stripe.livemode ? "Bank account (Stripe test mode)" : "Bank account",
+      description: "Link your bank through Stripe Financial Connections. Read-only: balances feed your cash position and forecast. No money moves.",
       supports: { read: true, write: false },
-      available: false,
+      available: Boolean(env.stripe),
       needsAddress: false,
+      ...(env.stripe ? { viaStripe: true } : {}),
     },
   ];
 }
@@ -104,6 +110,7 @@ export function prepareConnection(
   if (!entry) return { error: "unknown connection kind" };
   if (!entry.available) return { error: `${entry.name} is not available yet` };
   const kind = entry.kind;
+  if (kind === "bank") return { error: "Link bank accounts with the Connect bank button (Stripe)" };
   let address: string | undefined;
   if (kind === "cardano_agent_wallet") address = env.agentWalletAddress;
   if (kind === "cardano_wallet") {
@@ -190,7 +197,18 @@ export async function fetchBalances(env: ConnectionEnv, c: Pick<ConnectionRow, "
         return { asset: b.currency, amount: b.available, usdMinor: Number.isFinite(amount) ? toUsdMinor(majorToMinor(amount, b.currency), b.currency) : undefined };
       });
     }
-    case "bank":
-      return [];
+    case "bank": {
+      if (!env.stripe || !c.address) throw new Error("Bank connections are not configured on this server");
+      // Ask for a fresh balance; when the bank cannot refresh yet, read the last one Stripe has.
+      const account = await env.stripe.refreshBalance(c.address).catch(async error => {
+        if (error instanceof StripeError) return env.stripe!.account(c.address!);
+        throw error;
+      });
+      return accountBalances(account).map(b => ({
+        asset: b.currency,
+        amount: (b.minor / 10 ** exponent(b.currency)).toFixed(exponent(b.currency)),
+        usdMinor: toUsdMinor(b.minor, b.currency),
+      }));
+    }
   }
 }
