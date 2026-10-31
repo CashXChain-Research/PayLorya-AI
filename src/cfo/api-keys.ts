@@ -30,6 +30,9 @@ export function newKey(): { key: string; hash: string; prefix: string } {
 
 export const hashKey = (key: string): string => createHash("sha256").update(key).digest("hex");
 
+/** The token of an `Authorization: Bearer …` header; shared by /api/v1 and /mcp so both read it alike. */
+export const bearerToken = (header: string | undefined): string | undefined => /^Bearer\s+(\S+)$/i.exec(header ?? "")?.[1];
+
 /**
  * Routes a key can never call: they move money, sign, or manage credentials and the agent's own
  * rights. Those stay with a person signed in to the dashboard. Payees and budgets count as rights:

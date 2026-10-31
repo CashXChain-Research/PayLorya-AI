@@ -36,7 +36,7 @@ export function createApp(config: Config, { runs, agent, cfo }: AppDeps): Expres
   // Before express.json(): Better Auth reads the raw body, and the CFO API parses its own (larger) bodies.
   if (cfo) mountCfo(app, cfo);
   else {
-    app.all(["/app", "/app/*splat", "/api/v1/*splat", "/api/auth/*splat"], (_req, res) => {
+    app.all(["/app", "/app/*splat", "/api/v1/*splat", "/api/auth/*splat", "/mcp"], (_req, res) => {
       res.status(503).json({ error: "The AI CFO is temporarily unavailable. The demo at /demo still works." });
     });
   }
