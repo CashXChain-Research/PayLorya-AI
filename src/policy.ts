@@ -36,13 +36,17 @@ export class SpendLedger {
   // Payment being signed or in flight: locks the invoice and holds budget until marked.
   private pending = new Map<string, bigint>();
 
-  constructor(private readonly policy: SpendPolicy) {}
+  /** `what` names the purchase in refusals: the report fee, or the invoice payout. */
+  constructor(
+    private readonly policy: SpendPolicy,
+    private readonly what = "report",
+  ) {}
 
   canPay(fingerprint: string, amount: bigint): { ok: true } | { ok: false; reason: string } {
     if (this.unknownFingerprints.has(fingerprint)) {
       return { ok: false, reason: "previous payment for this invoice has unknown settlement; resolve before paying again" };
     }
-    if (this.paidFingerprints.has(fingerprint)) return { ok: false, reason: "report for this invoice already paid" };
+    if (this.paidFingerprints.has(fingerprint)) return { ok: false, reason: `${this.what} for this invoice already paid` };
     if (this.pending.has(fingerprint)) return { ok: false, reason: "payment for this invoice already in progress" };
     const held = [...this.pending.values()].reduce((sum, a) => sum + a, this.spent);
     if (held + amount > this.policy.sessionBudgetLovelace) return { ok: false, reason: "session budget exhausted" };
@@ -82,8 +86,8 @@ export class SpendLedger {
 
 /** Cheap local checks before spending anything on the paid report. */
 export function precheck(invoice: Invoice): { ok: true } | { ok: false; reason: string } {
-  if (!invoice.iban && !invoice.routingNumber) {
-    return { ok: false, reason: "no account identifier (IBAN or routing number) extracted" };
+  if (invoice.currency === "ADA" ? !invoice.cardanoAddress : !invoice.iban && !invoice.routingNumber) {
+    return { ok: false, reason: "no account identifier (IBAN, routing number or Cardano address) extracted" };
   }
   return { ok: true };
 }

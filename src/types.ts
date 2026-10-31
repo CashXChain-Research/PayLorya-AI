@@ -10,6 +10,8 @@ export const CURRENCY_EXPONENT: Record<string, number> = {
   PLN: 2,
   SEK: 2,
   JPY: 0,
+  // Cardano test ADA (tADA on Preprod). Minor unit is lovelace.
+  ADA: 6,
 };
 
 export const InvoiceSchema = z.object({
@@ -23,6 +25,8 @@ export const InvoiceSchema = z.object({
   bic: z.string().max(11).optional(),
   routingNumber: z.string().max(9).optional(),
   accountNumber: z.string().max(34).optional(),
+  // Payee wallet printed on the invoice. Data only: it is paid only if it equals the verified payee record.
+  cardanoAddress: z.string().max(120).optional(),
 });
 export type Invoice = z.infer<typeof InvoiceSchema>;
 
@@ -72,13 +76,50 @@ export interface PaymentProof {
   settledAt: string;
 }
 
+export type PayoutRail = "cxc_fiat" | "cardano_preprod";
+
+export interface RouteCheck {
+  id: "payee" | "account" | "rail" | "limit" | "wallet";
+  status: CheckStatus;
+  message: string;
+}
+
+/**
+ * Deterministic payout route. `destination` always comes from the verified payee record,
+ * never from invoice text.
+ */
+export interface RouteDecision {
+  status: "selected" | "unavailable" | "blocked";
+  rail?: PayoutRail;
+  payee?: string;
+  destination?: string;
+  checks: RouteCheck[];
+  reason: string;
+}
+
 export interface PaymentDraft {
   status: "awaiting_human_approval";
-  executable: false;
+  /** True only when a payout route was selected; execution still needs human approval. */
+  executable: boolean;
   invoiceId: string;
   supplier: string;
   amountMinor: number;
   currency: string;
   routeQuote?: RouteQuote;
+  route: RouteDecision;
   note: string;
+}
+
+export interface PayoutResult {
+  rail: PayoutRail;
+  /** confirmed/submitted: real Preprod tx. simulated: no money moved. unknown: signed, outcome unclear. */
+  status: "confirmed" | "submitted" | "simulated" | "unknown";
+  simulated: boolean;
+  amountMinor: number;
+  currency: string;
+  destination: string;
+  reference?: string;
+  explorerUrl?: string;
+  label: string;
+  executedAt: string;
 }

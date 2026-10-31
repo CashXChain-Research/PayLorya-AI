@@ -1,28 +1,42 @@
-import { decodeCardanoTransaction, toClientCardanoSigner, type ClientCardanoSigner } from "@x402/cardano";
+import { decodeCardanoTransaction, toClientCardanoSigner, type ClientCardanoSigner, type ClientCardanoSignResult } from "@x402/cardano";
 import { ExactCardanoScheme } from "@x402/cardano/exact/client";
 import { wrapFetchWithPayment, x402Client, x402HTTPClient } from "@x402/fetch";
 import { blockfrostProvider, CARDANO_NETWORK, type Config } from "./config.js";
 import { extractInvoice } from "./extract.js";
+import { blockfrostSubmitter, simulatedCxcPayouts, type ChainSubmitter, type FiatPayoutClient } from "./payout.js";
 import { filterOffers, precheck, SpendLedger, type SpendPolicy } from "./policy.js";
 import { invoiceFingerprint } from "./readiness.js";
+import { decideRoute, payeeDirectory, type VerifiedPayee } from "./routing.js";
 import type { Run, RunStore } from "./runs.js";
 import { READINESS_PATH } from "./seller.js";
-import { InvoiceSchema, type Invoice, type PaymentDraft, type ReadinessReport } from "./types.js";
+import { InvoiceSchema, type Invoice, type PaymentDraft, type PayoutResult, type ReadinessReport, type RouteDecision } from "./types.js";
+
+/** Payout rails; tests inject stubs. */
+export interface PayoutRails {
+  submitter?: ChainSubmitter;
+  fiat?: FiatPayoutClient;
+}
 
 /**
  * Buyer role: the autonomous agent. Claude only extracts fields; every money decision
  * (whether to pay, how much, to whom, how often) is made by the deterministic policy.
+ * It pays report fees on its own within limits; an invoice payout needs human approval.
  */
 export class BuyerAgent {
   private readonly signer: ClientCardanoSigner;
   private readonly policy: SpendPolicy;
   private readonly ledger: SpendLedger;
+  private readonly payoutLedger: SpendLedger;
+  private readonly payees: VerifiedPayee[];
+  private readonly fiat: FiatPayoutClient;
+  private submitter?: ChainSubmitter;
   private walletQueue: Promise<void> = Promise.resolve();
 
   constructor(
     private readonly config: Config,
     private readonly runs: RunStore,
     signer?: ClientCardanoSigner, // tests inject a stub; production derives it from BUYER_MNEMONIC
+    rails: PayoutRails = {},
   ) {
     if (!(signer || config.BUYER_MNEMONIC) || !config.SELLER_ADDRESS) throw new Error("BUYER_MNEMONIC and SELLER_ADDRESS required");
     this.signer =
@@ -39,6 +53,14 @@ export class BuyerAgent {
       maxPaymentsPerRun: config.MAX_PAYMENTS_PER_RUN,
     };
     this.ledger = new SpendLedger(this.policy);
+    // Separate budget for invoice payouts; fiat payouts hold 0 lovelace but still lock the invoice.
+    this.payoutLedger = new SpendLedger(
+      { allowedPayTo: [], maxPriceLovelace: config.PAYOUT_MAX_LOVELACE, sessionBudgetLovelace: config.PAYOUT_BUDGET_LOVELACE, maxPaymentsPerRun: 1 },
+      "payout",
+    );
+    this.payees = payeeDirectory(config.SUPPLIER_CARDANO_ADDRESS);
+    this.fiat = rails.fiat ?? simulatedCxcPayouts;
+    this.submitter = rails.submitter;
   }
 
   get buyerAddress(): string {
@@ -47,6 +69,10 @@ export class BuyerAgent {
 
   get spentLovelace(): bigint {
     return this.ledger.spentLovelace;
+  }
+
+  get paidOutLovelace(): bigint {
+    return this.payoutLedger.spentLovelace;
   }
 
   async process(run: Run): Promise<void> {
@@ -65,8 +91,11 @@ export class BuyerAgent {
       run.report = report;
 
       if (report.verdict === "ready_for_review") {
-        run.draft = draftFrom(invoice, report);
-        this.runs.transition(run, "DRAFT_READY", "Awaiting human approval; nothing executed");
+        run.route = this.route(invoice);
+        if (run.route.status === "blocked") return this.runs.transition(run, "BLOCKED", run.route.reason);
+        run.draft = draftFrom(invoice, report, run.route);
+        const ready = run.draft.executable ? "nothing executed" : `not executable: ${run.route.reason}`;
+        this.runs.transition(run, "DRAFT_READY", `Awaiting human approval; ${ready}`);
       } else {
         this.runs.transition(run, report.verdict === "blocked" ? "BLOCKED" : "NEEDS_INFO", report.verdict);
       }
@@ -74,6 +103,118 @@ export class BuyerAgent {
       run.error = error instanceof Error ? error.message : String(error);
       if (run.state !== "SETTLEMENT_UNKNOWN") this.runs.transition(run, "FAILED", run.error);
     }
+  }
+
+  /**
+   * Human approval of an executable draft. The state changes synchronously, so a double click
+   * cannot start two payouts; `done` settles when the payout has an outcome.
+   */
+  approve(run: Run): { ok: true; done: Promise<void> } | { ok: false; reason: string } {
+    if (run.state !== "DRAFT_READY" || !run.draft) return { ok: false, reason: `run is ${run.state}, not awaiting approval` };
+    if (!run.draft.executable) return { ok: false, reason: run.draft.route.reason };
+    this.runs.transition(run, "EXECUTING", `Approved: ${run.draft.route.rail}`);
+    return { ok: true, done: this.execute(run) };
+  }
+
+  reject(run: Run): { ok: true } | { ok: false; reason: string } {
+    if (run.state !== "DRAFT_READY") return { ok: false, reason: `run is ${run.state}, not awaiting approval` };
+    this.runs.transition(run, "REJECTED", "Rejected by a human; nothing paid");
+    return { ok: true };
+  }
+
+  private route(invoice: Invoice): RouteDecision {
+    return decideRoute(invoice, this.payees, { payoutMaxLovelace: this.config.PAYOUT_MAX_LOVELACE });
+  }
+
+  private async execute(run: Run): Promise<void> {
+    try {
+      const invoice = run.invoice!;
+      // Re-derive the route at execution time: only the directory decides where money goes.
+      const route = this.route(invoice);
+      if (route.status !== "selected" || route.destination !== run.draft!.route.destination) {
+        throw new Error("payout route changed since the draft; nothing executed");
+      }
+      if (route.rail === "cardano_preprod") await this.withWallet(() => this.payOnCardano(run, invoice, route.destination!));
+      else await this.payViaCxc(run, invoice, route.destination!);
+    } catch (error) {
+      run.error = error instanceof Error ? error.message : String(error);
+      if (run.state === "EXECUTING") this.runs.transition(run, "FAILED", run.error);
+    }
+  }
+
+  /** tADA from the buyer wallet to the verified payee wallet. Signed locally, broadcast via Blockfrost. */
+  private async payOnCardano(run: Run, invoice: Invoice, destination: string): Promise<void> {
+    const fingerprint = run.fingerprint!;
+    const amount = BigInt(invoice.amountMinor);
+    const hold = this.payoutLedger.reserve(fingerprint, amount);
+    if (!hold.ok) throw new Error(`payout refused before signing: ${hold.reason}`);
+
+    let signed: ClientCardanoSignResult;
+    try {
+      signed = await this.signer.buildAndSignPaymentTransaction({
+        network: CARDANO_NETWORK,
+        payTo: destination,
+        asset: "lovelace",
+        amount: amount.toString(),
+        maxTimeoutSeconds: 600,
+        extra: { assetTransferMethod: "default" },
+      });
+    } catch (error) {
+      this.payoutLedger.release(fingerprint); // nothing left the wallet
+      throw error;
+    }
+
+    const base = { rail: "cardano_preprod" as const, simulated: false, amountMinor: invoice.amountMinor, currency: invoice.currency, destination };
+    const explorer = (tx?: string) => (tx ? { reference: tx, explorerUrl: `${this.config.EXPLORER_TX_URL}${tx}` } : {});
+    let sent: Awaited<ReturnType<ChainSubmitter["submit"]>>;
+    try {
+      this.submitter ??= blockfrostSubmitter(this.config);
+      sent = await this.submitter.submit(signed.transaction);
+    } catch (error) {
+      // The broadcast may have reached the chain: count it and lock the invoice.
+      const tx = signedTxHash(signed.transaction);
+      this.payoutLedger.markUnknown(fingerprint, amount);
+      run.error = error instanceof Error ? error.message : String(error);
+      run.payout = { ...base, status: "unknown", ...explorer(tx), label: "Payout outcome unknown: check the explorer before paying again", executedAt: new Date().toISOString() };
+      return this.runs.transition(run, "PAYOUT_UNKNOWN", tx ? `tx ${tx}: ${run.error}` : run.error);
+    }
+    this.payoutLedger.markPaid(fingerprint, amount);
+    const confirmed = sent.status === "confirmed";
+    run.payout = {
+      ...base,
+      status: confirmed ? "confirmed" : "submitted",
+      ...explorer(sent.txHash),
+      label: confirmed ? "Paid on Cardano Preprod (testnet)" : "Broadcast to Cardano Preprod; confirmation pending",
+      executedAt: new Date().toISOString(),
+    };
+    this.runs.transition(run, "EXECUTED", sent.txHash);
+  }
+
+  private async payViaCxc(run: Run, invoice: Invoice, destination: string): Promise<void> {
+    const fingerprint = run.fingerprint!;
+    const hold = this.payoutLedger.reserve(fingerprint, 0n);
+    if (!hold.ok) throw new Error(`payout refused: ${hold.reason}`);
+    const base = { rail: "cxc_fiat" as const, simulated: this.fiat.simulated, amountMinor: invoice.amountMinor, currency: invoice.currency, destination };
+    let reference: string;
+    try {
+      ({ reference } = await this.fiat.payout({ idempotencyKey: run.id, invoice, destination }));
+    } catch (error) {
+      // A real API may have accepted the payout before failing: lock, never retry blindly.
+      this.payoutLedger.markUnknown(fingerprint, 0n);
+      run.error = error instanceof Error ? error.message : String(error);
+      run.payout = { ...base, status: "unknown", label: "Payout outcome unknown: reconcile with CashXChain before paying again", executedAt: new Date().toISOString() };
+      return this.runs.transition(run, "PAYOUT_UNKNOWN", run.error);
+    }
+    this.payoutLedger.markPaid(fingerprint, 0n);
+    const payout: PayoutResult = {
+      ...base,
+      status: this.fiat.simulated ? "simulated" : "submitted",
+      reference,
+      label: this.fiat.label,
+      executedAt: new Date().toISOString(),
+    };
+    run.payout = payout;
+    this.runs.transition(run, "EXECUTED", reference);
   }
 
   private async extract(input: string): Promise<Invoice> {
@@ -229,15 +370,21 @@ function isReadinessReport(body: unknown): body is ReadinessReport {
   return typeof r === "object" && r !== null && VERDICTS.has(r.verdict) && Array.isArray(r.checks) && r.payoutExecuted === false;
 }
 
-function draftFrom(invoice: Invoice, report: ReadinessReport): PaymentDraft {
+function draftFrom(invoice: Invoice, report: ReadinessReport, route: RouteDecision): PaymentDraft {
+  const executable = route.status === "selected";
   return {
     status: "awaiting_human_approval",
-    executable: false,
+    executable,
     invoiceId: invoice.id,
     supplier: invoice.supplier,
     amountMinor: invoice.amountMinor,
     currency: invoice.currency,
     routeQuote: report.routeQuote,
-    note: "Draft only. No CashXChain payout endpoint is called from this demo.",
+    route,
+    note: !executable
+      ? `Not executable: ${route.reason}.`
+      : route.rail === "cardano_preprod"
+        ? "On approval the agent pays tADA on Cardano Preprod to the verified wallet."
+        : "On approval the agent submits the payout to CashXChain (simulated in this demo: no bank transfer).",
   };
 }
