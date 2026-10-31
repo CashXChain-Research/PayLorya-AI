@@ -167,8 +167,10 @@ is recorded in [SUBMISSION.md](docs/SUBMISSION.md); commands above are not a cla
 - tADA on Cardano Preprod (testnet) only; synthetic invoices only.
 - Report route/fees, corridors, FX and ETA are simulated. Supplier payouts use the CashXChain
   sandbox only; no production key is accepted.
-- CashXChain plan limits apply: the free plan's single-payment limit is USD 2,500, so larger sample
-  invoices are refused with `plan_limit_exceeded` (nothing paid).
+- CashXChain plan limits apply (free plan: USD 2,500 per payout, 5,000 per day, 10,000 per month).
+  The samples are sized for that; larger invoices are refused with `plan_limit_exceeded`, nothing paid.
+- Cross-currency payouts (e.g. a USD invoice paid from the EUR account) rely on the sandbox rail
+  converting; production would need an FX quote, which is not implemented.
 - `/api/runs/:id/approve` is unauthenticated like the rest of the demo API: anyone with the URL can
   approve a prepared sandbox payout. Fine for test money; production needs real approver auth.
 - No AML, sanctions, KYB or regulatory approval claim.

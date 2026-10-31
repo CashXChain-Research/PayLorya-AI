@@ -99,7 +99,7 @@ Written against docs.cashxchain.com/docs/api and checked against the backend DTO
 
 | Step | Call | Outcome when it does not work |
 | --- | --- | --- |
-| Source account | `GET /v1/banking/accounts`: active account in the invoice currency | draft not executable (`blockedReason`) |
+| Source account | `GET /v1/banking/accounts`: active account in the invoice currency, else the primary (or first) active account; the sandbox rail converts (`crossCurrency: true`) | no active account: draft not executable (`blockedReason`) |
 | Corridor | `GET /v1/banking/corridors?currency&country&entity_type=business` | `corridor_unsupported` -> `BLOCKED` |
 | Account mapping | invoice IBAN / ABA / BIC onto an `accepted_schemes` entry; required corridor fields (e.g. `account_type` for USD/US) | `NEEDS_INFO`, naming the field |
 | Beneficiary | `POST /v1/banking/beneficiaries`, key `agentpay-ben-<hash of payee>` | `400` -> `NEEDS_INFO` |
@@ -121,8 +121,12 @@ Any other API failure (auth, 5xx, network) leaves the draft non-executable with 
   key means a restart cannot reach a fresh key while an earlier one could still pay.
 - `5xx`, timeout, network: `PAYOUT_UNKNOWN`. Approving again ("Check status") replays the same key.
 - `approve` checks and sets state synchronously: a double click cannot send twice.
-- Not handled (cannot happen in the sandbox): payee-name `accept-verification`, FX quotes for
-  cross-currency payouts. Both would be required before production.
+- Not handled because the sandbox does not need them: payee-name `accept-verification` (the sandbox
+  answers `not_checked`) and `fx_quote_id` for cross-currency payouts (the sandbox rail converts
+  itself; production refuses a cross-currency payout without one). Both are required before
+  production.
+- Plan limits are CashXChain's: free plan USD 2,500 per payout, 5,000 per day, 10,000 per month. Over
+  a limit the create answers `422 plan_limit_exceeded` and nothing is paid. The samples stay small.
 
 ## Readiness checks
 
