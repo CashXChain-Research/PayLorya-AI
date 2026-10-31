@@ -14,6 +14,8 @@ body.auth::before {
 .mark.lg { width: 48px; height: 48px; border-radius: 24%; font-size: 22px; margin-bottom: 24px; }
 .auth-card h1 { margin: 0; font-size: 28px; line-height: 1.15; letter-spacing: -.035em; font-weight: 700; }
 .auth-card .sub { margin: 8px 0 0; color: var(--ink-2); font-size: 15px; }
+.auth-consent { margin: 20px 0 0; font-size: 12.5px; line-height: 1.65; color: var(--ink-2); }
+.auth-consent a { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
 
 /* "Continue with Google", shown when the server has a Google client. */
 .oauth { margin-top: 28px; }

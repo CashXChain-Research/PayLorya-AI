@@ -66,6 +66,10 @@ h1, h2, h3 { letter-spacing: -.02em; }
 .menu a, .menu button { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 9px; color: var(--ink); font-size: 13.5px; border: 0; background: none; cursor: pointer; text-align: left; }
 .menu a:hover, .menu button:hover { background: var(--field); }
 .menu button { color: var(--danger); }
+.side-legal { display: flex; flex-wrap: wrap; gap: 6px 12px; padding: 8px 6px 0; font-size: 11px; line-height: 1.5; }
+.side-legal a { color: var(--ink-2); text-decoration: underline; text-underline-offset: 3px; }
+.side-legal a:hover { color: var(--accent); }
+.side-copyright { padding: 2px 6px; font-size: 10px; line-height: 1.5; color: var(--ink-3); }
 
 .av { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; font-weight: 600; font-size: 13px; flex: none; }
 .av.v0 { background: var(--accent-soft); color: var(--accent); }
