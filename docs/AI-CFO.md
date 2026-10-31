@@ -124,15 +124,16 @@ account gets a CashXChain sub-account: a [Platform managed account](https://docs
 - Linked: the workspace's CashXChain connection reads the sub-account's own accounts and balances
   (`Cxc-Account` header). `GET /api/v1/cashxchain`, `POST /api/v1/cashxchain/link`.
 - Payouts from a sub-account need CashXChain's money permission on the master key
-  (`can_delegate_money`, staff-only) and grant scopes beyond the default; until then payouts keep
-  using the platform's own sandbox account (`CASHXCHAIN_API_KEY`).
+  (`can_delegate_money`, staff-only) and grant scopes beyond the default. Until then a linked
+  workspace pays out only with its own API key (below).
 - Sandbox only: live keys are dropped at startup (`/api/health` → `cashxchain.refused`).
 
 ## Your own CashXChain account and wallets
 
-A workspace can bring its own accounts instead of PayLorya AI's shared ones (Connections page).
+A workspace uses its own accounts (Connections page). PayLorya AI's shared sandbox account
+(`CASHXCHAIN_API_KEY`) serves the public demo only: no workspace reads its balances or pays from it.
 
-- **CashXChain by API key.** Adding the CashXChain connection takes the workspace's own sandbox
+- **CashXChain by API key (required).** Adding the CashXChain connection needs the workspace's own sandbox
   key (`cxc_sk_sandbox_…`, or `cxc_rk_sandbox_…` with `accounts:read`; to pay, also
   `payments:read`, `payments:write` and `beneficiaries:write`). The server checks it against
   CashXChain (`GET /v1/banking/accounts`) before storing it. Live keys are refused.
@@ -143,8 +144,10 @@ A workspace can bring its own accounts instead of PayLorya AI's shared ones (Con
   own keys are refused.
 - **Balances and payouts use that key.** An approved fiat payment of a workspace whose read & write
   CashXChain connection carries a key leaves from that account (`BuyerAgent.useFiatRoute`). If the
-  key cannot be opened, the payment fails; it never falls back to the shared account. Without a
-  key the connection is PayLorya AI's shared sandbox account (`CASHXCHAIN_API_KEY`), as before.
+  key cannot be opened, the payment fails; it never falls back to the shared account.
+- **Without a key** a CashXChain connection is allowed only for a linked sub-account, and it only
+  reads. A key-less connection made before keys were required shows an error and cannot pay
+  (`NEEDS_OWN_KEY`); remove it and connect again with the key.
 - **Wallets by browser popup.** The Cardano and EVM watch-only connections offer "Connect Lace /
   Eternl / …" (CIP-30) and "Connect browser wallet" (EIP-1193, MetaMask). The wallet's permission
   popup hands over an address only; Cardano must be on a testnet (network id 0). The AI CFO reads

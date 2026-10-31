@@ -11,8 +11,8 @@ export interface CatalogEntry {
   needsAddress: boolean;
   /** CashXChain: the workspace may connect its own account with an API key. */
   acceptsApiKey?: boolean;
-  /** CashXChain: without a key, PayLorya AI's shared sandbox account is used. */
-  sharedFallback?: boolean;
+  /** CashXChain: the key may be left out, because the workspace's linked sub-account is read instead. */
+  linkedFallback?: boolean;
 }
 
 export interface ConnectionEnv {
@@ -20,6 +20,8 @@ export interface ConnectionEnv {
   /** The platform's Preprod agent wallet, when x402 is configured. */
   agentWalletAddress?: string;
   cashxchain?: CashXChainClient;
+  /** `cashxchain` is the workspace's own linked sub-account (CxcLinker), not PayLorya AI's shared one. */
+  linkedSubAccount?: boolean;
   /** True when this server can seal a workspace's own CashXChain API key (BETTER_AUTH_SECRET is set). */
   acceptsApiKey?: boolean;
   fetch?: typeof fetch;
@@ -38,14 +40,14 @@ export function catalog(env: ConnectionEnv): CatalogEntry[] {
     {
       kind: "cashxchain",
       name: "CashXChain account (sandbox)",
-      description: env.acceptsApiKey
-        ? "Your CashXChain account by API key: fiat balances and payouts over SEPA, ACH and more. Sandbox: test money only."
-        : "Fiat balances and payouts over CashXChain rails: SEPA, ACH and more. Sandbox: test money only.",
+      description: "Your CashXChain account by API key: fiat balances and payouts over SEPA, ACH and more. Sandbox: test money only.",
       supports: { read: true, write: true },
-      available: Boolean(env.cashxchain || env.acceptsApiKey),
+      // Always the workspace's own account: by its API key, or its linked sub-account. PayLorya AI's
+      // shared sandbox account (CASHXCHAIN_API_KEY) serves the public demo only.
+      available: Boolean(env.acceptsApiKey || (env.cashxchain && env.linkedSubAccount)),
       needsAddress: false,
       ...(env.acceptsApiKey ? { acceptsApiKey: true } : {}),
-      ...(env.cashxchain ? { sharedFallback: true } : {}),
+      ...(env.cashxchain && env.linkedSubAccount ? { linkedFallback: true } : {}),
     },
     {
       kind: "cardano_wallet",
@@ -117,7 +119,7 @@ export function prepareConnection(
     if (!env.acceptsApiKey) return { error: "This server cannot store API keys (BETTER_AUTH_SECRET is not set)" };
     apiKey = typeof input.apiKey === "string" ? input.apiKey.trim() : "";
     if (!CXC_SANDBOX_KEY.test(apiKey)) return { error: "Paste a CashXChain sandbox API key (cxc_sk_sandbox_… or cxc_rk_sandbox_…). Live keys are not accepted." };
-  } else if (kind === "cashxchain" && !env.cashxchain) {
+  } else if (kind === "cashxchain" && !(env.cashxchain && env.linkedSubAccount)) {
     return { error: "Paste your CashXChain sandbox API key" };
   }
   const wantsWrite = input.access === "read_write";

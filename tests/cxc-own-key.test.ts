@@ -5,7 +5,9 @@ import express, { type Express } from "express";
 import { afterEach, describe, expect, it } from "vitest";
 import type { BuyerAgent } from "../src/agent.js";
 import { createCfo, mountCfo, type PaymentEngine } from "../src/cfo/index.js";
+import { CashXChainClient } from "../src/cashxchain.js";
 import { KEY_UNREADABLE } from "../src/cfo/cxc-keys.js";
+import { NEEDS_OWN_KEY } from "../src/cfo/payments.js";
 import { connectionContext, keyHint, Vault } from "../src/cfo/vault.js";
 import { loadConfig } from "../src/config.js";
 import type { FiatPayoutClient } from "../src/payout.js";
@@ -58,15 +60,15 @@ function routeAgent() {
   return { agent, given };
 }
 
-async function start() {
+async function start(env: Record<string, string> = {}) {
   const fake = createFakeCxc();
   const cxcUrl = await listen(fake.app);
   const app = express();
   const base = await listen(app);
-  const config = loadConfig({ PUBLIC_BASE_URL: base, BETTER_AUTH_SECRET: SECRET });
+  const config = loadConfig({ PUBLIC_BASE_URL: base, BETTER_AUTH_SECRET: SECRET, ...env });
   const { agent, given } = routeAgent();
   const engine: PaymentEngine = { runs: new RunStore(), agent };
-  const deps = await createCfo(config, engine, { memory: true, cashxchainBaseUrl: cxcUrl });
+  const deps = await createCfo(config, engine, { memory: true, cashxchainFor: apiKey => new CashXChainClient({ apiKey, baseUrl: cxcUrl }) });
   mountCfo(app, deps);
 
   async function user(email: string) {
@@ -99,13 +101,13 @@ const settle = async (check: () => Promise<boolean>) => {
 };
 
 describe("a workspace connects its own CashXChain account by API key", () => {
-  it("offers the key in the catalog and refuses a missing, live or rejected key", async () => {
-    const s = await start();
+  it("requires the key, even with a shared platform key on the server, and refuses a live or rejected one", async () => {
+    // The platform key (public demo) is configured; workspaces still never get its account.
+    const s = await start({ CASHXCHAIN_API_KEY: "cxc_sk_sandbox_platformDemo1" });
     const me = await s.user("owner@brenner.example");
     const cxc = (await me("GET", "/api/v1/connections/catalog")).json.find((c: { kind: string }) => c.kind === "cashxchain");
-    // No platform key on this server: the own key is the only way in.
     expect(cxc).toMatchObject({ available: true, acceptsApiKey: true });
-    expect(cxc.sharedFallback).toBeUndefined();
+    expect(cxc.linkedFallback).toBeUndefined();
 
     expect((await me("POST", "/api/v1/connections", { kind: "cashxchain" })).json.error).toMatch(/Paste your CashXChain sandbox API key/);
     expect((await me("POST", "/api/v1/connections", { kind: "cashxchain", apiKey: "cxc_sk_live_abc123" })).json.error).toMatch(/Live keys are not accepted/);
@@ -173,6 +175,23 @@ describe("a workspace connects its own CashXChain account by API key", () => {
     expect((await me("GET", "/api/v1/payments")).json[0].error).toBe(KEY_UNREADABLE);
     expect(s.given).toHaveLength(0);
     expect(s.fake.payoutCreates()).toHaveLength(0);
+  });
+});
+
+describe("no shared CashXChain account for workspaces", () => {
+  it("a connection without a key (made before keys were required) reads nothing and cannot pay", async () => {
+    const s = await start({ CASHXCHAIN_API_KEY: "cxc_sk_sandbox_platformDemo1" });
+    const me = await s.user("owner@brenner.example");
+    const ws = (await me("GET", "/api/v1/me")).json.workspace.id;
+    const legacy = await s.deps.store.addConnection(ws, { kind: "cashxchain", label: "CashXChain account (sandbox)", network: "cashxchain:sandbox", access: "read_write" });
+
+    expect((await me("POST", `/api/v1/connections/${legacy.id}/refresh`)).json.error).toMatch(/connect CashXChain again with your API key/);
+    const payee = (await me("POST", "/api/v1/payees", { name: "Brenner GmbH", iban: "DE89370400440532013000" })).json;
+    const draft = (await me("POST", "/api/v1/payments", { payeeId: payee.id, amountMinor: 12_000, currency: "EUR", reason: "INV-1042" })).json;
+    if (draft.status === "pending_approval") await me("POST", `/api/v1/payments/${draft.id}/approve`);
+    await settle(async () => (await me("GET", "/api/v1/payments")).json[0].status === "failed");
+    expect((await me("GET", "/api/v1/payments")).json[0].error).toBe(NEEDS_OWN_KEY);
+    expect(s.given).toHaveLength(0);
   });
 });
 

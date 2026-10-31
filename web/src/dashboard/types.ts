@@ -83,8 +83,8 @@ export interface CatalogEntry {
   needsAddress: boolean;
   /** cashxchain: an own API key can be connected. */
   acceptsApiKey?: boolean;
-  /** cashxchain: without a key, PayLorya AI's shared sandbox account is used. */
-  sharedFallback?: boolean;
+  /** cashxchain: the key may be left out; the workspace's linked sub-account is read instead. */
+  linkedFallback?: boolean;
 }
 
 export type DocumentKind = "invoice" | "receipt" | "bank_statement" | "contract" | "payroll" | "tax" | "other";
