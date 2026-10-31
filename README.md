@@ -32,8 +32,9 @@ sets, from the customer's own wallet (signed in Lace) or their CashXChain accoun
    offer against its allowlist, price cap and budget, signs a tADA payment locally and retries. The
    facilitator verifies and settles on Preprod; the report comes back only after settlement, with the
    transaction hash and explorer link.
-5. **Payout:** tADA from the customer's own Cardano wallet (built by the server, signed in Lace via
-   CIP-30, broadcast by the agent) or fiat through the customer's CashXChain sandbox account.
+5. **Payout:** tADA from the customer's own Cardano wallet (built by the server from the wallet's
+   UTxOs, signed in Lace via CIP-30, submitted by the server through Blockfrost) or fiat through the
+   customer's CashXChain sandbox account. The agent itself only pays for the x402 check.
 6. **Audit:** every step, by user, agent or system, lands in the activity log.
 
 ## Cardano stack
@@ -97,8 +98,11 @@ The buyer serializes report purchases within its agent instance to avoid competi
 UTxOs. Separate deployments still need separate buyer wallets.
 
 A signed payment with an unclear outcome becomes `SETTLEMENT_UNKNOWN`: its amount stays counted
-and the invoice stays locked. Do not retry it blindly. State is in memory, so these protections
-do not survive a restart. In the AI CFO, a payout runs only after the policy or a human approves it.
+and the invoice stays locked. Do not retry it blindly. The demo agent keeps this state in memory, so
+there these protections do not survive a restart. AI CFO payments are stored in D1 and do: a payment
+cut off by a restart goes back to approval and resumes under the same idempotency key, and a sent
+tADA payout is settled from the chain. In the AI CFO, a payout runs only after the policy or a human
+approves it.
 
 ## Real vs simulated
 
