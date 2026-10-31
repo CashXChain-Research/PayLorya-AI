@@ -32,17 +32,25 @@ export class ExtractionError extends Error {}
 
 export async function extractInvoice(text: string, model: string): Promise<Invoice> {
   const client = new Anthropic();
+  const format = zodOutputFormat(ExtractionSchema);
   // No model fallback on purpose: a refusal stops the run instead of switching models mid-demo.
-  const response = await client.messages.parse({
+  const response = await client.messages.create({
     model,
     max_tokens: 16000,
     system: SYSTEM,
     messages: [{ role: "user", content: `<invoice>\n${text}\n</invoice>` }],
-    output_config: { effort: "low", format: zodOutputFormat(ExtractionSchema) },
+    output_config: { effort: "low", format },
   });
+  // Checked before parsing: messages.parse() throws a plain AnthropicError on refusal text that is not JSON.
   if (response.stop_reason === "refusal") throw new ExtractionError("model declined the extraction");
-  if (!response.parsed_output) throw new ExtractionError("model output did not match the schema");
-  return toInvoice(response.parsed_output);
+  const output = response.content.find(b => b.type === "text")?.text;
+  let parsed: Extraction;
+  try {
+    parsed = format.parse(output ?? "");
+  } catch {
+    throw new ExtractionError("model output did not match the schema");
+  }
+  return toInvoice(parsed);
 }
 
 /** Deterministic normalization and bounds checking of model output. */
