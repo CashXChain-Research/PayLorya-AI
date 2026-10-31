@@ -61,6 +61,9 @@ const P: Record<string, string> = {
   arrowDown: '<path d="M17 7L7 17M15 17H7V9"/>',
   more: '<circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/>',
   zap: '<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>',
+  key: '<circle cx="7.5" cy="15.5" r="5.5"/><path d="M21 2l-9.6 9.6M15.5 7.5l3 3L22 7l-3-3"/>',
+  webhook: '<path d="M18 16.98h-5.99c-1.1 0-1.95.94-2.48 1.9A4 4 0 0 1 2 17c.01-.7.2-1.4.57-2"/><path d="M6 17l3.13-5.78c.53-.97.1-2.18-.5-3.1a4 4 0 1 1 6.89-4.06"/><path d="M12 6l3.13 5.73C15.66 12.7 16.9 13 18 13a4 4 0 0 1 0 8"/>',
+  code: '<path d="M16 18l6-6-6-6M8 6l-6 6 6 6"/>',
 };
 
 export function icon(name: keyof typeof P | string, size = 18, sw = 1.9): string {

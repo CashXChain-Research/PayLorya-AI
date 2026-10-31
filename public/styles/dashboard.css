@@ -817,6 +817,18 @@ a.today-item:hover { background: var(--surface-2); }
 .acct-text span { color: var(--ink-2); font-size: 14px; overflow-wrap: anywhere; }
 .settings .acct-kv { grid-template-columns: auto minmax(0, 1fr); gap: 4px 14px; margin-top: 4px; font-size: 13px; }
 .acct-kv dd { color: var(--ink-2); }
+/* Settings › Developers: API keys and webhooks. Rows reuse the Payees list. */
+.settings .dev-wide { grid-column: 1 / -1; }
+.dev .payee-list { margin: 0 -12px; }
+.dev .payee-list li.revoked { opacity: .55; }
+.dev .payee-list li.revoked:hover { background: none; }
+.dev .pe-act { align-items: center; gap: 6px; }
+.callout.warn { background: var(--warn-soft); color: var(--warn); }
+.callout.warn .i { color: var(--warn); }
+/* A new key or secret, shown once: all of it visible (wraps), one click selects it. */
+.secret-row { display: flex; align-items: center; gap: 8px; }
+.secret { flex: 1; min-width: 0; padding: 10px 12px; border-radius: 12px; background: var(--field); color: var(--ink); font: 13px/1.45 var(--mono); word-break: break-all; user-select: all; }
+.secret-row .btn { flex: none; }
 
 /* Chat */
 body.full .main { max-width: none; padding: 0; height: 100vh; height: 100dvh; }

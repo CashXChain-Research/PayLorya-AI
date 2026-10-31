@@ -1,10 +1,11 @@
-// Settings: workspace name, account, optional password, appearance, sign out.
+// Settings: workspace name, account, optional password, appearance, sign out, and Developers (API keys, webhooks).
 import { esc } from "../../shared/dom.js";
 import { currentTheme, setTheme } from "../../shared/theme.js";
 import { get, patch, post } from "../api.js";
 import { type Ctx, emitState, signOut, state } from "../state.js";
 import type { Me, Workspace } from "../types.js";
 import { AUTONOMY, avatar, date, fieldError, icon, pageHead, sk, toast, val } from "../ui.js";
+import { developersSection, wireDevelopers } from "./developers.js";
 
 export async function renderSettings(view: HTMLElement, ctx: Ctx): Promise<void> {
   view.innerHTML = `${pageHead("Settings", "Workspace and account.")}<div class="settings">${[1, 2].map(() => `<div class="card">${sk("30%", 18)}<div style="height:18px"></div>${sk("100%", 44, 12)}</div>`).join("")}</div>`;
@@ -43,7 +44,8 @@ export async function renderSettings(view: HTMLElement, ctx: Ctx): Promise<void>
       <div class="card-head"><h2>Environment</h2></div>
       <p class="muted small">Payments in this workspace run on <b>Cardano Preprod</b> (testnet, tADA with no real value) and the <b>CashXChain sandbox</b> fiat rail (a test ledger). USD totals use indicative FX rates.</p>
     </section>
-  </div>`;
+  </div>
+  ${developersSection()}`;
   const form = view.querySelector<HTMLFormElement>("#ws-form")!;
   const save = view.querySelector<HTMLButtonElement>("#s-save")!;
   form.addEventListener("input", () => (save.disabled = val(form, "name") === (state.me?.workspace.name ?? ws.name)));
@@ -66,6 +68,7 @@ export async function renderSettings(view: HTMLElement, ctx: Ctx): Promise<void>
   });
   view.querySelector("#s-out")!.addEventListener("click", () => void signOut());
   wirePassword(view, ctx);
+  wireDevelopers(view.querySelector<HTMLElement>("#developers")!, ctx);
   view.querySelector("#s-theme")!.addEventListener("click", e => {
     const b = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-t]");
     if (!b) return;
