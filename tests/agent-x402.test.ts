@@ -8,8 +8,8 @@ import { decodeCardanoTransaction, type ClientCardanoSignInput, type ClientCarda
 import { ExactCardanoScheme } from "@x402/cardano/exact/client";
 import type { PaymentPayload, PaymentRequirements } from "@x402/core/types";
 import { decodePaymentResponseHeader, wrapFetchWithPayment, x402Client } from "@x402/fetch";
-import { BuyerAgent } from "../src/agent.js";
-import type { ChainSubmitter } from "../src/payout.js";
+import { BuyerAgent, type PayoutRails } from "../src/agent.js";
+import { isDefinitiveSubmitRejection, type ChainSubmitter, type ChainView } from "../src/payout.js";
 import { CRYPTO_PAYEE } from "../src/routing.js";
 import { CARDANO_NETWORK, loadConfig } from "../src/config.js";
 import { RunStore, type Run } from "../src/runs.js";
@@ -109,6 +109,7 @@ function stubSubmitter(): StubSubmitter {
   const submitter: StubSubmitter = {
     calls: [],
     status: "confirmed",
+    isDefinitiveRejection: isDefinitiveSubmitRejection,
     async submit(tx) {
       submitter.calls.push(tx);
       if (submitter.fail) throw submitter.fail;
@@ -211,7 +212,7 @@ const env = (facilitatorUrl: string, overrides: Env = {}): Env => ({
 /** Replaces the seller's report on its way out; `send` is the original res.json. */
 type Tamper = (res: Response, send: (body: unknown) => Response) => Response;
 
-async function startStack(opts: { seller?: Env; buyer?: Env; tamperReport?: Tamper } = {}) {
+async function startStack(opts: { seller?: Env; buyer?: Env; tamperReport?: Tamper; chain?: ChainView; walletSync?: PayoutRails["walletSync"] } = {}) {
   const events: string[] = [];
   const handled: ReadinessReport[] = [];
   const fac = await startFacilitator(events);
@@ -238,7 +239,8 @@ async function startStack(opts: { seller?: Env; buyer?: Env; tamperReport?: Tamp
   const runs = new RunStore();
   const signer = stubSigner();
   const submitter = stubSubmitter();
-  const agent = new BuyerAgent(config, runs, signer, { submitter });
+  // No grace by default so tests stay fast; wallet-sync tests set their own.
+  const agent = new BuyerAgent(config, runs, signer, { submitter, chain: opts.chain, walletSync: { graceMs: 0, ...opts.walletSync } });
   const run = async (inv: Invoice = invoice): Promise<Run> => {
     const r = runs.create(JSON.stringify(inv));
     await agent.process(r);
@@ -566,7 +568,7 @@ describe("buyer agent over real x402 (stub signer + stub facilitator)", () => {
     const s = await startStack();
     expect((await s.run()).state).toBe("DRAFT_READY");
     // Own ledger, e.g. after a restart: only the seller's duplicate check catches it.
-    const other = new BuyerAgent(s.config, s.runs, stubSigner());
+    const other = new BuyerAgent(s.config, s.runs, stubSigner(), { walletSync: { graceMs: 0 } });
     const run = s.runs.create(JSON.stringify(invoice));
     await other.process(run);
 
@@ -654,6 +656,25 @@ describe("invoice payout after human approval", () => {
     expect(s.signer.calls).toHaveLength(1);
   });
 
+  it("crypto: node refuses the payout before broadcast -> back to DRAFT_READY, nothing counted, approve again pays", async () => {
+    const s = await startStack();
+    const run = await s.run(adaInvoice);
+    s.submitter.fail = new Error('Blockfrost submitTx failed: 400 {"error":"Bad Request","message":"BadInputsUTxO","status_code":400}');
+    await approve(s.agent, run);
+
+    expect(states(run).slice(-2)).toEqual(["EXECUTING", "DRAFT_READY"]);
+    expect(lastNote(run)).toMatch(/^Payout refused before broadcast, nothing paid; approve again: Blockfrost submitTx failed: 400 /);
+    expect(run.payout).toBeUndefined();
+    expect(s.agent.paidOutLovelace).toBe(0n);
+
+    s.submitter.fail = undefined;
+    await approve(s.agent, run);
+    expect(run.state).toBe("EXECUTED");
+    expect(run.payout).toMatchObject({ status: "confirmed", reference: PAYOUT_TX });
+    expect(s.submitter.calls).toHaveLength(2);
+    expect(s.agent.paidOutLovelace).toBe(3_500_000n);
+  });
+
   it("crypto: submit error after signing -> PAYOUT_UNKNOWN, amount counted, invoice locked", async () => {
     const s = await startStack();
     const run = await s.run(adaInvoice);
@@ -714,6 +735,94 @@ describe("invoice payout after human approval", () => {
     expect(b.state).toBe("FAILED");
     expect(b.error).toBe("payout refused before signing: session budget exhausted");
     expect(s.signer.calls).toHaveLength(3); // two report fees, one payout
+  });
+});
+
+describe("wallet sync between transactions from the buyer wallet", () => {
+  type Stack = Awaited<ReturnType<typeof startStack>>;
+  const second = { ...invoice, id: "INV-2026-1043" };
+  // Records "sign" in the event log so the order of lookups and signatures is visible.
+  const traceSigner = (s: Stack) => {
+    const sign = s.signer.buildAndSignPaymentTransaction.bind(s.signer);
+    s.signer.buildAndSignPaymentTransaction = input => {
+      s.events.push("sign");
+      return sign(input);
+    };
+  };
+
+  it("the next payment waits until the previous tx is indexed", async () => {
+    const answers = [false, false, true];
+    let s!: Stack;
+    const chain: ChainView = {
+      async hasTransaction(hash) {
+        s.events.push(`lookup ${hash === TX ? "TX" : hash}`);
+        return answers.shift() ?? true;
+      },
+    };
+    s = await startStack({ chain, walletSync: { pollMs: 1 } });
+    traceSigner(s);
+
+    expect((await s.run()).state).toBe("DRAFT_READY");
+    expect((await s.run(second)).state).toBe("DRAFT_READY");
+    expect(s.events).toEqual([
+      ...["sign", "verify", "handler", "settle"],
+      ...["lookup TX", "lookup TX", "lookup TX"],
+      ...["sign", "verify", "handler", "settle"],
+    ]);
+  });
+
+  it("waits a grace period after the previous tx settled, for other indexers", async () => {
+    const s = await startStack({ chain: { hasTransaction: async () => true }, walletSync: { graceMs: 150 } });
+    await s.run();
+    const start = Date.now();
+    expect((await s.run(second)).state).toBe("DRAFT_READY");
+    expect(Date.now() - start).toBeGreaterThanOrEqual(120);
+  });
+
+  it("a tx that never shows up delays the next payment only up to the timeout", async () => {
+    let lookups = 0;
+    const s = await startStack({ chain: { hasTransaction: async () => (lookups++, false) }, walletSync: { timeoutMs: 40, pollMs: 5 } });
+    await s.run();
+    expect((await s.run(second)).state).toBe("DRAFT_READY");
+    expect(lookups).toBeGreaterThan(1);
+    expect(s.signer.calls).toHaveLength(2);
+  });
+
+  it("a verify rejection was never broadcast, so it is not waited for", async () => {
+    let lookups = 0;
+    const s = await startStack({ chain: { hasTransaction: async () => (lookups++, true) }, walletSync: { graceMs: 10_000 } });
+    s.fac.verify = res => void res.json({ isValid: false, invalidReason: "invalid_exact_cardano_payload_input_not_available", payer: BUYER });
+    expect((await s.run()).state).toBe("SETTLEMENT_UNKNOWN");
+    s.fac.verify = verifyOk;
+    expect((await s.run(second)).state).toBe("DRAFT_READY");
+    expect(lookups).toBe(0);
+  });
+
+  it("a confirmed invoice payout is waited for before the next x402 payment", async () => {
+    const seen: string[] = [];
+    const s = await startStack({ chain: { hasTransaction: async hash => (seen.push(hash), true) } });
+    const run = await s.run(adaInvoice);
+    await approve(s.agent, run);
+    expect(run.state).toBe("EXECUTED");
+    await s.run(second);
+    expect(seen).toEqual([TX, PAYOUT_TX]);
+  });
+});
+
+describe("definitive submit rejection", () => {
+  it.each([
+    ['Blockfrost submitTx failed: 400 {"message":"BadInputsUTxO"}', true],
+    ["Blockfrost submitTx failed: 500 Internal Server Error", false],
+    ["Blockfrost submitTx failed: 4000 odd", false],
+    ["Blockfrost submitTx returned an unexpected body: <html>", false],
+    ["submitTx timed out after 120000ms", false],
+    ["fetch failed", false],
+  ])("%s -> %s", (message, definitive) => {
+    expect(isDefinitiveSubmitRejection(new Error(message))).toBe(definitive);
+  });
+
+  it("non-errors are never definitive", () => {
+    expect(isDefinitiveSubmitRejection("Blockfrost submitTx failed: 400 x")).toBe(false);
   });
 });
 

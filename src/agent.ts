@@ -3,7 +3,7 @@ import { ExactCardanoScheme } from "@x402/cardano/exact/client";
 import { wrapFetchWithPayment, x402Client, x402HTTPClient } from "@x402/fetch";
 import { blockfrostProvider, CARDANO_NETWORK, type Config } from "./config.js";
 import { extractInvoice } from "./extract.js";
-import { blockfrostSubmitter, simulatedCxcPayouts, type ChainSubmitter, type FiatPayoutClient } from "./payout.js";
+import { blockfrostChainView, blockfrostSubmitter, simulatedCxcPayouts, type ChainSubmitter, type ChainView, type FiatPayoutClient } from "./payout.js";
 import { filterOffers, precheck, SpendLedger, type SpendPolicy } from "./policy.js";
 import { invoiceFingerprint } from "./readiness.js";
 import { decideRoute, payeeDirectory, type VerifiedPayee } from "./routing.js";
@@ -11,11 +11,22 @@ import type { Run, RunStore } from "./runs.js";
 import { READINESS_PATH } from "./seller.js";
 import { InvoiceSchema, type Invoice, type PaymentDraft, type PayoutResult, type ReadinessReport, type RouteDecision } from "./types.js";
 
-/** Payout rails; tests inject stubs. */
+/** Payout rails and chain access; tests inject stubs. */
 export interface PayoutRails {
   submitter?: ChainSubmitter;
   fiat?: FiatPayoutClient;
+  chain?: ChainView;
+  walletSync?: Partial<typeof WALLET_SYNC>;
 }
+
+/**
+ * Between two transactions from the buyer wallet: wait until our provider has indexed the previous
+ * one, then let other indexers (the hosted facilitator's) catch up for `graceMs` after it settled.
+ * Otherwise the next tx can be built on, or checked against, a stale UTxO set and fail after signing.
+ */
+const WALLET_SYNC = { timeoutMs: 90_000, pollMs: 3_000, graceMs: 30_000 };
+
+const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
 
 /**
  * Buyer role: the autonomous agent. Claude only extracts fields; every money decision
@@ -30,6 +41,10 @@ export class BuyerAgent {
   private readonly payees: VerifiedPayee[];
   private readonly fiat: FiatPayoutClient;
   private submitter?: ChainSubmitter;
+  private chain?: ChainView;
+  private readonly walletSync: typeof WALLET_SYNC;
+  // Last tx this wallet broadcast (or may have), and when we learned of it.
+  private lastTx?: { hash: string; at: number };
   private walletQueue: Promise<void> = Promise.resolve();
 
   constructor(
@@ -61,6 +76,8 @@ export class BuyerAgent {
     this.payees = payeeDirectory(config.SUPPLIER_CARDANO_ADDRESS);
     this.fiat = rails.fiat ?? simulatedCxcPayouts;
     this.submitter = rails.submitter;
+    this.chain = rails.chain;
+    this.walletSync = { ...WALLET_SYNC, ...rails.walletSync };
   }
 
   get buyerAddress(): string {
@@ -171,13 +188,20 @@ export class BuyerAgent {
       this.submitter ??= blockfrostSubmitter(this.config);
       sent = await this.submitter.submit(signed.transaction);
     } catch (error) {
+      run.error = error instanceof Error ? error.message : String(error);
+      if (this.submitter?.isDefinitiveRejection?.(error)) {
+        // Refused before the mempool (e.g. an input another tx already spent): nothing was broadcast.
+        this.payoutLedger.release(fingerprint);
+        return this.runs.transition(run, "DRAFT_READY", `Payout refused before broadcast, nothing paid; approve again: ${run.error}`);
+      }
       // The broadcast may have reached the chain: count it and lock the invoice.
       const tx = signedTxHash(signed.transaction);
+      if (tx) this.noteTx(tx);
       this.payoutLedger.markUnknown(fingerprint, amount);
-      run.error = error instanceof Error ? error.message : String(error);
       run.payout = { ...base, status: "unknown", ...explorer(tx), label: "Payout outcome unknown: check the explorer before paying again", executedAt: new Date().toISOString() };
       return this.runs.transition(run, "PAYOUT_UNKNOWN", tx ? `tx ${tx}: ${run.error}` : run.error);
     }
+    this.noteTx(sent.txHash);
     this.payoutLedger.markPaid(fingerprint, amount);
     const confirmed = sent.status === "confirmed";
     run.payout = {
@@ -234,12 +258,32 @@ export class BuyerAgent {
    * the same input; both pass verify, and the second broadcast fails after signing.
    */
   private withWallet<T>(pay: () => Promise<T>): Promise<T> {
-    const turn = this.walletQueue.then(pay);
+    const turn = this.walletQueue.then(() => this.syncWallet()).then(pay);
     this.walletQueue = turn.then(
       () => undefined,
       () => undefined,
     );
     return turn;
+  }
+
+  /** Remember a tx this wallet broadcast (or may have), so the next one waits for it. */
+  private noteTx(hash: string): void {
+    this.lastTx = { hash, at: Date.now() };
+  }
+
+  /** Runs inside the wallet queue, before the next tx is built. Bounded: never blocks forever. */
+  private async syncWallet(): Promise<void> {
+    const last = this.lastTx;
+    if (!last) return;
+    const { timeoutMs, pollMs, graceMs } = this.walletSync;
+    if (!this.chain && this.config.BLOCKFROST_PROJECT_ID) this.chain = blockfrostChainView(this.config);
+    if (this.chain) {
+      const deadline = Date.now() + timeoutMs;
+      while (!(await this.chain.hasTransaction(last.hash).catch(() => false)) && Date.now() < deadline) await sleep(pollMs);
+    }
+    const grace = last.at + graceMs - Date.now();
+    if (grace > 0) await sleep(grace);
+    if (this.lastTx === last) this.lastTx = undefined;
   }
 
   private async buyReport(run: Run, invoice: Invoice): Promise<ReadinessReport | undefined> {
@@ -298,6 +342,8 @@ export class BuyerAgent {
       // Verify rejections carry no PAYMENT-RESPONSE; core puts the facilitator's reason in PAYMENT-REQUIRED `error`.
       const reason = settle?.errorReason ?? paymentRequiredError(http, response);
       const detail = `HTTP ${response.status}${reason ? `, ${reason}` : ""}`;
+      // A settle response with a tx means the facilitator broadcast it; a verify rejection did not.
+      if (settle?.transaction) this.noteTx(settle.transaction);
       return this.failPayment(run, fingerprint, signedAmount, new Error(detail), settle?.transaction || signedTx);
     }
     // A proof needs an on-chain tx hash for a payment we actually signed.
@@ -316,6 +362,7 @@ export class BuyerAgent {
       explorerUrl: `${this.config.EXPLORER_TX_URL}${settle.transaction}`,
       settledAt: new Date().toISOString(),
     };
+    this.noteTx(settle.transaction);
     this.runs.transition(run, "PAID", settle.transaction);
     // Paid either way: a settled request without a usable report is a failed delivery, and the
     // invoice stays locked as paid instead of being bought again.
