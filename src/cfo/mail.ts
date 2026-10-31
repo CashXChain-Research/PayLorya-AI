@@ -8,8 +8,8 @@ export interface Mailer {
 }
 
 export const PRODUCT = "PayLorya AI";
-/** Footer of every mail, worded as on /legal: "PayLorya AI is a product of CashXChain Inc." */
-export const COMPANY = { name: "CashXChain Inc.", url: "https://cashxchain.com" };
+/** Our website, linked in the footer of every mail. */
+export const WEBSITE = "https://paylorya.valentin.is/";
 
 /**
  * Mail colors and font, mirroring the base.css tokens (--primary, --accent, --font). Mail clients
@@ -65,7 +65,7 @@ export function codeEmail(code: string, purpose: CodePurpose, minutes: number, o
   const link = base && opts.to ? codeLink(base, opts.to, code, purpose) : undefined;
   const lead = link && copy.linkLead ? copy.linkLead : copy.lead;
   const ignore = `If you did not ask for this, ignore this email; nothing happens without the ${link ? "link or code" : "code"}.`;
-  const footerText = `${PRODUCT}${base ? ` · ${base}` : ""}\nA product of ${COMPANY.name} · ${COMPANY.url}`;
+  const footerText = `${PRODUCT} · ${WEBSITE}`;
   const text = link
     ? `${lead}\n\n${link}\n\nOr enter this code: ${code}\n\nThe link and code expire in ${minutes} minutes. ${ignore}\n\n${footerText}`
     : `${lead}\n\n${code}\n\nThe code expires in ${minutes} minutes. ${ignore}\n\n${footerText}`;
@@ -92,9 +92,7 @@ export function codeEmail(code: string, purpose: CodePurpose, minutes: number, o
 ${body}
 </table>
 <table role="presentation" width="100%" style="max-width:480px;margin:16px auto 0">
-<tr><td style="font-size:12px;line-height:1.6;color:${t.muted};text-align:center">${
-    base ? `<a href="${attr(base)}/" style="color:${t.primary};font-weight:600;text-decoration:none">${PRODUCT}</a>` : PRODUCT
-  } is a product of <a href="${COMPANY.url}" style="color:${t.muted};text-decoration:underline">${COMPANY.name}</a></td></tr>
+<tr><td style="font-size:12px;line-height:1.6;color:${t.muted};text-align:center"><b style="color:${t.primary}">${PRODUCT}</b> · <a href="${WEBSITE}" style="color:${t.muted};text-decoration:underline">${WEBSITE.replace(/^https:\/\/|\/$/g, "")}</a></td></tr>
 </table></body></html>`;
   return { subject: `${code} is your ${PRODUCT} code: ${copy.subject}`, text, html };
 }

@@ -257,11 +257,11 @@ describe("Resend mailer", () => {
     expect(body.html).toContain('<img src="https://app.example/apple-touch-icon.png?v=3"');
     expect(body.html).toContain("Sign in to PayLorya AI");
     expect(body.html).toContain("123456");
-    // Footer: our website and the company behind the product.
-    expect(body.html).toContain('<a href="https://app.example/"');
-    expect(body.html).toContain('<a href="https://cashxchain.com"');
-    expect(body.html).toContain("is a product of");
-    expect(body.text).toContain("PayLorya AI · https://app.example\nA product of CashXChain Inc. · https://cashxchain.com");
+    // Footer: our website.
+    expect(body.html).toContain('<a href="https://paylorya.valentin.is/"');
+    expect(body.html).toContain(">paylorya.valentin.is</a>");
+    expect(body.html).not.toContain("cashxchain.com");
+    expect(body.text).toContain("PayLorya AI · https://paylorya.valentin.is/");
   });
 
   it("links only sign-in and email confirmation; reset and email change keep the plain code", () => {
