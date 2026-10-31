@@ -24,6 +24,7 @@ Cloudflare docs, 2026-10-30). `wrangler deploy --dry-run` passes with this confi
 | `BLOCKFROST_PROJECT_ID` | secret (cloud project) | `npx wrangler secret put` |
 | `BUYER_MNEMONIC` | secret (**buyer-cloud** wallet) | `npx wrangler secret put` |
 | `SELLER_ADDRESS` | secret | `npx wrangler secret put` |
+| `CASHXCHAIN_API_KEY` | secret, optional: CashXChain **sandbox** key for fiat payouts (see below) | `npx wrangler secret put` |
 | `PUBLIC_BASE_URL` | var | `vars` in `wrangler.jsonc`, after the first deploy |
 | `LOCAL_FACILITATOR`, `PRICE_LOVELACE`, `MAX_PRICE_LOVELACE`, `SESSION_BUDGET_LOVELACE`, `MAX_PAYMENTS_PER_RUN` | var | `vars` in `wrangler.jsonc` |
 | `FACILITATOR_URL`, `CARDANO_L1_CONFIRMATIONS`, `BLOCKFROST_PREPROD_URL`, `EXPLORER_TX_URL`, `DEMO_AMOUNT_CEILING_MINOR`, `CLAUDE_MODEL`, `ANTHROPIC_BASE_URL` | optional var | add to `vars` only to override the default in `src/config.ts` |
@@ -46,6 +47,7 @@ npx wrangler secret put ANTHROPIC_API_KEY
 npx wrangler secret put BLOCKFROST_PROJECT_ID
 npx wrangler secret put BUYER_MNEMONIC
 npx wrangler secret put SELLER_ADDRESS
+npx wrangler secret put CASHXCHAIN_API_KEY   # optional: real CashXChain sandbox payouts
 npx wrangler deploy
 ```
 
@@ -53,11 +55,25 @@ Live URL: **https://cxc-agentpay.cashxchain.workers.dev** (CashXChain account, p
 in `wrangler.jsonc`). It is set as `vars.PUBLIC_BASE_URL`. If the URL changes, update it there and run
 `npx wrangler deploy` again.
 
-Alternative to `wrangler secret put`: after the first deploy, add the four secrets in the dashboard under
+Alternative to `wrangler secret put`: after the first deploy, add the secrets in the dashboard under
 Workers & Pages → `cxc-agentpay` → Settings → Variables and Secrets, type **Secret**. Secrets survive
 `wrangler deploy`; plain variables added in the dashboard do not (deploy replaces them with `vars`).
 Redeploy afterwards so the container restarts with the new env. The first container start after a deploy can take
 a while; retry `/api/health` until it answers.
+
+### CashXChain sandbox payouts
+
+Without `CASHXCHAIN_API_KEY`, an approved fiat invoice uses the simulated stand-in (no API call).
+With it, approval sends `POST /v1/banking/payouts` to `https://api.sandbox.cashxchain.com`
+(`src/payout-cashxchain.ts`). The base URL is fixed, and the server refuses to start with anything
+other than a `cxc_sk_sandbox_` / `cxc_rk_sandbox_` key.
+
+- The sandbox account needs an active account in the invoice currency (EUR for the samples) with test
+  funds: app.sandbox.cashxchain.com → Accounts → Get test funds. API keys cannot call the faucet.
+- Free plan limits: USD 2,500 per payout, 5,000 per day, 10,000 per month. Over a limit, CashXChain
+  refuses the payout and nothing is sent; the samples stay below it.
+- `/api/health` reports `cashxchain.ready: true`. An approved EUR sample ends `EXECUTED`, with the
+  CashXChain payout id in `run.payout.reference`. Check it in app.sandbox.cashxchain.com.
 
 ## Verify
 
