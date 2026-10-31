@@ -1,3 +1,4 @@
+import { StripeFc } from "./stripe.js";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -86,7 +87,9 @@ export async function createCfo(
         return engine.agent?.buyerAddress;
       },
       ...(config.CASHXCHAIN_API_KEY ? { cashxchain: new CashXChainClient({ apiKey: config.CASHXCHAIN_API_KEY }) } : {}),
+      ...(config.STRIPE_SECRET_KEY && config.STRIPE_PUBLISHABLE_KEY ? { stripe: new StripeFc(config.STRIPE_SECRET_KEY) } : {}),
     },
+    stripePublishableKey: config.STRIPE_SECRET_KEY ? config.STRIPE_PUBLISHABLE_KEY : undefined,
     extract: claudeExtractor(config.CLAUDE_MODEL),
     model: config.CLAUDE_MODEL,
     aiReady: config.aiReady,

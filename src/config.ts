@@ -23,6 +23,9 @@ const EnvSchema = z.object({
   // "Continue with Google" (Google Cloud OAuth client, type Web application). Both set: offered.
   GOOGLE_CLIENT_ID: optional,
   GOOGLE_CLIENT_SECRET: optional,
+  // Stripe Financial Connections (read-only bank balances). Both set: "Bank account" can be linked.
+  STRIPE_SECRET_KEY: optional,
+  STRIPE_PUBLISHABLE_KEY: optional,
 
   // Cardano / x402
   BLOCKFROST_PREPROD_URL: z.string().default("https://cardano-preprod.blockfrost.io/api/v0"),

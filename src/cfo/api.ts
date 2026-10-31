@@ -4,7 +4,8 @@ import { z } from "zod";
 import { budgetsWithSpend, forecast, overview } from "./analytics.js";
 import type { Auth, SessionUser } from "./auth.js";
 import { runChatTurn, toPublic, type Attachment, type ChatDeps, type ChatEvent } from "./chat.js";
-import { catalog, fetchBalances, prepareConnection, supportsWrite, type ConnectionEnv } from "./connections.js";
+import { catalog, fetchBalances, networkOf, prepareConnection, supportsWrite, type ConnectionEnv } from "./connections.js";
+import { accountLabel } from "./stripe.js";
 import { KeyRefused, type CxcKeys } from "./cxc-keys.js";
 import { CXC_SANDBOX_SIGNUP, type CxcLinker } from "./cxc-link.js";
 import { SUPPORTED_CURRENCIES } from "./fx.js";
@@ -27,6 +28,8 @@ export interface CfoDeps {
   cxc?: CxcLinker;
   /** A workspace's own CashXChain account by API key; absent in tests that do not need it. */
   keys?: CxcKeys;
+  /** Stripe.js key for linking bank accounts (with connections.stripe). */
+  stripePublishableKey?: string;
 }
 
 const MAX_FILE_BYTES = 15 * 1024 * 1024;
@@ -209,7 +212,7 @@ export function mountCfo(app: Express, deps: CfoDeps): void {
     access: c.access,
     ...(c.credentialHint ? { keyHint: c.credentialHint } : {}),
     supports: { read: true, write: supportsWrite(c.kind) },
-    status: c.error ? "error" : c.kind === "bank" ? "coming_soon" : "active",
+    status: c.error ? "error" : "active",
     balances: c.balances,
     ...(c.error ? { error: c.error } : {}),
     createdAt: c.createdAt,
@@ -321,6 +324,35 @@ export function mountCfo(app: Express, deps: CfoDeps): void {
     const created = await store.addConnection(ws, { ...prepared, ...(secret ? { secret } : {}) });
     await store.log(ws, "user", "added connection", `${created.label} (${created.access === "read_write" ? "read & write" : "read-only"})`, { type: "connection", id: created.id });
     res.status(201).json(publicConnection(await refresh(ws, created)));
+  });
+  // Bank accounts: Stripe Financial Connections. The browser opens Stripe's dialog with the session's
+  // client secret, then hands the session id back; each linked account becomes a read-only connection.
+  api.post("/connections/bank/session", async (_req, res) => {
+    const { ws } = ctx(res);
+    const stripe = deps.connections.stripe;
+    if (!stripe || !deps.stripePublishableKey) throw new HttpError(503, "Bank connections are not configured on this server");
+    const session = await stripe.createSession({ id: ws.id, name: ws.name }).catch(error => {
+      throw new HttpError(502, `Stripe: ${error instanceof Error ? error.message : String(error)}`);
+    });
+    res.json({ sessionId: session.id, clientSecret: session.clientSecret, publishableKey: deps.stripePublishableKey });
+  });
+  api.post("/connections/bank/complete", json, async (req, res) => {
+    const ws = ctx(res).ws.id;
+    const stripe = deps.connections.stripe;
+    if (!stripe) throw new HttpError(503, "Bank connections are not configured on this server");
+    const { sessionId } = z.object({ sessionId: z.string().regex(/^fcsess_[A-Za-z0-9_]+$/) }).parse(req.body);
+    const accounts = await stripe.sessionAccounts(sessionId).catch(error => {
+      throw new HttpError(502, `Stripe: ${error instanceof Error ? error.message : String(error)}`);
+    });
+    const existing = await store.connections(ws);
+    const added = [];
+    for (const a of accounts) {
+      if (existing.some(c => c.kind === "bank" && c.address === a.id)) continue;
+      const created = await store.addConnection(ws, { kind: "bank", label: accountLabel(a), network: networkOf("bank"), address: a.id, access: "read" });
+      await store.log(ws, "user", "added connection", `${created.label} (read-only, via Stripe)`, { type: "connection", id: created.id });
+      added.push(publicConnection(await refresh(ws, created)));
+    }
+    res.status(201).json(added);
   });
   api.patch("/connections/:id", json, async (req, res) => {
     const ws = ctx(res).ws.id;
