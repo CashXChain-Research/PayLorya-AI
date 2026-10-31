@@ -12,7 +12,8 @@ const config = loadConfig();
 const runs = new RunStore();
 const app = express();
 app.use(express.json({ limit: "256kb" }));
-app.use(express.static("public"));
+// "/app" and "/about" resolve to their .html pages.
+app.use(express.static("public", { extensions: ["html"] }));
 
 if (config.LOCAL_FACILITATOR) mountLocalFacilitator(app, config);
 mountSeller(app, config);

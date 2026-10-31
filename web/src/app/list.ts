@@ -35,7 +35,11 @@ export async function loadList(): Promise<void> {
   const held = runs.filter(r => HELD.includes(r.state)).length;
   countTo($("k-total"), runs.length);
   $("k-total-sub").textContent = held ? `${held} held by the CFO` : "this session";
-  countTo($("k-ready"), runs.filter(r => r.state === "DRAFT_READY").length);
+  const awaiting = runs.filter(r => r.state === "DRAFT_READY").length;
+  countTo($("k-ready"), awaiting);
+  const badge = $("nav-ready");
+  badge.hidden = awaiting === 0;
+  badge.textContent = String(awaiting);
   countTo($("k-paid"), runs.filter(r => r.state === "EXECUTED").length);
   $("k-count").textContent = runs.length ? String(runs.length) : "";
 

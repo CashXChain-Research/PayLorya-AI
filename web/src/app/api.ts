@@ -20,6 +20,7 @@ export interface Health {
   payoutMaxLovelace: string;
   payoutBudgetLovelace: string;
   paidOutLovelace: string;
+  cashxchain?: { ready: boolean; environment: string; api: string };
 }
 
 /** One GET /api/runs item (src/server.ts), newest first. The input text stays behind /api/runs/:id. */
