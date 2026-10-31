@@ -1,0 +1,105 @@
+{
+  "kind": "live-run",
+  "target": "https://cxc-agentpay.cashxchain.workers.dev",
+  "runId": "8a1e92b8-ea38-4c63-8a95-7a2f006e81e7",
+  "state": "DRAFT_READY",
+  "createdAt": "2026-10-30T23:32:38.131Z",
+  "invoiceId": "LIVE-1793403157254",
+  "timeline": [
+    {
+      "state": "CREATED",
+      "at": "2026-10-30T23:32:38.131Z"
+    },
+    {
+      "state": "EXTRACTED",
+      "at": "2026-10-30T23:32:38.134Z"
+    },
+    {
+      "state": "PRECHECKED",
+      "at": "2026-10-30T23:32:38.134Z"
+    },
+    {
+      "state": "PAYING",
+      "at": "2026-10-30T23:32:38.135Z"
+    },
+    {
+      "state": "PAID",
+      "at": "2026-10-30T23:33:10.489Z",
+      "note": "4e959d66ee947505292fbb48c1ec10356ed70b1751dab98b1ad2f37591ea87b2"
+    },
+    {
+      "state": "DRAFT_READY",
+      "at": "2026-10-30T23:33:10.491Z",
+      "note": "Awaiting human approval; nothing executed"
+    }
+  ],
+  "payment": {
+    "network": "cardano:preprod",
+    "buyerAddress": "addr_test1qpcd3j374gmqm2e8nadzunnq9kp3zueq9r0xm8qjsgmrev4wjjx6xpxkhkwz6gzc8j8w9ru0jerpm8uy4j36m6ydnghqgwlndx",
+    "sellerAddress": "addr_test1qzy3pa2qjvffa4hzy4e7rf60alp5lplxyevgmtt04fld62qeymuzqmcdmqahse09573jx6hurs39svgswdcgev0trzhsyeahyd",
+    "asset": "lovelace",
+    "amount": "2000000",
+    "transactionHash": "4e959d66ee947505292fbb48c1ec10356ed70b1751dab98b1ad2f37591ea87b2",
+    "explorerUrl": "https://preprod.cardanoscan.io/transaction/4e959d66ee947505292fbb48c1ec10356ed70b1751dab98b1ad2f37591ea87b2",
+    "settledAt": "2026-10-30T23:33:10.489Z"
+  },
+  "report": {
+    "verdict": "ready_for_review",
+    "payoutExecuted": false,
+    "checks": [
+      {
+        "id": "corridor",
+        "status": "pass",
+        "source": "demo-fixture"
+      },
+      {
+        "id": "required_fields",
+        "status": "pass",
+        "source": "demo-fixture"
+      },
+      {
+        "id": "account",
+        "status": "pass",
+        "source": "deterministic"
+      },
+      {
+        "id": "duplicate",
+        "status": "pass",
+        "source": "deterministic"
+      },
+      {
+        "id": "amount",
+        "status": "pass",
+        "source": "deterministic"
+      }
+    ]
+  },
+  "draft": {
+    "status": "awaiting_human_approval",
+    "executable": false
+  },
+  "settlement": null,
+  "error": null,
+  "input": {
+    "source": "default",
+    "sha256": "53233c4e00cddfdb127040e461661b8f7969072b2d985e7c072d49f9d0a86836"
+  },
+  "health": {
+    "network": "cardano:preprod",
+    "facilitator": "https://x402.preprod.dev.ecosyseng.cf-deployments.org",
+    "sellerAddress": "addr_test1qzy3pa2qjvffa4hzy4e7rf60alp5lplxyevgmtt04fld62qeymuzqmcdmqahse09573jx6hurs39svgswdcgev0trzhsyeahyd",
+    "buyerAddress": "addr_test1qpcd3j374gmqm2e8nadzunnq9kp3zueq9r0xm8qjsgmrev4wjjx6xpxkhkwz6gzc8j8w9ru0jerpm8uy4j36m6ydnghqgwlndx",
+    "priceLovelace": "2000000",
+    "maxPriceLovelace": "3000000",
+    "sessionBudgetLovelace": "20000000",
+    "spentLovelaceBefore": "0",
+    "spentLovelaceAfter": "2000000"
+  },
+  "timingsMs": {
+    "paid": 32358,
+    "final": 32360,
+    "wallClock": 34768
+  },
+  "startedAt": "2026-10-30T23:32:37.254Z",
+  "finishedAt": "2026-10-30T23:33:12.022Z"
+}

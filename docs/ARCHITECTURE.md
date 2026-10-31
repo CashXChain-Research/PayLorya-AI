@@ -91,6 +91,9 @@ executable. `PAID -> BLOCKED` also covers a payout route the policy blocks.
   `run.settlement = { transactionHash?, explorerUrl?, reason }` says what to look up before anyone
   pays again. The hash comes from the settle response, or else from decoding the tx we signed, so
   a lost response still leaves an explorer link.
+- **Paid without a usable report:** if settle succeeded but the body is not a well-formed report
+  (not JSON, or no valid verdict/checks), the run ends `FAILED` with the payment proof kept and
+  the invoice locked as paid. It is a failed delivery, not a free retry.
 - **Offer filter:** only `exact` / `cardano:preprod` / `lovelace`, allowlisted `payTo`, price
   cap, and the plain `default` transfer method (no Masumi or script locks).
 - The facilitator broadcasts a given Cardano tx at most once (`@x402/cardano` duplicate
@@ -152,6 +155,11 @@ otherwise `ready_for_review`.
 - 2026-10-30: Blockfrost preprod answers a missing key with 403 "Missing project token" and any
   rejected key (including `mainnet…`/`preview…` prefixes) with 403 "Invalid project token.". The
   preflight hint now treats the prefix as a suggestion only. `/health` needs no key.
+- 2026-10-30 (milestone 1): first real x402 payment through the Cloudflare deployment, hosted
+  facilitator, `CARDANO_L1_CONFIRMATIONS` unset (1). Run `8a1e92b8`, 2 tADA buyer-cloud -> seller,
+  tx `4e959d66ee947505292fbb48c1ec10356ed70b1751dab98b1ad2f37591ea87b2`, block 5354949, fee
+  0.168581 tADA, PAYING -> PAID in 32.4 s, run ended `DRAFT_READY`. Outputs checked on Koios.
+  Evidence: `evidence/live-run-2026-10-30T23-32-37-254Z.json`.
 
 ## Not verified yet
 
@@ -160,11 +168,8 @@ otherwise `ready_for_review`.
   read from the installed source and covered offline with a stub only.
 - Whether Claude copies a 100+ character bech32 address exactly. A single wrong character fails
   the checksum and the run ends `NEEDS_INFO`, so this fails safe.
-- The CashXChain sandbox payout API (`api.sandbox.cashxchain.com` per internal docs) is not wired:
-  its OpenAPI contract and an API key are needed. Implement `FiatPayoutClient` against it.
-
-- No hosted-facilitator verify/settle has run yet.
-- No live preprod payment has run yet: that is milestone 1 (`npm run smoke:x402`).
+- The fiat rail is simulated: the CashXChain sandbox client (separate session) plugs in as a
+  `FiatPayoutClient`.
 - With `LOCAL_FACILITATOR=true`, verify also calls Blockfrost `POST /utils/txs/evaluate/utxos`;
   untested against real Blockfrost for a script-free tx.
 - Cloudflare Containers deploy is written against `@cloudflare/containers@0.3.7` and the

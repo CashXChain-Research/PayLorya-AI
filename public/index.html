@@ -567,9 +567,10 @@ function stagesFor(run) {
       { status: "pass", message: "First payment for this invoice" },
     ];
     const q = r?.routeQuote;
+    const noReport = !r && s === "FAILED";
     Object.assign(v, {
-      cls: !r || verdict === "ready_for_review" ? "done" : verdict === "blocked" ? "bad" : "warn",
-      sum: `Paid <b>${esc(ada(run.payment.amount))}</b> per request for a readiness report.${esc(verdictText)}<br>${txLink(run.payment.transactionHash, run.payment.explorerUrl)}`,
+      cls: noReport || verdict === "blocked" ? "bad" : !r || verdict === "ready_for_review" ? "done" : "warn",
+      sum: `Paid <b>${esc(ada(run.payment.amount))}</b> per request for a readiness report.${esc(noReport ? ` ${run.error}.` : verdictText)}<br>${txLink(run.payment.transactionHash, run.payment.explorerUrl)}`,
       more: `<div class="sub-h">Spend policy</div>${checkList(policy)}
         ${r ? `<div class="sub-h">Report</div>${checkList(r.checks)}` : ""}
         ${q ? `<p class="fine">${esc(q.label)}: ${esc(q.rail)} · fee USD ${esc(q.feeUsd)} · ${esc(q.fxRate)}</p>` : ""}

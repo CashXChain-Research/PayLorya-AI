@@ -314,7 +314,13 @@ export class BuyerAgent {
       settledAt: new Date().toISOString(),
     };
     this.runs.transition(run, "PAID", settle.transaction);
-    return (await response.json()) as ReadinessReport;
+    // Paid either way: a settled request without a usable report is a failed delivery, and the
+    // invoice stays locked as paid instead of being bought again.
+    const report: unknown = await response.json().catch(() => undefined);
+    if (!isReadinessReport(report)) {
+      throw new Error(`paid (tx ${settle.transaction}), but the seller returned no readable report; the invoice stays locked as paid`);
+    }
+    return report;
   }
 
   /** A signed tx may already be on-chain: never re-sign blindly, lock the invoice instead. */
@@ -341,6 +347,14 @@ function signedTxHash(transaction: unknown): string | undefined {
   } catch {
     return undefined; // undecodable: rely on the facilitator's settle response
   }
+}
+
+const VERDICTS: ReadonlySet<unknown> = new Set(["ready_for_review", "needs_info", "blocked"]);
+
+/** Only a well-formed report may drive the run's verdict; anything else is a failed delivery. */
+function isReadinessReport(body: unknown): body is ReadinessReport {
+  const r = body as Partial<ReadinessReport> | null | undefined;
+  return typeof r === "object" && r !== null && VERDICTS.has(r.verdict) && Array.isArray(r.checks) && r.payoutExecuted === false;
 }
 
 function draftFrom(invoice: Invoice, report: ReadinessReport, route: RouteDecision): PaymentDraft {
