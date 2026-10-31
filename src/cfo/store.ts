@@ -11,6 +11,16 @@ export type DocumentKind = "invoice" | "receipt" | "bank_statement" | "contract"
 /** awaiting_signature: a tADA payout that passed its checks and waits for the owner's wallet. */
 export type PaymentStatus = "pending_approval" | "approved" | "executing" | "awaiting_signature" | "executed" | "rejected" | "failed" | "blocked";
 
+/** The one test-tADA grant to an account's agent wallet. */
+export interface Funding {
+  address: string;
+  lovelace: string;
+  at: string;
+  /** "sending": claimed, transaction being made; "sent": handed to the network. */
+  status: "sending" | "sent";
+  txHash?: string;
+}
+
 export interface Workspace {
   id: string;
   name: string;
@@ -20,6 +30,8 @@ export interface Workspace {
   createdAt: string;
   /** CashXChain sandbox sub-account; unset until the first attach attempt. */
   cashxchain?: CxcLink;
+  /** Test tADA sent once to the agent wallet ("Get test tADA"). */
+  funding?: Funding;
 }
 
 export interface Balance {
@@ -240,6 +252,24 @@ export class Store {
       now(),
     );
     return this.remember((await this.get("SELECT * FROM workspaces WHERE owner_user_id = ?", userId))!);
+  }
+
+  /** Claims the account's one test-tADA grant: true only for the call that set it (no double grants). */
+  async claimFunding(id: string, funding: Funding): Promise<boolean> {
+    const changes = await this.run("UPDATE workspaces SET funded_json = ?, funded_at = ? WHERE id = ? AND funded_json IS NULL", JSON.stringify(funding), funding.at, id);
+    await this.reloadWorkspace(id);
+    return changes > 0;
+  }
+
+  /** Updates the grant (its transaction), or releases it (null) when nothing was sent. */
+  async setFunding(id: string, funding: Funding | null): Promise<void> {
+    await this.run("UPDATE workspaces SET funded_json = ?, funded_at = ? WHERE id = ?", funding ? JSON.stringify(funding) : null, funding?.at ?? null, id);
+    await this.reloadWorkspace(id);
+  }
+
+  /** Grants made since `since`, over all accounts: the daily cap. */
+  async fundingGrantsSince(since: string): Promise<number> {
+    return Number((await this.get("SELECT COUNT(*) AS n FROM workspaces WHERE funded_at >= ?", since))?.n ?? 0);
   }
 
   async setCxcLink(id: string, link: CxcLink): Promise<void> {
@@ -736,6 +766,7 @@ function toWorkspace(r: Row): Workspace {
     },
     createdAt: String(r.created_at),
     ...(r.cxc_link_json ? { cashxchain: JSON.parse(String(r.cxc_link_json)) as CxcLink } : {}),
+    ...(r.funded_json ? { funding: JSON.parse(String(r.funded_json)) as Funding } : {}),
   };
 }
 

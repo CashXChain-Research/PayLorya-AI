@@ -2,7 +2,7 @@
 import { esc, short } from "../../shared/dom.js";
 import { ApiError, del, get, patch, post } from "../api.js";
 import type { Ctx } from "../state.js";
-import type { Access, CatalogEntry, Connection, ConnectionCreate, ConnectionKind, CxcState } from "../types.js";
+import type { Access, CatalogEntry, Connection, ConnectionCreate, ConnectionKind, CxcState, FundingStatus } from "../types.js";
 import { ago, balance, confirmDialog, copyText, dialog, empty, fieldError, icon, pageHead, sk, toast, usd, val } from "../ui.js";
 import { linkBank } from "../stripe-bank.js";
 import { generateMnemonic, validateMnemonic } from "@scure/bip39";
@@ -66,6 +66,22 @@ function networkPill(n: string): string {
   return `<span class="net">${esc(name)}${note ? `<em>${esc(note)}</em>` : ""}</span>`;
 }
 
+// "Get test tADA" for the agent wallet (GET /api/v1/funding); unknown until loaded.
+let funding: FundingStatus | undefined;
+const tadaText = (lovelace?: string) => `${(Number(lovelace ?? 0) / 1e6).toLocaleString("en-US", { maximumFractionDigits: 6 })} test tADA`;
+
+/** On the agent wallet: the one-time top-up, or what it sent. */
+function fundingRow(c: Connection): string {
+  if (c.kind !== "cardano_agent_wallet" || !c.keyHint || !funding) return "";
+  const g = funding.granted;
+  if (g) {
+    const tx = g.txHash ? (g.explorerUrl ? ` · <a href="${esc(g.explorerUrl)}" target="_blank" rel="noopener noreferrer">transaction ${icon("external", 11)}</a>` : "") : "";
+    return `<div class="addr-row owner"><span class="muted small">Received ${esc(tadaText(g.lovelace))} from PayLorya AI${tx}</span></div>`;
+  }
+  if (!funding.available) return "";
+  return `<div class="fund-row"><button type="button" class="btn primary xs" data-fund>${icon("plus", 14, 2.4)}Get ${esc(tadaText(funding.lovelace))}</button><span class="fine">Once per account, sent to this wallet. Arrives in about a minute.</span></div>`;
+}
+
 function connCard(c: Connection, i: number): string {
   const total = c.balances.reduce((a, b) => a + (b.usdMinor ?? 0), 0);
   const hasUsd = c.balances.some(b => b.usdMinor != null);
@@ -76,6 +92,7 @@ function connCard(c: Connection, i: number): string {
       <span class="pill ${c.status === "active" ? "t-ok" : c.status === "error" ? "t-bad" : "t-neutral"}">${c.status === "active" ? '<i class="live"></i>Active' : c.status === "error" ? "Error" : "Coming soon"}</span>
     </div>
     ${cxcOwner(c)}
+    ${fundingRow(c)}
     ${c.address ? `<div class="addr-row"><span class="mono" title="${esc(c.address)}">${esc(short(c.address))}</span><button type="button" class="icon-btn xs" data-copy="${esc(c.address)}" aria-label="Copy address">${icon("copy", 13)}</button></div>` : ""}
     ${c.error ? `<div class="callout bad sm">${icon("alert", 14)}<span>${esc(c.error)}</span></div>` : ""}
     <div class="conn-bal">
@@ -311,6 +328,8 @@ export async function renderConnections(view: HTMLElement, ctx: Ctx): Promise<vo
     const c = await addDialog(entry);
     if (c && ctx.alive()) {
       conns.push(c);
+      // A new agent wallet can ask for its test tADA right away.
+      if (c.kind === "cardano_agent_wallet") funding = await get<FundingStatus>("/api/v1/funding", true).catch(() => undefined);
       paint();
       grid.querySelector(`[data-id="${CSS.escape(c.id)}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" });
     }
@@ -319,6 +338,21 @@ export async function renderConnections(view: HTMLElement, ctx: Ctx): Promise<vo
     const t = e.target as HTMLElement;
     const cp = t.closest<HTMLElement>("[data-copy]");
     if (cp) return void copyText(cp.dataset.copy!);
+    const fund = t.closest<HTMLButtonElement>("[data-fund]");
+    if (fund) {
+      fund.disabled = true;
+      fund.classList.add("loading");
+      try {
+        const granted = await post<NonNullable<FundingStatus["granted"]>>("/api/v1/funding");
+        funding = { available: false, granted };
+        toast(`${tadaText(granted.lovelace)} on the way to your agent wallet. Refresh its balance in a minute.`, "ok");
+        paint();
+      } catch {
+        fund.disabled = false;
+        fund.classList.remove("loading");
+      }
+      return;
+    }
     const card = t.closest<HTMLElement>(".conn");
     const c = card && conns.find(x => x.id === card.dataset.id);
     if (!c || !card) return;
@@ -382,4 +416,8 @@ export async function renderConnections(view: HTMLElement, ctx: Ctx): Promise<vo
   catalog = cat.sort((a, b) => Number(b.available) - Number(a.available));
   paint();
   paintCatalog();
+  if (conns.some(c => c.kind === "cardano_agent_wallet" && c.keyHint)) {
+    funding = await get<FundingStatus>("/api/v1/funding", true).catch(() => undefined);
+    if (ctx.alive() && funding) paint();
+  }
 }

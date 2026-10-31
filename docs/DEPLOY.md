@@ -31,6 +31,7 @@ Cloudflare docs, 2026-10-30). `wrangler deploy --dry-run` passes with this confi
 | --- | --- | --- |
 | `ANTHROPIC_API_KEY` | secret | `npx wrangler secret put` |
 | `BLOCKFROST_PROJECT_ID` | secret (cloud project) | `npx wrangler secret put` |
+| `FUNDER_MNEMONIC` | secret, optional: PayLorya AI's funding wallet for "Get test tADA" (each account's agent wallet gets `FUNDER_LOVELACE`, default 20 tADA, once; at most `FUNDER_DAILY_GRANTS`, default 30, per day). Unset: the button is not offered | `npx wrangler secret put` |
 | `BUYER_MNEMONIC` | secret (**buyer-cloud** wallet): the public demo's buyer only. AI CFO accounts pay from their own agent wallet (recovery phrase, sealed with `BETTER_AUTH_SECRET`) | `npx wrangler secret put` |
 | `SELLER_ADDRESS` | secret | `npx wrangler secret put` |
 | `CASHXCHAIN_API_KEY` | secret, optional: CashXChain **sandbox** key for fiat payouts (see below) | `npx wrangler secret put` |
@@ -67,8 +68,16 @@ npx wrangler secret put BLOCKFROST_PROJECT_ID
 npx wrangler secret put BUYER_MNEMONIC
 npx wrangler secret put SELLER_ADDRESS
 npx wrangler secret put CASHXCHAIN_API_KEY   # optional: real CashXChain sandbox payouts
+npx wrangler secret put FUNDER_MNEMONIC      # optional: "Get test tADA" for new agent wallets (fund it from the Preprod faucet)
 npx wrangler secret put APPROVE_TOKEN        # required for approve/reject (UI asks for it); unset = approvals disabled
 npx wrangler deploy
+```
+
+The funding wallet's address, to fund it from the Cardano Preprod faucet (it is the address
+`@x402/cardano` derives, account 0):
+
+```bash
+FUNDER_MNEMONIC="…" npx tsx -e 'import("./src/cfo/connections.ts").then(m => console.log(m.agentWalletAddress(process.env.FUNDER_MNEMONIC)))'
 ```
 
 Live URL: **https://paylorya.valentin.is** (CashXChain account, pinned via `account_id` in

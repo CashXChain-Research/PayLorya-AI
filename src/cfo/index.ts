@@ -2,7 +2,8 @@ import { StripeFc } from "./stripe.js";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { toClientCardanoSigner, type ClientCardanoSignInput, type ClientCardanoSignResult } from "@x402/cardano";
+import { toClientCardanoSigner, type ClientCardanoSigner, type ClientCardanoSignInput, type ClientCardanoSignResult } from "@x402/cardano";
+import { Funder } from "./funder.js";
 import { BuyerAgent } from "../agent.js";
 import { CashXChainClient } from "../cashxchain.js";
 import { blockfrostProvider, CARDANO_NETWORK, type Config } from "../config.js";
@@ -48,6 +49,9 @@ export async function createCfo(
     noSweep?: boolean;
     /** Tests: a shorter limit for the paid verification step. */
     checkTimeoutMs?: number;
+    /** Tests: the funding wallet's signer ("Get test tADA"), and how long a grant waits for the previous one. */
+    funderSigner?: ClientCardanoSigner;
+    funderSettleMs?: number;
     /** Tests: the payout engine for an account's agent wallet (its recovery phrase). */
     agentFor?: (recoveryPhrase: string, signed: (input: ClientCardanoSignInput, out: ClientCardanoSignResult) => Promise<void>) => BuyerAgent;
   } = {},
@@ -88,10 +92,28 @@ export async function createCfo(
         });
       }),
   );
+  const kit = opts.walletKit ?? (config.BLOCKFROST_PROJECT_ID ? evolutionKit(blockfrostProvider(config).blockfrost) : undefined);
+  // "Get test tADA": tops up a new agent wallet once from PayLorya AI's funding wallet (FUNDER_MNEMONIC).
+  const funderSigner =
+    opts.funderSigner ??
+    (config.FUNDER_MNEMONIC && config.BLOCKFROST_PROJECT_ID
+      ? toClientCardanoSigner({ mnemonic: config.FUNDER_MNEMONIC, network: CARDANO_NETWORK, provider: blockfrostProvider(config) })
+      : undefined);
+  const funder =
+    funderSigner && kit
+      ? new Funder(store, {
+          signer: funderSigner,
+          kit,
+          lovelace: config.FUNDER_LOVELACE,
+          dailyGrants: config.FUNDER_DAILY_GRANTS,
+          explorerTxUrl: config.EXPLORER_TX_URL,
+          ...(opts.funderSettleMs !== undefined ? { settleMs: opts.funderSettleMs } : {}),
+        })
+      : undefined;
   const payments = new Payments(store, engine, keys, {
     agents,
     limits: { tadaMaxLovelace: config.PAYOUT_MAX_LOVELACE, fiatMaxMinor: config.FIAT_PAYOUT_MAX_MINOR, feeMaxLovelace: config.MAX_PRICE_LOVELACE },
-    ...(opts.walletKit ? { kit: opts.walletKit } : config.BLOCKFROST_PROJECT_ID ? { kit: evolutionKit(blockfrostProvider(config).blockfrost) } : {}),
+    ...(kit ? { kit } : {}),
     explorerTxUrl: config.EXPLORER_TX_URL,
     ...(opts.checkTimeoutMs ? { checkTimeoutMs: opts.checkTimeoutMs } : {}),
   });
@@ -106,6 +128,7 @@ export async function createCfo(
     auth,
     payments,
     keys,
+    ...(funder ? { funder } : {}),
     connections: {
       acceptsApiKey: keys.ready,
       ...(config.BLOCKFROST_PROJECT_ID ? { blockfrost: blockfrostProvider(config).blockfrost } : {}),

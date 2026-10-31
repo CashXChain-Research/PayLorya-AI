@@ -162,6 +162,16 @@ A workspace uses its own accounts (Connections page). PayLorya AI's shared sandb
 - **Wallets by browser popup.** The Cardano and EVM connections offer "Connect Lace / Eternl / …"
   (CIP-30) and "Connect browser wallet" (EIP-1193, MetaMask). The wallet's permission popup hands
   over an address only; Cardano must be on a testnet (network id 0).
+- **Get test tADA.** With `FUNDER_MNEMONIC` set, the agent wallet's card offers "Get 20 test tADA"
+  (`POST /api/v1/funding`, `src/cfo/funder.ts`): PayLorya AI's funding wallet tops the account's own
+  agent wallet up once, so new accounts start without the rate-limited Preprod faucet.
+  - Once per account: claimed in the database before anything is signed, so a double click gets one
+    grant.
+  - At most `FUNDER_DAILY_GRANTS` per day over all accounts; one grant in flight at a time (the next
+    waits for the previous to reach a block, its UTxOs).
+  - Only ever to the account's own agent wallet; refused with a reason when the funding wallet runs
+    low, the cap is reached, or the network refuses (then the account may ask again).
+  - It pays nothing else: every payment still leaves from the account's own wallet.
 - **Agent wallet per account (required), like the CashXChain key.**
   - The account pastes its wallet's recovery phrase (12, 15 or 24 BIP-39 words), or creates a new
     wallet in the browser ("Create a new wallet", 24 words from the browser's CSPRNG).
