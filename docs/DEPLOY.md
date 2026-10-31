@@ -67,9 +67,14 @@ npx wrangler secret put APPROVE_TOKEN        # required for approve/reject (UI a
 npx wrangler deploy
 ```
 
-Live URL: **https://cxc-agentpay.cashxchain.workers.dev** (CashXChain account, pinned via `account_id`
-in `wrangler.jsonc`). It is set as `vars.PUBLIC_BASE_URL`. If the URL changes, update it there and run
-`npx wrangler deploy` again.
+Live URL: **https://paylorya.valentin.is** (CashXChain account, pinned via `account_id` in
+`wrangler.jsonc`). It is set as `vars.PUBLIC_BASE_URL`; `vars.AUTH_TRUSTED_ORIGINS` keeps sign-in working on
+https://cxc-agentpay.cashxchain.workers.dev too. If the URL changes, update it there and run `npx wrangler deploy` again.
+
+The domain is a Cloudflare for SaaS custom hostname on the `cashxchain.ai` zone (valentin.is stays in its own
+account): `paylorya.valentin.is` CNAME → `paylorya-origin.cashxchain.ai` (fallback origin, `AAAA 100::`, proxied),
+plus the Worker route `paylorya.valentin.is/*` → `cxc-agentpay` on `cashxchain.ai`. Without that route Cloudflare
+answers 522; zone-wide redirect rules on `cashxchain.ai` must exclude the hostname.
 
 Alternative to `wrangler secret put`: after the first deploy, add the secrets in the dashboard under
 Workers & Pages → `cxc-agentpay` → Settings → Variables and Secrets, type **Secret**. Secrets survive

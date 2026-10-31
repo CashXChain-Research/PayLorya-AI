@@ -40,7 +40,8 @@
   // RESEND_API_KEY
   // via `npx wrangler secret put <NAME>`. See docs/DEPLOY.md.
   "vars": {
-    "PUBLIC_BASE_URL": "https://cxc-agentpay.cashxchain.workers.dev",
+    "PUBLIC_BASE_URL": "https://paylorya.valentin.is",
+    "AUTH_TRUSTED_ORIGINS": "https://cxc-agentpay.cashxchain.workers.dev",
     // Served by the Worker's outbound handler (D1 + R2); unset locally, where SQLite and a folder are used.
     "CFO_DATA_URL": "http://cfo-data.internal",
     "LOCAL_FACILITATOR": "false",

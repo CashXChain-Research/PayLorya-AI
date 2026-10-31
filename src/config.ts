@@ -18,6 +18,8 @@ const bool = z
 const EnvSchema = z.object({
   PORT: z.coerce.number().int().positive().default(8787),
   PUBLIC_BASE_URL: optional,
+  // Extra origins allowed to sign in (comma-separated), e.g. the workers.dev URL next to the custom domain.
+  AUTH_TRUSTED_ORIGINS: optional,
 
   // Cardano / x402
   BLOCKFROST_PREPROD_URL: z.string().default("https://cardano-preprod.blockfrost.io/api/v0"),
