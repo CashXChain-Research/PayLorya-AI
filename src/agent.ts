@@ -46,6 +46,8 @@ export class BuyerAgent {
   // Last tx this wallet broadcast (or may have), and when we learned of it.
   private lastTx?: { hash: string; at: number };
   private walletQueue: Promise<void> = Promise.resolve();
+  // Fiat payout keys counted against FIAT_PAYOUTS_PER_SESSION (fiat holds no lovelace budget).
+  private readonly fiatKeys = new Set<string>();
 
   constructor(
     private readonly config: Config,
@@ -86,6 +88,11 @@ export class BuyerAgent {
 
   get spentLovelace(): bigint {
     return this.ledger.spentLovelace;
+  }
+
+  /** Fiat payouts this session that were sent or may have been (the session limit counts these). */
+  get fiatPayoutsUsed(): number {
+    return this.fiatKeys.size;
   }
 
   get paidOutLovelace(): bigint {
@@ -145,7 +152,7 @@ export class BuyerAgent {
   }
 
   private route(run: Run, invoice: Invoice): RouteDecision {
-    return decideRoute(invoice, this.directory(run), { payoutMaxLovelace: this.config.PAYOUT_MAX_LOVELACE });
+    return decideRoute(invoice, this.directory(run), { payoutMaxLovelace: this.config.PAYOUT_MAX_LOVELACE, fiatMaxMinor: this.config.FIAT_PAYOUT_MAX_MINOR });
   }
 
   private async execute(run: Run): Promise<void> {
@@ -222,8 +229,11 @@ export class BuyerAgent {
   }
 
   private async payViaCxc(run: Run, invoice: Invoice, destination: string, payee: VerifiedPayee, key: string): Promise<void> {
+    const limit = this.config.FIAT_PAYOUTS_PER_SESSION;
+    if (!this.fiatKeys.has(key) && this.fiatKeys.size >= limit) throw new Error(`payout refused: fiat payout limit of ${limit} per session reached`);
     const hold = this.payoutLedger.reserve(key, 0n);
     if (!hold.ok) throw new Error(`payout refused: ${hold.reason}`);
+    this.fiatKeys.add(key);
     const base = { rail: "cxc_fiat" as const, simulated: this.fiat.simulated, amountMinor: invoice.amountMinor, currency: invoice.currency, destination };
     let reference: string;
     try {
@@ -233,6 +243,7 @@ export class BuyerAgent {
       if (this.fiat.isDefinitiveRejection?.(error)) {
         run.error = error instanceof Error ? error.message : String(error);
         this.payoutLedger.release(key);
+        this.fiatKeys.delete(key); // nothing sent: does not count against the session limit
         return this.runs.transition(run, "DRAFT_READY", `Payout refused before it was sent, nothing paid; approve again: ${run.error}`);
       }
       // A real API may have accepted the payout before failing: lock, never retry blindly.

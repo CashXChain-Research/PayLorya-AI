@@ -1,5 +1,6 @@
 import express from "express";
 import { BuyerAgent } from "./agent.js";
+import { approvalAllowed } from "./approval.js";
 import { CashXChainClient, CXC_SANDBOX_API } from "./cashxchain.js";
 import { createCfo, mountCfo, type PaymentEngine } from "./cfo/index.js";
 import { loadConfig } from "./config.js";
@@ -55,6 +56,10 @@ app.get(["/health", "/api/health"], (_req, res) => {
     payoutMaxLovelace: config.PAYOUT_MAX_LOVELACE.toString(),
     payoutBudgetLovelace: config.PAYOUT_BUDGET_LOVELACE.toString(),
     paidOutLovelace: agent?.paidOutLovelace.toString() ?? "0",
+    fiatPayoutMaxMinor: config.FIAT_PAYOUT_MAX_MINOR,
+    fiatPayoutsPerSession: config.FIAT_PAYOUTS_PER_SESSION,
+    fiatPayoutsUsed: agent?.fiatPayoutsUsed ?? 0,
+    approvalTokenRequired: Boolean(config.APPROVE_TOKEN),
     cashxchain: { ready: config.cxcReady, environment: "sandbox", api: CXC_SANDBOX_API },
   });
 });
@@ -110,13 +115,21 @@ app.get("/api/runs/:id", (req, res) => {
   res.json(run);
 });
 
-// Human decision on a draft. Public on the demo deployment. tADA payouts are capped by
-// PAYOUT_MAX/BUDGET_LOVELACE; CashXChain sandbox payouts only by the demo amount ceiling and the
-// sandbox plan limits (test money).
+// Human decision on a draft. With APPROVE_TOKEN set, only an operator holding it can decide; without
+// it the endpoint is open (demo default). Payouts are capped either way: tADA by
+// PAYOUT_MAX/BUDGET_LOVELACE, fiat by FIAT_PAYOUT_MAX_MINOR and FIAT_PAYOUTS_PER_SESSION.
 app.post("/api/runs/:id/:decision", (req, res) => {
-  const run = runs.get(req.params.id);
   const decision = req.params.decision;
-  if (!agent || !run || (decision !== "approve" && decision !== "reject")) {
+  if (decision !== "approve" && decision !== "reject") {
+    res.status(404).json({ error: "not found" });
+    return;
+  }
+  if (!approvalAllowed(config.APPROVE_TOKEN, req.header("authorization"), req.header("x-approve-token"))) {
+    res.status(401).json({ error: "approval token required" });
+    return;
+  }
+  const run = runs.get(req.params.id);
+  if (!agent || !run) {
     res.status(404).json({ error: "not found" });
     return;
   }
