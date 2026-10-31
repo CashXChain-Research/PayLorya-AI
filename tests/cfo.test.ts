@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import type { Server } from "node:http";
 import type Anthropic from "@anthropic-ai/sdk";
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
@@ -230,10 +231,10 @@ async function start(script: ScriptStep[] = [], agent?: BuyerAgent) {
     });
     expect(res.status).toBe(200);
     const cookie = res.headers.get("set-cookie")!.split(";")[0]!;
-    const call = async (method: string, path: string, body?: unknown) => {
+    const call = async (method: string, path: string, body?: unknown, extra: Record<string, string> = {}) => {
       const r = await fetch(`${base}${path}`, {
         method,
-        headers: { cookie, origin: base, ...(body !== undefined ? { "content-type": "application/json" } : {}) },
+        headers: { cookie, origin: base, ...extra, ...(body !== undefined ? { "content-type": "application/json" } : {}) },
         body: body !== undefined ? JSON.stringify(body) : undefined,
       });
       const text = await r.text();
@@ -261,6 +262,19 @@ const settle = async (check: () => Promise<boolean>) => {
 describe.each(["local", "cloudflare"] as const)("AI CFO API on %s storage", storage => {
   beforeEach(() => {
     backend = storage;
+  });
+
+  it("a page loaded before a deploy is told to reload, and its changes are refused", async () => {
+    const { user } = await start();
+    const me = await user("stale@example.com");
+    const build = (JSON.parse(readFileSync("public/assets/build.json", "utf8")) as { id: string }).id;
+    const fresh = await me("GET", "/api/v1/me");
+    expect(fresh.headers.get("x-paylorya-build")).toBe(build);
+    const old = await me("POST", "/api/v1/payees", { name: "Brenner GmbH", iban: "DE89370400440532013000" }, { "x-paylorya-build": "000000000000" });
+    expect(old.status).toBe(409);
+    expect(old.json.code).toBe("stale_page");
+    expect((await me("GET", "/api/v1/payees", undefined, { "x-paylorya-build": "000000000000" })).status).toBe(200);
+    expect((await me("POST", "/api/v1/payees", { name: "Brenner GmbH", iban: "DE89370400440532013000" }, { "x-paylorya-build": build })).status).toBe(201);
   });
 
   it("requires a session and isolates workspaces", async () => {
