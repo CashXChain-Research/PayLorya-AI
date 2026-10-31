@@ -8,12 +8,13 @@ import type { Auth, SessionUser } from "./auth.js";
 import { runChatTurn, toPublic, type Attachment, type ChatDeps, type ChatEvent } from "./chat.js";
 import { catalog, fetchBalances, networkOf, prepareConnection, supportsWrite, type ConnectionEnv } from "./connections.js";
 import { accountLabel } from "./stripe.js";
-import { hashKey, KEY_PATTERN, keyRefusal, newKey, RateLimiter, SCOPES, type ApiKey } from "./api-keys.js";
+import { bearerToken, hashKey, KEY_PATTERN, keyRefusal, newKey, RateLimiter, SCOPES, type ApiKey } from "./api-keys.js";
 import { KeyRefused, type CxcKeys } from "./cxc-keys.js";
 import type { Funder } from "./funder.js";
 import { CXC_SANDBOX_SIGNUP, type CxcLinker } from "./cxc-link.js";
 import { SUPPORTED_CURRENCIES } from "./fx.js";
 import { ingestDocument, type Extractor } from "./ingest.js";
+import { mountMcp } from "./mcp.js";
 import { DraftRefused, Payments } from "./payments.js";
 import type { ConnectionRow, DocumentRow, Store, Workspace } from "./store.js";
 
@@ -123,8 +124,9 @@ function passwordError(error: unknown): unknown {
 }
 
 /**
- * Mounts Better Auth (/api/auth/*), the dashboard pages and the AI CFO API (/api/v1/*). Must run
- * before any global express.json(): Better Auth reads the raw request body itself.
+ * Mounts Better Auth (/api/auth/*), the dashboard pages, the AI CFO API (/api/v1/*) and its MCP
+ * server (/mcp). Must run before any global express.json(): Better Auth and the MCP transport read
+ * the raw request body themselves.
  */
 export function mountCfo(app: Express, deps: CfoDeps): void {
   const { store, auth } = deps;
@@ -171,7 +173,7 @@ export function mountCfo(app: Express, deps: CfoDeps): void {
   // per key; it never approves, signs, or manages credentials (api-keys.ts, keyRefusal).
   const limiter = new RateLimiter();
   api.use(async (req: Request, res: Response, next: NextFunction) => {
-    const bearer = /^Bearer\s+(\S+)$/i.exec(req.header("authorization") ?? "")?.[1];
+    const bearer = bearerToken(req.header("authorization"));
     if (!bearer) return next();
     try {
       const found = KEY_PATTERN.test(bearer) ? await store.apiKeyByHash(hashKey(bearer)) : undefined;
@@ -707,4 +709,5 @@ export function mountCfo(app: Express, deps: CfoDeps): void {
     }
   });
   app.use("/api/v1", api);
+  mountMcp(app, store);
 }

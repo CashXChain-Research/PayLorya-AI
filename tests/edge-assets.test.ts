@@ -25,11 +25,11 @@ describe("static assets on Cloudflare's edge", () => {
     expect(assets.directory).toBe("./public");
     expect(assets.html_handling).toBe("auto-trailing-slash");
     // /app checks the session and redirects to /login, although public/app.html exists.
-    for (const route of ["/app", "/app/*", "/api/*", "/health", "/v1/*", "/facilitator/*"]) expect(first).toContain(route);
+    for (const route of ["/app", "/app/*", "/api/*", "/health", "/v1/*", "/facilitator/*", "/mcp"]) expect(first).toContain(route);
   });
 
   it("no file in public/ sits under a path the server owns", () => {
-    const owned = ["/api/", "/v1/", "/facilitator/", "/app/"];
+    const owned = ["/api/", "/v1/", "/facilitator/", "/app/", "/mcp"];
     expect(files("public").filter(f => owned.some(p => f.startsWith(p)))).toEqual([]);
   });
 });
