@@ -12,7 +12,7 @@ const RESEND_API = "https://api.resend.com/emails";
 
 const COPY: Record<CodePurpose, { subject: string; lead: string }> = {
   "email-verification": { subject: "confirm your email", lead: `Welcome to ${PRODUCT}. Enter this code to confirm your email address:` },
-  "sign-in": { subject: "your sign-in code", lead: `Enter this code to sign in to ${PRODUCT}:` },
+  "sign-in": { subject: "your sign-in code", lead: `Enter this code to sign in to ${PRODUCT}. New here? The same code creates your account.` },
   "forget-password": { subject: "reset your password", lead: `Enter this code to reset your ${PRODUCT} password:` },
   "change-email": { subject: "confirm your new email", lead: `Enter this code to confirm your new ${PRODUCT} email address:` },
 };
