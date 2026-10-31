@@ -155,7 +155,7 @@ describe("a workspace connects its own CashXChain account by API key", () => {
     const payee = (await me("POST", "/api/v1/payees", { name: "Brenner GmbH", iban: "DE89370400440532013000" })).json;
     const draft = await me("POST", "/api/v1/payments", { payeeId: payee.id, amountMinor: 12_000, currency: "EUR", reason: "INV-1042" });
     expect(draft.status).toBe(201);
-    if (draft.json.status === "pending_approval") expect((await me("POST", `/api/v1/payments/${draft.json.id}/approve`)).status).toBe(200);
+    if (draft.json.status === "pending_approval") expect((await me("POST", `/api/v1/payments/${draft.json.id}/approve`, { amountMinor: draft.json.amountMinor, currency: draft.json.currency })).status).toBe(200);
     await settle(async () => (await me("GET", "/api/v1/payments")).json[0].status === "executed");
 
     expect(s.given).toHaveLength(1);
@@ -179,7 +179,7 @@ describe("a workspace connects its own CashXChain account by API key", () => {
     expect((await me("POST", `/api/v1/connections/${conn.id}/refresh`)).json.error).toBe(KEY_UNREADABLE);
     const payee = (await me("POST", "/api/v1/payees", { name: "Brenner GmbH", iban: "DE89370400440532013000" })).json;
     const draft = (await me("POST", "/api/v1/payments", { payeeId: payee.id, amountMinor: 12_000, currency: "EUR", reason: "INV-1042" })).json;
-    if (draft.status === "pending_approval") await me("POST", `/api/v1/payments/${draft.id}/approve`);
+    if (draft.status === "pending_approval") await me("POST", `/api/v1/payments/${draft.id}/approve`, { amountMinor: draft.amountMinor, currency: draft.currency });
     await settle(async () => (await me("GET", "/api/v1/payments")).json[0].status === "failed");
     expect((await me("GET", "/api/v1/payments")).json[0].error).toBe(KEY_UNREADABLE);
     expect(s.given).toHaveLength(0);
@@ -195,7 +195,7 @@ describe("a CashXChain payout cut off by a restart", () => {
     await agentWallet(me);
     const payee = (await me("POST", "/api/v1/payees", { name: "Brenner GmbH", iban: "DE89370400440532013000" })).json;
     const draft = (await me("POST", "/api/v1/payments", { payeeId: payee.id, amountMinor: 12_000, currency: "EUR", reason: "INV-1042" })).json;
-    if (draft.status === "pending_approval") await me("POST", `/api/v1/payments/${draft.id}/approve`);
+    if (draft.status === "pending_approval") await me("POST", `/api/v1/payments/${draft.id}/approve`, { amountMinor: draft.amountMinor, currency: draft.currency });
     await settle(async () => (await me("GET", "/api/v1/payments")).json[0].status === "executed");
     const first = (await me("GET", "/api/v1/payments")).json[0];
 
@@ -205,7 +205,7 @@ describe("a CashXChain payout cut off by a restart", () => {
     await s.deps.payments.sweep();
     expect((await me("GET", "/api/v1/payments")).json[0]).toMatchObject({ status: "pending_approval", error: expect.stringMatching(/never twice/) });
 
-    expect((await me("POST", `/api/v1/payments/${draft.id}/approve`)).status).toBe(200);
+    expect((await me("POST", `/api/v1/payments/${draft.id}/approve`, { amountMinor: draft.amountMinor, currency: draft.currency })).status).toBe(200);
     await settle(async () => (await me("GET", "/api/v1/payments")).json[0].status === "executed");
     expect(s.fake.payoutCreates()).toHaveLength(2); // the same request twice…
     expect(s.fake.state.payouts.size).toBe(1); // …one payout at CashXChain
@@ -219,13 +219,13 @@ describe("a CashXChain payout cut off by a restart", () => {
     await agentWallet(me);
     const payee = (await me("POST", "/api/v1/payees", { name: "Brenner GmbH", iban: "DE89370400440532013000" })).json;
     const draft = (await me("POST", "/api/v1/payments", { payeeId: payee.id, amountMinor: 12_000, currency: "EUR", reason: "INV-1042" })).json;
-    if (draft.status === "pending_approval") await me("POST", `/api/v1/payments/${draft.id}/approve`);
+    if (draft.status === "pending_approval") await me("POST", `/api/v1/payments/${draft.id}/approve`, { amountMinor: draft.amountMinor, currency: draft.currency });
     await settle(async () => (await me("GET", "/api/v1/payments")).json[0].status === "executed");
     const ws = (await me("GET", "/api/v1/me")).json.workspace.id;
     await s.deps.store.updatePayment(ws, draft.id, { status: "executing" });
     await s.deps.payments.sweep();
     await me("PATCH", `/api/v1/payees/${payee.id}`, { name: "Brenner Maschinenbau GmbH" });
-    await me("POST", `/api/v1/payments/${draft.id}/approve`);
+    await me("POST", `/api/v1/payments/${draft.id}/approve`, { amountMinor: draft.amountMinor, currency: draft.currency });
     await settle(async () => (await me("GET", "/api/v1/payments")).json[0].status === "failed");
     expect((await me("GET", "/api/v1/payments")).json[0].error).toMatch(/changed since an earlier attempt/);
     expect(s.fake.payoutCreates()).toHaveLength(1);
@@ -243,7 +243,7 @@ describe("no shared CashXChain account for workspaces", () => {
     expect((await me("POST", `/api/v1/connections/${legacy.id}/refresh`)).json.error).toMatch(/connect CashXChain again with your API key/);
     const payee = (await me("POST", "/api/v1/payees", { name: "Brenner GmbH", iban: "DE89370400440532013000" })).json;
     const draft = (await me("POST", "/api/v1/payments", { payeeId: payee.id, amountMinor: 12_000, currency: "EUR", reason: "INV-1042" })).json;
-    if (draft.status === "pending_approval") await me("POST", `/api/v1/payments/${draft.id}/approve`);
+    if (draft.status === "pending_approval") await me("POST", `/api/v1/payments/${draft.id}/approve`, { amountMinor: draft.amountMinor, currency: draft.currency });
     await settle(async () => (await me("GET", "/api/v1/payments")).json[0].status === "failed");
     expect((await me("GET", "/api/v1/payments")).json[0].error).toBe(NEEDS_OWN_KEY);
     expect(s.given).toHaveLength(0);

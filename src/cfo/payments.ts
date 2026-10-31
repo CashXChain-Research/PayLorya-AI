@@ -20,6 +20,18 @@ export function railFor(currency: string): Rail {
   return CXC_CURRENCIES.has(currency) ? "cashxchain" : "manual";
 }
 
+/** A draft that would duplicate an open or paid payment: nothing is created. */
+export class DraftRefused extends Error {}
+
+/** Statuses of a payment that is still open or already paid: a second one for the same bill is refused. */
+const OPEN_OR_PAID: ReadonlySet<Payment["status"]> = new Set(["pending_approval", "blocked", "executing", "awaiting_signature", "executed"]);
+
+/** What the person saw in the approval dialog; approving checks it against the stored payment. */
+export interface ApprovalConfirmation {
+  amountMinor: number;
+  currency: string;
+}
+
 export interface DraftInput {
   payeeId?: string;
   payeeName?: string;
@@ -350,6 +362,17 @@ export class Payments {
   async draft(ws: string, input: DraftInput): Promise<Payment> {
     const payee = input.payeeId ? await this.store.payee(ws, input.payeeId) : findPayeeByName(await this.store.payees(ws), input.payeeName);
     const payeeName = payee?.name ?? input.payeeName?.trim() ?? "Unknown payee";
+    // One payment per bill: the same invoice, or the same payee and amount while one is still open.
+    const twin = (await this.store.payments(ws)).find(
+      x =>
+        OPEN_OR_PAID.has(x.status) &&
+        ((input.documentId !== undefined && x.documentId === input.documentId) ||
+          (x.status !== "executed" && x.payeeName.toLowerCase() === payeeName.toLowerCase() && x.amountMinor === input.amountMinor && x.currency === input.currency)),
+    );
+    if (twin) {
+      const state = twin.status === "executed" ? "already paid" : `already open (${twin.status.replace(/_/g, " ")})`;
+      throw new DraftRefused(`A payment to ${twin.payeeName} for ${fmt(twin.amountMinor, twin.currency)} is ${state}, payment ${twin.id}. No second payment was drafted.`);
+    }
     const rail = railFor(input.currency);
     const usdMinor = toUsdMinor(input.amountMinor, input.currency);
     const { destination, accountMismatch } = await this.destinationFor(ws, payee, input.destination, input.documentId);
@@ -377,10 +400,14 @@ export class Payments {
   }
 
   /** Human approval. Re-checks the policy: access or the payee may have changed since the draft. */
-  async approve(ws: string, id: string): Promise<{ ok: true; payment: Payment } | { ok: false; error: string }> {
+  async approve(ws: string, id: string, seen: ApprovalConfirmation): Promise<{ ok: true; payment: Payment } | { ok: false; error: string }> {
     const p = await this.store.payment(ws, id);
     if (!p) return { ok: false, error: "payment not found" };
     if (p.status !== "pending_approval" && p.status !== "blocked") return { ok: false, error: `payment is ${p.status}` };
+    // The approval names what the person confirmed; a stale or blind approval does not pay.
+    if (seen.amountMinor !== p.amountMinor || seen.currency !== p.currency) {
+      return { ok: false, error: `This payment is ${fmt(p.amountMinor, p.currency)}, not what was confirmed. Nothing was paid; review it again.` };
+    }
     const payee = p.payeeId ? await this.store.payee(ws, p.payeeId) : undefined;
     const destination = payee ? (clean(payee) ?? {}) : (p.destination ?? {});
     const policy = await this.evaluate(ws, { requestedBy: "user", rail: p.rail, usdMinor: p.usdMinor, payeeKnown: Boolean(payee), hasAccount: hasAccount(destination, p.rail) });

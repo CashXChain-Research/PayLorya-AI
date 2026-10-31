@@ -9,7 +9,7 @@ import type { BuyerAgent } from "../src/agent.js";
 import type { CashXChainClient } from "../src/cashxchain.js";
 import { handleCfoData, type D1Like, type D1StatementLike, type R2Like } from "../cloudflare/cfo-proxy.js";
 import { createCfo, mountCfo, type PaymentEngine } from "../src/cfo/index.js";
-import type { Extraction } from "../src/cfo/ingest.js";
+import { resumeDocuments, RESUME_WINDOW_MS, type Extraction } from "../src/cfo/ingest.js";
 import { decidePayment, type AgentLimits } from "../src/cfo/policy.js";
 import { loadConfig } from "../src/config.js";
 import { RunStore, type Run } from "../src/runs.js";
@@ -334,7 +334,7 @@ describe.each(["local", "cloudflare"] as const)("AI CFO API on %s storage", stor
     expect(payment).toMatchObject({ requestedBy: "agent", status: "pending_approval", payeeName: "Brenner GmbH", amountMinor: 200_000, currency: "EUR" });
     expect(payment.policy.checks.find((c: { id: string }) => c.id === "per_payment").status).toBe("warn");
 
-    expect((await me("POST", `/api/v1/payments/${payment.id}/approve`)).status).toBe(200);
+    expect((await me("POST", `/api/v1/payments/${payment.id}/approve`, { amountMinor: payment.amountMinor, currency: payment.currency })).status).toBe(200);
     await settle(async () => (await me("GET", "/api/v1/payments")).json[0].status === "executed");
     expect((await me("GET", "/api/v1/payments")).json[0].reference).toBe("cxc_po_123");
     expect((await me("GET", `/api/v1/chats/${chat.id}`)).json.messages.map((m: { role: string }) => m.role)).toEqual(["user", "assistant"]);
@@ -351,7 +351,7 @@ describe.each(["local", "cloudflare"] as const)("AI CFO API on %s storage", stor
     const [payment] = (await me("GET", "/api/v1/payments")).json;
     expect(payment).toMatchObject({ status: "pending_approval", payeeName: "Attacker Ltd" });
     expect((await me("GET", "/api/v1/payees")).json).toEqual([]);
-    const approve = await me("POST", `/api/v1/payments/${payment.id}/approve`);
+    const approve = await me("POST", `/api/v1/payments/${payment.id}/approve`, { amountMinor: payment.amountMinor, currency: payment.currency });
     expect(approve.status).toBe(409);
     expect(approve.json.error).toMatch(/No account details/);
   });
@@ -368,7 +368,7 @@ describe.each(["local", "cloudflare"] as const)("AI CFO API on %s storage", stor
     expect(payment.status).toBe("pending_approval");
     expect(payment.destination).toMatchObject({ iban: "DE89370400440532013000", country: "DE" });
     expect(payment.policy.checks.find((c: { id: string }) => c.id === "payee").message).toMatch(/Known payees only/);
-    expect((await me("POST", `/api/v1/payments/${payment.id}/approve`)).status).toBe(200);
+    expect((await me("POST", `/api/v1/payments/${payment.id}/approve`, { amountMinor: payment.amountMinor, currency: payment.currency })).status).toBe(200);
     await settle(async () => (await me("GET", "/api/v1/payments")).json[0].status === "executed");
     expect((await me("GET", "/api/v1/payees")).json).toEqual([]);
   });
@@ -400,5 +400,87 @@ describe.each(["local", "cloudflare"] as const)("AI CFO API on %s storage", stor
     expect(payment.status).toBe("pending_approval");
     expect(payment.destination).toBeUndefined();
     expect(payment.policy.checks.find((c: { id: string }) => c.id === "account").message).toMatch(/saved account is used/);
+  });
+});
+
+describe("approving moves money only with what the person confirmed", () => {
+  async function savedPayeePayment(me: Awaited<ReturnType<Awaited<ReturnType<typeof start>>["user"]>>, amountMinor = 18_000) {
+    await me("POST", "/api/v1/connections", { kind: "cashxchain", apiKey: CXC_KEY, access: "read_write" });
+    await me("POST", "/api/v1/connections", { kind: "cardano_agent_wallet", recoveryPhrase: AGENT_PHRASE, access: "read_write" });
+    const payee = (await me("POST", "/api/v1/payees", { name: "Brenner GmbH", country: "DE", iban: "DE89 3704 0044 0532 0130 00" })).json;
+    return { payee, payment: (await me("POST", "/api/v1/payments", { payeeId: payee.id, amountMinor, currency: "EUR", reason: "INV-2026-1201" })).json };
+  }
+
+  it("approve needs the confirmed amount and currency; a blind or mismatched approval pays nothing", async () => {
+    const { user } = await start([], stubAgent());
+    const me = await user("confirm@example.com");
+    const { payment } = await savedPayeePayment(me);
+    expect(payment.status).toBe("pending_approval");
+    const url = `/api/v1/payments/${payment.id}/approve`;
+
+    expect((await me("POST", url)).status).toBe(400);
+    expect((await me("POST", url, {})).json.error).toMatch(/confirmation dialog/);
+    const wrong = await me("POST", url, { amountMinor: 1_800_000, currency: "EUR" });
+    expect(wrong.status).toBe(409);
+    expect(wrong.json.error).toMatch(/not what was confirmed/);
+    expect((await me("POST", url, { amountMinor: 18_000, currency: "USD" })).status).toBe(409);
+    expect((await me("GET", "/api/v1/payments")).json[0].status).toBe("pending_approval");
+
+    expect((await me("POST", url, { amountMinor: 18_000, currency: "EUR" })).status).toBe(200);
+    await settle(async () => (await me("GET", "/api/v1/payments")).json[0].status === "executed");
+    // Rejecting needs no confirmation body.
+    const other = (await me("POST", "/api/v1/payments", { payeeId: payment.payeeId, amountMinor: 9_900, currency: "EUR", reason: "INV-2026-1203" })).json;
+    expect((await me("POST", `/api/v1/payments/${other.id}/reject`)).status).toBe(200);
+  });
+
+  it("a second payment for the same bill is refused while the first is open; after a reject, a new one can be drafted", async () => {
+    const { user } = await start([], stubAgent());
+    const me = await user("twice@example.com");
+    const { payee, payment } = await savedPayeePayment(me, 29_400);
+    const again = await me("POST", "/api/v1/payments", { payeeId: payee.id, amountMinor: 29_400, currency: "EUR", reason: "same invoice, asked twice" });
+    expect(again.status).toBe(409);
+    expect(again.json.error).toMatch(/already open \(pending approval\).*No second payment/);
+    expect((await me("GET", "/api/v1/payments")).json).toHaveLength(1);
+
+    expect((await me("POST", `/api/v1/payments/${payment.id}/reject`)).status).toBe(200);
+    expect((await me("POST", "/api/v1/payments", { payeeId: payee.id, amountMinor: 29_400, currency: "EUR", reason: "redo" })).status).toBe(201);
+  });
+
+  it("the agent's draft_payment gets the refusal as a tool error, not a second payment", async () => {
+    const input = { payeeName: "Nordlicht Studio", amount: 120, currency: "EUR", reason: "INV-77", iban: "DE89 3704 0044 0532 0130 00", country: "DE" };
+    const { user } = await start(
+      [{ tool: { name: "draft_payment", input } }, { text: "Drafted." }, { tool: { name: "draft_payment", input } }, { text: "Already open." }],
+      stubAgent(),
+    );
+    const me = await user("agenttwice@example.com");
+    await me("POST", "/api/v1/connections", { kind: "cashxchain", apiKey: CXC_KEY, access: "read_write" });
+    await me("POST", "/api/v1/connections", { kind: "cardano_agent_wallet", recoveryPhrase: AGENT_PHRASE, access: "read_write" });
+    const chat = (await me("POST", "/api/v1/chats")).json;
+    await me("POST", `/api/v1/chats/${chat.id}/messages`, { text: "Pay Nordlicht" });
+    const second = await me("POST", `/api/v1/chats/${chat.id}/messages`, { text: "Pay Nordlicht again" });
+    // The tool fails (the model gets the refusal as its result); no second payment exists.
+    expect(second.json).toMatch(/"status":"done","summary":"[^"]* failed"/);
+    expect((await me("GET", "/api/v1/payments")).json).toHaveLength(1);
+  });
+});
+
+describe("documents a restart cut off mid-read", () => {
+  it("are read again once after a grace period; past the window they fail with a clear message", async () => {
+    const { deps, user } = await start();
+    const me = await user("restart@example.com");
+    const ws = (await me("GET", "/api/v1/me")).json.workspace.id as string;
+    const file = { mimeType: "text/plain", data: new TextEncoder().encode("Invoice 1, EUR 10"), source: "upload" as const };
+    const a = await deps.store.addDocument(ws, { ...file, filename: "a.txt" });
+    const t0 = Date.parse(a.createdAt);
+
+    expect(await resumeDocuments(deps.store, deps.extract, t0 + 30_000)).toEqual([]);
+    expect(await resumeDocuments(deps.store, deps.extract, t0 + 5 * 60_000)).toEqual([a.id]);
+    await settle(async () => (await deps.store.document(ws, a.id))?.status === "processed");
+    // Read now: a later sweep leaves it alone.
+    expect(await resumeDocuments(deps.store, deps.extract, t0 + 6 * 60_000)).toEqual([]);
+
+    const b = await deps.store.addDocument(ws, { ...file, filename: "b.txt" });
+    expect(await resumeDocuments(deps.store, deps.extract, Date.parse(b.createdAt) + RESUME_WINDOW_MS + 60_000)).toEqual([b.id]);
+    expect(await deps.store.document(ws, b.id)).toMatchObject({ status: "failed", error: expect.stringMatching(/interrupted by a server restart/) });
   });
 });

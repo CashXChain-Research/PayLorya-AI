@@ -153,7 +153,7 @@ async function approvedAdaPayment(me: Call) {
   await me("POST", "/api/v1/connections", { kind: "cardano_wallet", address: WALLET, access: "read_write" });
   const payee = (await me("POST", "/api/v1/payees", { name: "Nordwind Node Services", cardanoAddress: PAYEE })).json;
   const draft = (await me("POST", "/api/v1/payments", { payeeId: payee.id, amountMinor: 2_000_000, currency: "ADA", reason: "Node hosting" })).json;
-  if (draft.status === "pending_approval") expect((await me("POST", `/api/v1/payments/${draft.id}/approve`)).status).toBe(200);
+  if (draft.status === "pending_approval") expect((await me("POST", `/api/v1/payments/${draft.id}/approve`, { amountMinor: draft.amountMinor, currency: draft.currency })).status).toBe(200);
   await settle(async () => (await payment(me, draft.id)).status === "awaiting_signature");
   return draft.id as string;
 }
@@ -283,7 +283,7 @@ describe("tADA payouts from the workspace's own wallet: stored at every step, si
     expect(await s.deps.store.claimPayment(ws, draft.id, ["pending_approval"], "executing", new Date().toISOString())).toBe(true);
     await s.deps.payments.sweep();
     expect(await payment(me, draft.id)).toMatchObject({ status: "pending_approval", error: INTERRUPTED });
-    expect((await me("POST", `/api/v1/payments/${draft.id}/approve`)).status).toBe(200);
+    expect((await me("POST", `/api/v1/payments/${draft.id}/approve`, { amountMinor: draft.amountMinor, currency: draft.currency })).status).toBe(200);
     await settle(async () => (await payment(me, draft.id)).status === "awaiting_signature");
   });
 
@@ -294,7 +294,7 @@ describe("tADA payouts from the workspace's own wallet: stored at every step, si
     await me("POST", "/api/v1/connections", { kind: "cardano_wallet", address: WALLET, access: "read_write" });
     const payee = (await me("POST", "/api/v1/payees", { name: "Nordwind Node Services", cardanoAddress: PAYEE })).json;
     const draft = (await me("POST", "/api/v1/payments", { payeeId: payee.id, amountMinor: 2_000_000, currency: "ADA", reason: "Node hosting" })).json;
-    if (draft.status === "pending_approval") await me("POST", `/api/v1/payments/${draft.id}/approve`);
+    if (draft.status === "pending_approval") await me("POST", `/api/v1/payments/${draft.id}/approve`, { amountMinor: draft.amountMinor, currency: draft.currency });
     await settle(async () => (await payment(me, draft.id)).status === "pending_approval" && Boolean((await payment(me, draft.id)).error));
     expect((await payment(me, draft.id)).error).toBe(CHECK_TIMED_OUT);
     expect(s.state.built).toEqual([]);
@@ -341,7 +341,8 @@ describe("each account pays from its own agent wallet, connected with its recove
     const none = (await me("POST", "/api/v1/payments", { payeeId: payee.id, amountMinor: 2_000_000, currency: "ADA", reason: "A" })).json;
     expect(none.policy.checks.find((c: { id: string }) => c.id === "agent_wallet").message).toMatch(/No agent wallet/);
     await connectAgentWallet(me, PHRASE, "read");
-    const readOnly = (await me("POST", "/api/v1/payments", { payeeId: payee.id, amountMinor: 2_000_000, currency: "ADA", reason: "B" })).json;
+    // Another bill (a second draft of the same one would be refused as a duplicate).
+    const readOnly = (await me("POST", "/api/v1/payments", { payeeId: payee.id, amountMinor: 3_000_000, currency: "ADA", reason: "B" })).json;
     expect(readOnly.status).toBe("blocked");
     expect(readOnly.policy.checks.find((c: { id: string }) => c.id === "agent_wallet").message).toMatch(/read-only/);
     expect(s.made).toEqual([]);
@@ -354,7 +355,7 @@ describe("each account pays from its own agent wallet, connected with its recove
     await connectAgentWallet(me);
     const payee = (await me("POST", "/api/v1/payees", { name: "Nordwind Node Services", cardanoAddress: PAYEE })).json;
     const draft = (await me("POST", "/api/v1/payments", { payeeId: payee.id, amountMinor: 2_000_000, currency: "ADA", reason: "Node hosting" })).json;
-    if (draft.status === "pending_approval") await me("POST", `/api/v1/payments/${draft.id}/approve`);
+    if (draft.status === "pending_approval") await me("POST", `/api/v1/payments/${draft.id}/approve`, { amountMinor: draft.amountMinor, currency: draft.currency });
     await settle(async () => (await payment(me, draft.id)).status === "executed");
     const paid = await payment(me, draft.id);
     expect(paid).toMatchObject({ txHash: AGENT_TX, verification: { txHash: FEE_TX, payer: agentWalletAddress(PHRASE) } });
@@ -371,7 +372,7 @@ describe("each account pays from its own agent wallet, connected with its recove
       await connectAgentWallet(me, phrase);
       const payee = (await me("POST", "/api/v1/payees", { name: "Nordwind Node Services", cardanoAddress: PAYEE })).json;
       const draft = (await me("POST", "/api/v1/payments", { payeeId: payee.id, amountMinor: 2_000_000, currency: "ADA", reason: "Node hosting" })).json;
-      if (draft.status === "pending_approval") await me("POST", `/api/v1/payments/${draft.id}/approve`);
+      if (draft.status === "pending_approval") await me("POST", `/api/v1/payments/${draft.id}/approve`, { amountMinor: draft.amountMinor, currency: draft.currency });
       await settle(async () => (await payment(me, draft.id)).status === "executed");
       expect((await payment(me, draft.id)).verification.payer).toBe(agentWalletAddress(phrase));
     }
