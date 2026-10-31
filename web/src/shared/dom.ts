@@ -1,0 +1,25 @@
+export const $ = <T extends HTMLElement = HTMLElement>(id: string): T => {
+  const el = document.getElementById(id);
+  if (!el) throw new Error(`#${id} missing`);
+  return el as T;
+};
+
+const ESCAPES: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+/** Escapes anything that goes into innerHTML. */
+export const esc = (s: unknown): string => String(s ?? "").replace(/[&<>"']/g, c => ESCAPES[c]!);
+
+export const tada = (lovelace: string | number | undefined): string =>
+  (Number(lovelace || 0) / 1e6).toLocaleString("en-US", { maximumFractionDigits: 2 });
+export const ada = (lovelace: string | number | undefined): string => `${tada(lovelace)} tADA`;
+
+export const short = (address?: string): string =>
+  address && address.length > 22 ? `${address.slice(0, 12)}…${address.slice(-6)}` : address || "";
+export const shortHash = (hash?: string): string => (hash ? `${hash.slice(0, 8)}…${hash.slice(-6)}` : "");
+
+const EXPONENT: Record<string, number> = { JPY: 0 };
+export function money(minor: number | undefined, currency: string | undefined): string {
+  if (minor == null || !currency) return "";
+  if (currency === "ADA") return `${(minor / 1e6).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 6 })} tADA`;
+  const e = EXPONENT[currency] ?? 2;
+  return `${currency} ${(minor / 10 ** e).toLocaleString("en-US", { minimumFractionDigits: e, maximumFractionDigits: e })}`;
+}
