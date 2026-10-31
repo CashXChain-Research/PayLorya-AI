@@ -162,7 +162,7 @@ export class BuyerAgent {
       run.report = report;
 
       if (report.verdict === "ready_for_review") {
-        run.route = this.route(invoice);
+        run.route = this.route(run, invoice);
         if (run.route.status === "blocked") return this.runs.transition(run, "BLOCKED", run.route.reason);
         run.draft = draftFrom(invoice, report, run.route);
         const ready = run.draft.executable ? "nothing executed" : `not executable: ${run.route.reason}`;
@@ -199,12 +199,12 @@ export class BuyerAgent {
    */
   private payableNow(run: Run): { ok: true; route: RouteDecision } | { ok: false; reason: string } {
     const invoice = run.invoice!;
-    const route = this.route(invoice);
+    const route = this.route(run, invoice);
     if (route.status !== "selected") return { ok: false, reason: route.reason };
     if (run.draft!.executable && (route.rail !== run.draft!.route.rail || route.destination !== run.draft!.route.destination)) {
       return { ok: false, reason: "payout route changed since the draft" };
     }
-    const key = payoutKey(findPayee(this.payees, invoice.supplier)!, invoice);
+    const key = payoutKey(findPayee(this.directory(run), invoice.supplier)!, invoice);
     if (route.rail === "cardano_preprod") {
       const allowed = this.payoutLedger.canPay(key, BigInt(invoice.amountMinor));
       return allowed.ok ? { ok: true, route } : { ok: false, reason: `payout refused: ${allowed.reason}` };
@@ -232,8 +232,8 @@ export class BuyerAgent {
   async preview(run: Run, approvals: PaymentPreview["approvals"]): Promise<PaymentPreview> {
     const invoice = run.invoice!;
     const draft = run.draft!;
-    const payee = findPayee(this.payees, invoice.supplier);
-    const route = this.route(invoice);
+    const payee = findPayee(this.directory(run), invoice.supplier);
+    const route = this.route(run, invoice);
     const rail = route.rail ?? draft.route.rail;
     const blockers: string[] = [];
     const warnings: string[] = [];
@@ -383,8 +383,13 @@ export class BuyerAgent {
     return { ok: true };
   }
 
-  private route(invoice: Invoice): RouteDecision {
-    return decideRoute(invoice, this.payees, {
+  /** A run may carry its own verified payee directory (an AI CFO workspace's); else the demo directory. */
+  private directory(run: Run): VerifiedPayee[] {
+    return run.payees ?? this.payees;
+  }
+
+  private route(run: Run, invoice: Invoice): RouteDecision {
+    return decideRoute(invoice, this.directory(run), {
       payoutMaxLovelace: BigInt(this.budgetState.cardanoPayoutMaxLovelace),
       fiatMaxMinor: this.budgetState.fiatPayoutMaxMinor,
     });
@@ -394,12 +399,12 @@ export class BuyerAgent {
     try {
       const invoice = run.invoice!;
       // Re-derive the route at execution time: only the directory decides where money goes.
-      const route = this.route(invoice);
+      const route = this.route(run, invoice);
       if (route.status !== "selected" || route.destination !== run.draft!.route.destination) {
         throw new Error("payout route changed since the draft; nothing executed");
       }
       // decideRoute selected this payee, so the record exists. Payouts key on it, not on extracted text.
-      const payee = findPayee(this.payees, invoice.supplier)!;
+      const payee = findPayee(this.directory(run), invoice.supplier)!;
       const key = payoutKey(payee, invoice);
       if (route.rail === "cardano_preprod") await this.withWallet(() => this.payOnCardano(run, invoice, route.destination!, key));
       else await this.payViaCxc(run, invoice, route.destination!, payee, key);

@@ -5,6 +5,8 @@ import { decisionRefusal } from "./approval.js";
 import { HARD_MAX } from "./budget.js";
 import { CXC_SANDBOX_API } from "./cashxchain.js";
 import { chat, ChatRequestSchema } from "./chat.js";
+import { mountCfo } from "./cfo/index.js";
+import type { CfoDeps } from "./cfo/api.js";
 import type { Config } from "./config.js";
 import { mountLocalFacilitator } from "./facilitator.js";
 import { sampleInvoices } from "./fixtures.js";
@@ -20,15 +22,19 @@ export interface AppDeps {
   runs: RunStore;
   /** Undefined until x402 is configured: the payment routes then answer 503/404. */
   agent?: BuyerAgent;
+  /** The AI CFO product (accounts, dashboard API); tests of the demo routes leave it out. */
+  cfo?: CfoDeps;
 }
 
 /** All HTTP routes. server.ts builds the agent and listens; tests mount this on a local port. */
-export function createApp(config: Config, { runs, agent }: AppDeps): Express {
+export function createApp(config: Config, { runs, agent, cfo }: AppDeps): Express {
   const limiter = new RunRateLimiter(config.RUNS_PER_MINUTE_PER_CLIENT, config.RUNS_PER_HOUR);
   // Every chat message is one or more model calls: its own, wider limits.
   const chatLimiter = new RunRateLimiter(CHAT_PER_MINUTE_PER_CLIENT, CHAT_PER_HOUR);
   const approvals = config.APPROVE_TOKEN ? ("operator-token" as const) : ("disabled" as const);
   const app = express();
+  // Before express.json(): Better Auth reads the raw body, and the CFO API parses its own (larger) bodies.
+  if (cfo) mountCfo(app, cfo);
   app.use(express.json({ limit: "256kb" }));
   // "/app" and "/about" resolve to their .html pages.
   app.use(express.static("public", { extensions: ["html"] }));

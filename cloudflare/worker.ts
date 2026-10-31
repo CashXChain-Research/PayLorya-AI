@@ -7,7 +7,8 @@ type Env = { AGENTPAY: DurableObjectNamespace<AgentPayContainer> } & Partial<Rec
 
 export class AgentPayContainer extends Container<Env> {
   defaultPort = 8787;
-  sleepAfter = "2h";
+  // AI CFO accounts live on the container disk until it stops (docs/DEPLOY.md, lifecycle limits).
+  sleepAfter = "24h";
 
   constructor(ctx: DurableObjectState<{}>, env: Env) {
     super(ctx, env);

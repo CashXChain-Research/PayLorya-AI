@@ -26,9 +26,10 @@ Cloudflare docs, 2026-10-30). `wrangler deploy --dry-run` passes with this confi
 | `SELLER_ADDRESS` | secret | `npx wrangler secret put` |
 | `CASHXCHAIN_API_KEY` | secret, optional: CashXChain **sandbox** key for fiat payouts (see below) | `npx wrangler secret put` |
 | `APPROVE_TOKEN` | secret, **required for approvals** (fail-closed): only requests carrying it may approve or reject a draft; unset, approve/reject answer 503 and `/api/health` shows `approvals: "disabled"` | `npx wrangler secret put` |
+| `BETTER_AUTH_SECRET` | secret, AI CFO accounts: signs sessions (32+ random characters, `openssl rand -hex 32`). Unset: a random one per start | `npx wrangler secret put` |
 | `PUBLIC_BASE_URL` | var | `vars` in `wrangler.jsonc`, after the first deploy |
 | `LOCAL_FACILITATOR`, `PRICE_LOVELACE`, `MAX_PRICE_LOVELACE`, `SESSION_BUDGET_LOVELACE`, `MAX_PAYMENTS_PER_RUN` | var | `vars` in `wrangler.jsonc` |
-| `FACILITATOR_URL`, `CARDANO_L1_CONFIRMATIONS`, `BLOCKFROST_PREPROD_URL`, `EXPLORER_TX_URL`, `DEMO_AMOUNT_CEILING_MINOR`, `FIAT_PAYOUT_MAX_MINOR` (1,000.00), `FIAT_PAYOUTS_PER_SESSION` (5), `FIAT_BUDGET_MINOR` (5,000.00 per currency), `CLAUDE_MODEL`, `ANTHROPIC_BASE_URL` | optional var | add to `vars` only to override the default in `src/config.ts` |
+| `FACILITATOR_URL`, `CARDANO_L1_CONFIRMATIONS`, `BLOCKFROST_PREPROD_URL`, `EXPLORER_TX_URL`, `DEMO_AMOUNT_CEILING_MINOR`, `FIAT_PAYOUT_MAX_MINOR` (1,000.00), `FIAT_PAYOUTS_PER_SESSION` (5), `FIAT_BUDGET_MINOR` (5,000.00 per currency), `CLAUDE_MODEL`, `ANTHROPIC_BASE_URL`, `DATA_DIR`, `CFO_AI_DAILY_LIMIT` | optional var | add to `vars` only to override the default in `src/config.ts` |
 | `RUNS_PER_MINUTE_PER_CLIENT` (10), `RUNS_PER_HOUR` (120, all clients together), `MAX_TEXT_CHARS` (20,000), `MAX_RUNS` (500) | optional var: limits for the public `POST /api/runs` (`src/ratelimit.ts`); `/api/health` shows the effective values under `limits` | add to `vars` only to override the default in `src/config.ts` |
 
 Every key in `src/config.ts` (except `PORT`) is forwarded into the container by `cloudflare/env.ts`.
@@ -103,11 +104,14 @@ other than a `cxc_sk_sandbox_` / `cxc_rk_sandbox_` key.
 
 ## Lifecycle limits (known limitation)
 
-- One instance (`max_instances: 1`, name `"main"`). State is in memory.
-- `sleepAfter = "2h"`: after 2 h without requests the container stops. A sleep or a redeploy **resets
-  all runs and the spend ledger** (`spentLovelace` back to 0).
+- One instance (`max_instances: 1`, name `"main"`). Demo runs and spend ledgers are in memory.
+- AI CFO accounts and workspace data live in SQLite at `DATA_DIR/cfo.db` inside the container.
+  Cloudflare Containers have **no persistent disk**: a redeploy or a sleep **deletes all accounts,
+  documents and chats**. Fine for a demo; before real customers, move the store to Postgres or D1
+  (Better Auth supports both; `src/cfo/store.ts` is the only data-access layer to port).
+- `sleepAfter = "24h"`: after 24 h without requests the container stops, with the effect above.
+  A running `basic` instance costs about $0.01 per hour beyond the plan's included usage.
 - Before judging: one warm-up request to `/api/health`, then no redeploys and no secret changes.
-- If the judging window has longer idle gaps, raise `sleepAfter` in `cloudflare/worker.ts`.
 
 ## Troubleshooting
 

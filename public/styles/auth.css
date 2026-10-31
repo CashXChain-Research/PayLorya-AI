@@ -1,0 +1,59 @@
+/* Login and signup: one centred card. Colors come only from base.css tokens, so dark mode follows. */
+
+body.auth { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; position: relative; overflow-x: hidden; }
+body.auth::before {
+  content: ""; position: absolute; inset: 0 0 auto; height: 720px; pointer-events: none; z-index: -1;
+  background: radial-gradient(45% 55% at 50% 20%, var(--brand-soft), transparent 70%), radial-gradient(25% 35% at 70% 40%, var(--accent-soft), transparent 70%);
+}
+.auth .nav { background: transparent; }
+.nav-link { color: var(--ink-2); font-size: 14px; font-weight: 500; padding: 8px 12px; border-radius: 999px; transition: color .2s, background .2s; }
+.nav-link:hover { color: var(--ink); background: var(--field); }
+
+.auth-main { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 32px 16px 48px; }
+.auth-card { width: 100%; max-width: 420px; background: var(--surface); border-radius: var(--r-xl); box-shadow: var(--shadow-lift); padding: 40px 36px 32px; }
+.mark.lg { width: 48px; height: 48px; border-radius: 15px; font-size: 22px; margin-bottom: 24px; }
+.auth-card h1 { margin: 0; font-size: 28px; line-height: 1.15; letter-spacing: -.035em; font-weight: 700; }
+.auth-card .sub { margin: 8px 0 0; color: var(--ink-2); font-size: 15px; }
+
+form[data-auth] { display: grid; gap: 16px; margin-top: 28px; }
+form[data-auth] .btn { margin-top: 6px; padding: 15px 22px; }
+
+.field label { display: block; font-size: 13.5px; font-weight: 600; margin-bottom: 7px; }
+.input { position: relative; }
+.input input {
+  width: 100%; height: 48px; border: 0; border-radius: var(--r-md); padding: 0 14px; background: var(--field); color: var(--ink);
+  font: inherit; font-size: 16px; outline: none; box-shadow: inset 0 0 0 1px transparent; transition: box-shadow .2s, background .2s;
+}
+.input.has-btn input { padding-right: 48px; }
+.input input:hover { background: var(--field-hover); }
+.input input:focus { background: var(--surface); box-shadow: inset 0 0 0 1.5px var(--accent), 0 0 0 4px var(--accent-soft); }
+.input input[aria-invalid="true"] { background: var(--surface); box-shadow: inset 0 0 0 1.5px var(--danger), 0 0 0 4px var(--danger-soft); }
+.pw-toggle { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); width: 36px; height: 36px; border: 0; border-radius: 10px; background: transparent; color: var(--ink-3); display: grid; place-items: center; cursor: pointer; transition: color .2s, background .2s; }
+.pw-toggle:hover { color: var(--ink); background: var(--field-hover); }
+.pw-toggle .eye-off { display: none; }
+.pw-toggle[aria-pressed="true"] .eye { display: none; }
+.pw-toggle[aria-pressed="true"] .eye-off { display: block; }
+.hint { margin: 7px 0 0; color: var(--ink-3); font-size: 12.5px; }
+.err { margin: 7px 0 0; color: var(--danger); font-size: 13px; font-weight: 500; }
+.err[hidden], .form-err[hidden] { display: none; }
+.err:not([hidden]) + .hint, .hint:has(+ .err:not([hidden])) { display: none; }
+
+.form-err {
+  display: flex; align-items: flex-start; gap: 10px; margin-top: 22px; padding: 12px 14px; border-radius: var(--r-md);
+  background: var(--danger-soft); color: var(--danger); font-size: 14px; font-weight: 500; line-height: 1.45; animation: rise .35s var(--ease);
+}
+.form-err svg { flex: none; margin-top: 1px; }
+
+.switch { margin: 24px 0 0; padding-top: 20px; border-top: 1px solid var(--line); text-align: center; color: var(--ink-2); font-size: 14.5px; }
+.switch a { font-weight: 600; }
+.switch a:hover, .auth-fine a:hover, .auth-foot a:hover { text-decoration: underline; }
+.auth-fine { max-width: 420px; margin: 20px 0 0; text-align: center; color: var(--ink-3); font-size: 12.5px; line-height: 1.5; }
+
+.auth-foot { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px 20px; padding: 20px 16px 28px; color: var(--ink-3); font-size: 12.5px; }
+.auth-foot a { color: var(--ink-2); }
+
+@media (max-width: 480px) {
+  .auth-main { justify-content: flex-start; padding-top: 16px; }
+  .auth-card { padding: 32px 22px 24px; border-radius: 24px; }
+  .auth-card h1 { font-size: 26px; }
+}

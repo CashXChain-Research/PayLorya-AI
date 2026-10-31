@@ -21,7 +21,14 @@ export const BUILDS: BuildOptions[] = [
   {
     ...common,
     format: "esm",
-    entryPoints: { app: "web/src/app/main.ts", home: "web/src/home/main.ts", about: "web/src/about/main.ts" },
+    entryPoints: {
+      app: "web/src/app/main.ts",
+      home: "web/src/home/main.ts",
+      about: "web/src/about/main.ts",
+      marketing: "web/src/marketing/main.ts",
+      auth: "web/src/auth/main.ts",
+      dashboard: "web/src/dashboard/main.ts",
+    },
   },
   // Runs before first paint (blocking script in <head>), so the theme never flashes.
   { ...common, format: "iife", entryPoints: { "theme-init": "web/src/theme-init.ts" } },
