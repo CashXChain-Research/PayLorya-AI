@@ -42,7 +42,11 @@ sets, from the customer's own wallet (signed in Lace) or their CashXChain accoun
 - **x402** with the official `@x402/*` SDK: scheme `exact`, network `cardano:preprod`, asset lovelace.
 - **Blockfrost** (Preprod) for UTxOs, balances and settlement checks.
 - **Evolution SDK** builds payouts from the customer's UTxOs; **CIP-30** wallets (Lace, Eternl) sign
-  them in the browser. PayLorya AI never holds customer keys.
+  them in the browser, so PayLorya AI holds no key for those payouts.
+- **Agent wallet per account:** the wallet that pays the x402 checks (and tADA payouts when the
+  owner's wallet is not set to sign) is connected by its recovery phrase. The server holds that key,
+  sealed with AES-256-GCM and bound to the account (`src/cfo/vault.ts`). Preprod test tADA only; a
+  mainnet product would need a custody assessment (MiCAR). Details: `docs/AI-CFO.md`.
 - Hosted x402 facilitator, with an in-process fallback (`LOCAL_FACILITATOR=true`).
 
 ## Product
