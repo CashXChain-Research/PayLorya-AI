@@ -1,81 +1,12 @@
-/* Developers (API docs). Structure and type come from base.css; this page swaps in the CashXChain
-   palette (white, grey, black, navy #000066, teal #005577) through the same tokens, so the shared
-   nav, buttons and theme toggle follow it in both themes. */
+/* Developers (API docs). Colors, structure and type come from base.css, like every other PayLorya
+   page (graphite and coral, light and dark). Only the code blocks keep their own dark palette. */
 
 :root {
-  --bg: #ffffff;
-  --surface: #ffffff;
-  --surface-2: #f5f6f8;
-  --field: #f0f1f4;
-  --field-hover: #e6e8ed;
-  --line: #e3e5ea;
-  --ink: #0f1115;
-  --ink-2: #4a505c;
-  --ink-3: #868b96;
-  --brand: #000066;
-  --brand-soft: #ebebf7;
-  --accent: #005577;
-  --accent-soft: #e6f1f5;
-  --accent-line: #b4d1dc;
-  --primary: #000066;
-  --on-primary: #ffffff;
-  --primary-glow: rgba(0, 0, 102, .2);
-  --navy-ink: #000066;
-  --navy-soft: #ebebf7;
-  --code-bg: #0c0e13;
-  --code-ink: #e6e8ee;
-  --code-line: #1d212b;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #0d0f13;
-    --surface: #151820;
-    --surface-2: #181b23;
-    --field: #20242e;
-    --field-hover: #282d39;
-    --line: #262a35;
-    --ink: #eef0f4;
-    --ink-2: #a7adba;
-    --ink-3: #777d8b;
-    --brand: #eef0f4;
-    --brand-soft: rgba(143, 155, 255, .14);
-    --accent: #5fbcda;
-    --accent-soft: rgba(95, 188, 218, .12);
-    --accent-line: rgba(95, 188, 218, .32);
-    --primary: #005577;
-    --on-primary: #ffffff;
-    --primary-glow: rgba(0, 85, 119, .45);
-    --navy-ink: #a9b1ff;
-    --navy-soft: rgba(143, 155, 255, .14);
-    --code-bg: #080a0e;
-    --code-ink: #e6e8ee;
-    --code-line: #1f2330;
-  }
-}
-:root[data-theme="dark"] {
-  --bg: #0d0f13;
-  --surface: #151820;
-  --surface-2: #181b23;
-  --field: #20242e;
-  --field-hover: #282d39;
-  --line: #262a35;
-  --ink: #eef0f4;
-  --ink-2: #a7adba;
-  --ink-3: #777d8b;
-  --brand: #eef0f4;
-  --brand-soft: rgba(143, 155, 255, .14);
-  --accent: #5fbcda;
-  --accent-soft: rgba(95, 188, 218, .12);
-  --accent-line: rgba(95, 188, 218, .32);
-  --primary: #005577;
-  --on-primary: #ffffff;
-  --primary-glow: rgba(0, 85, 119, .45);
-  --navy-ink: #a9b1ff;
-  --navy-soft: rgba(143, 155, 255, .14);
-  --code-bg: #080a0e;
-  --code-ink: #e6e8ee;
-  --code-line: #1f2330;
+  --navy-ink: var(--brand);
+  --navy-soft: var(--brand-soft);
+  --code-bg: #14161a;
+  --code-ink: #ece9e3;
+  --code-line: #262930;
 }
 
 html { scroll-behavior: smooth; }
