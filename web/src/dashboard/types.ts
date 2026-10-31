@@ -172,8 +172,10 @@ export interface BudgetInput {
 
 /** A tADA payout from your own wallet: its Cardano verification, transaction and confirmation. */
 export interface CardanoPayout {
-  /** Your connected wallet it leaves from. */
+  /** The wallet it leaves from: your agent wallet, or your own wallet you sign with. */
   from: string;
+  /** Paid by your agent wallet on its own. */
+  byAgent?: boolean;
   payTo: string;
   lovelace: string;
   /** The x402 verification report the agent paid for on Cardano before the payout. */

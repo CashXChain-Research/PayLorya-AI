@@ -210,6 +210,24 @@ A workspace uses its own accounts (Connections page). PayLorya AI's shared sandb
   before it. Approving it again
   continues it under the same idempotency key, fixed at the first attempt (`payments.payout_key`):
   CashXChain replays the payout instead of paying twice, and a changed payee or amount is refused.
+- **A tADA payout from the agent wallet survives a restart too.** The signer the account's engine uses
+  stores the signed transaction on its payment before the agent sends it
+  (`Payments.recordAgentPayout`). After a restart the sweep settles it from the chain: in a block →
+  executed; past its validity with Blockfrost's tip well beyond → back to approval, nothing was sent.
+  Cut off before signing → back to approval at once.
+- **Checked before anything is paid, with a reason.**
+  - When drafted (and again on approval), the policy refuses amounts the payout engine would refuse
+    after the paid check: tADA below 1 tADA (Cardano's minimum output) or above the per-payout cap
+    (`PAYOUT_MAX_LOVELACE`), fiat above `FIAT_PAYOUT_MAX_MINOR`. Policy check `limit`.
+  - Before buying the verification, `Payments.preflight` checks the agent's session budgets, the
+    agent wallet's balance (the verification's price cap `MAX_PRICE_LOVELACE` plus fees, plus the
+    payout when the agent wallet pays tADA), and the CashXChain account's balance. A miss blocks the
+    payment with its reason ("Your agent wallet holds 2 tADA; this payment needs …"), logs
+    "payment blocked", and costs no fee.
+  - A run that stops says why in words (`explain`): the verification's failing checks, the
+    route's reason, or the error. Never a bare state.
+  - A blocked payment shows "Check again": approving it checks everything anew. Approving again
+    clears the earlier note and logs "approved payment again".
 - **Not possible today:** a "Sign in with CashXChain" popup (the CashXChain auth portal is an OAuth
   client for Google/Apple/Microsoft, not an OAuth provider), and a platform creating CashXChain
   accounts for customers (attach-only by design, see above).

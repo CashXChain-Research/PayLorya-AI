@@ -44,6 +44,8 @@ export interface TxKit {
   confirmed(txHash: string): Promise<boolean>;
   /** Unix ms of the newest block the provider has indexed: how far its view of the chain reaches. */
   tipTime(): Promise<number>;
+  /** Lovelace held at an address (0 for one that never received anything). */
+  balance(address: string): Promise<bigint>;
 }
 
 const ADA = (lovelace: bigint) => `${(Number(lovelace) / 1e6).toLocaleString("en-US", { maximumFractionDigits: 6 })} tADA`;
@@ -85,6 +87,13 @@ export function evolutionKit(blockfrost: { baseUrl: string; projectId: string })
       if (res.status === 404) return false;
       if (!res.ok) throw new Error(`Blockfrost answered ${res.status}`);
       return true;
+    },
+    async balance(address) {
+      const res = await fetch(`${base}/addresses/${address}`, { headers: { project_id: blockfrost.projectId }, signal: AbortSignal.timeout(10_000) });
+      if (res.status === 404) return 0n;
+      if (!res.ok) throw new Error(`Blockfrost answered ${res.status}`);
+      const amount = ((await res.json()) as { amount?: Array<{ unit: string; quantity: string }> }).amount ?? [];
+      return BigInt(amount.find(a => a.unit === "lovelace")?.quantity ?? "0");
     },
     async tipTime() {
       const res = await fetch(`${base}/blocks/latest`, { headers: { project_id: blockfrost.projectId }, signal: AbortSignal.timeout(10_000) });

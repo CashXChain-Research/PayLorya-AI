@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { build } from "esbuild";
 import { describe, expect, it } from "vitest";
-import { BUILDS, VENDOR } from "../web/build.js";
+import { BUILD_ID, BUILDS, VENDOR } from "../web/build.js";
 
 const read = (path: string): Buffer | undefined => {
   try {
@@ -20,6 +20,10 @@ describe("committed web bundle", () => {
         expect(read(file.path)?.toString("utf8"), `${file.path} is stale`).toBe(file.text);
       }
     }
+  });
+
+  it("build.json names the dashboard's build (run npm run build:web)", () => {
+    expect(JSON.parse(read("public/assets/build.json")?.toString("utf8") ?? "{}").id).toBe(BUILD_ID);
   });
 
   it("vendored files match node_modules (run npm run build:web)", () => {

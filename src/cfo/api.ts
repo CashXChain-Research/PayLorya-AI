@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import express, { type Express, type NextFunction, type Request, type Response } from "express";
 import { toNodeHandler } from "better-auth/node";
 import { z } from "zod";
@@ -31,6 +32,8 @@ export interface CfoDeps {
   /** Stripe.js key for linking bank accounts (with connections.stripe). */
   stripePublishableKey?: string;
 }
+
+export const STALE_PAGE = "PayLorya AI was updated while this page was open. Reload the page and try again: nothing was changed.";
 
 const MAX_FILE_BYTES = 15 * 1024 * 1024;
 // base64 grows by 4/3; one file per document upload, a few per chat message.
@@ -138,6 +141,25 @@ export function mountCfo(app: Express, deps: CfoDeps): void {
   app.get("/demo", async (_req, res) => res.sendFile("demo.html", { root: "public" }));
 
   const api = express.Router();
+  // The dashboard build this server ships (public/assets/build.json, written by npm run build:web).
+  // A page loaded before a deploy sends an older one: it is told to reload, and its money actions are
+  // refused rather than run with what that old page knew.
+  const build = ((): string | undefined => {
+    try {
+      return (JSON.parse(readFileSync("public/assets/build.json", "utf8")) as { id?: string }).id;
+    } catch {
+      return undefined;
+    }
+  })();
+  api.use((req: Request, res: Response, next: NextFunction) => {
+    if (build) res.setHeader("x-paylorya-build", build);
+    const page = req.header("x-paylorya-build");
+    if (build && page && page !== build && req.method !== "GET") {
+      res.status(409).json({ error: STALE_PAGE, code: "stale_page" });
+      return;
+    }
+    next();
+  });
   api.use(async (req: Request, res: Response, next: NextFunction) => {
     try {
       const user = await auth.userFrom(req.headers);
@@ -526,7 +548,12 @@ export function mountCfo(app: Express, deps: CfoDeps): void {
     let seen: z.infer<typeof ApprovalBody> | undefined;
     if (decision === "approve") {
       const parsed = ApprovalBody.safeParse(req.body);
-      if (!parsed.success) throw new HttpError(400, "Approve from the confirmation dialog: the request must name the confirmed amountMinor and currency");
+      if (!parsed.success) {
+        throw new HttpError(
+          400,
+          "Approve from the confirmation dialog: the request must name the confirmed amountMinor and currency. If you just did, this page is out of date (PayLorya AI was updated): reload it and approve again. Nothing was paid.",
+        );
+      }
       seen = parsed.data;
     }
     const result = seen ? await deps.payments.approve(ws, req.params.id as string, seen) : await deps.payments.reject(ws, req.params.id as string);

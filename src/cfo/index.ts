@@ -2,7 +2,7 @@ import { StripeFc } from "./stripe.js";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { toClientCardanoSigner } from "@x402/cardano";
+import { toClientCardanoSigner, type ClientCardanoSignInput, type ClientCardanoSignResult } from "@x402/cardano";
 import { BuyerAgent } from "../agent.js";
 import { CashXChainClient } from "../cashxchain.js";
 import { blockfrostProvider, CARDANO_NETWORK, type Config } from "../config.js";
@@ -49,7 +49,7 @@ export async function createCfo(
     /** Tests: a shorter limit for the paid verification step. */
     checkTimeoutMs?: number;
     /** Tests: the payout engine for an account's agent wallet (its recovery phrase). */
-    agentFor?: (recoveryPhrase: string) => BuyerAgent;
+    agentFor?: (recoveryPhrase: string, signed: (input: ClientCardanoSignInput, out: ClientCardanoSignResult) => Promise<void>) => BuyerAgent;
   } = {},
 ): Promise<CfoDeps> {
   const { sql, files } = storage(config, opts);
@@ -75,14 +75,27 @@ export async function createCfo(
     store,
     keys,
     opts.agentFor ??
-      (phrase => new BuyerAgent(config, engine.runs, toClientCardanoSigner({ mnemonic: phrase, network: CARDANO_NETWORK, provider: blockfrostProvider(config) }))),
+      ((phrase, signed) => {
+        const signer = toClientCardanoSigner({ mnemonic: phrase, network: CARDANO_NETWORK, provider: blockfrostProvider(config) });
+        return new BuyerAgent(config, engine.runs, {
+          getAddress: () => signer.getAddress(),
+          // A payout (anything not paying the x402 seller) is stored before the agent sends it.
+          async buildAndSignPaymentTransaction(input) {
+            const out = await signer.buildAndSignPaymentTransaction(input);
+            if (input.payTo !== config.SELLER_ADDRESS) await signed(input, out);
+            return out;
+          },
+        });
+      }),
   );
   const payments = new Payments(store, engine, keys, {
     agents,
+    limits: { tadaMaxLovelace: config.PAYOUT_MAX_LOVELACE, fiatMaxMinor: config.FIAT_PAYOUT_MAX_MINOR, feeMaxLovelace: config.MAX_PRICE_LOVELACE },
     ...(opts.walletKit ? { kit: opts.walletKit } : config.BLOCKFROST_PROJECT_ID ? { kit: evolutionKit(blockfrostProvider(config).blockfrost) } : {}),
     explorerTxUrl: config.EXPLORER_TX_URL,
     ...(opts.checkTimeoutMs ? { checkTimeoutMs: opts.checkTimeoutMs } : {}),
   });
+  agents.onPayoutSigned = (ws, input, out) => payments.recordAgentPayout(ws, input, out);
   if (!opts.noSweep) {
     // Settles what a restart left behind, then follows sent tADA payouts to their block.
     void payments.sweep();

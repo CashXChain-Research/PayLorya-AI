@@ -1,3 +1,4 @@
+import type { ClientCardanoSignInput, ClientCardanoSignResult } from "@x402/cardano";
 import type { BuyerAgent } from "../agent.js";
 import type { CxcKeys } from "./cxc-keys.js";
 import type { ConnectionRow, Store } from "./store.js";
@@ -15,14 +16,22 @@ export const PHRASE_UNREADABLE =
  * on Cardano and tADA payouts. Never PayLorya AI's wallet (BUYER_MNEMONIC), which serves the public
  * demo only. Each engine has its own wallet queue, ledgers and session budget.
  */
+/** Called after the agent wallet signed a tADA payout and before it is sent: record it first. */
+export type PayoutSigned = (ws: string, input: ClientCardanoSignInput, signed: ClientCardanoSignResult) => Promise<void>;
+
 export class WorkspaceAgents {
   private readonly cache = new Map<string, { connectionId: string; agent: BuyerAgent }>();
+  /** Set by Payments: a signed payout is stored before the agent broadcasts it (restart-safe). */
+  onPayoutSigned?: PayoutSigned;
 
   constructor(
     private readonly store: Store,
     private readonly keys: CxcKeys,
-    /** Builds the engine for a recovery phrase: production signs with @x402/cardano on Preprod. */
-    private readonly make: (recoveryPhrase: string) => BuyerAgent,
+    /**
+     * Builds the engine for a recovery phrase: production signs with @x402/cardano on Preprod.
+     * `signed` must be awaited after signing a payout (not an x402 fee) and before it is sent.
+     */
+    private readonly make: (recoveryPhrase: string, signed: (input: ClientCardanoSignInput, out: ClientCardanoSignResult) => Promise<void>) => BuyerAgent,
   ) {}
 
   /** The account's agent wallet: its own, connected with a recovery phrase. */
@@ -39,7 +48,7 @@ export class WorkspaceAgents {
     if (cached?.connectionId === wallet.id) return cached.agent;
     const phrase = await this.keys.open(ws, wallet, PHRASE_UNREADABLE);
     if (!phrase) throw new Error(NEEDS_AGENT_WALLET);
-    const agent = this.make(phrase);
+    const agent = this.make(phrase, (input, out) => this.onPayoutSigned?.(ws, input, out) ?? Promise.resolve());
     this.cache.set(ws, { connectionId: wallet.id, agent });
     return agent;
   }
