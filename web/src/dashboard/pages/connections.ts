@@ -5,6 +5,8 @@ import type { Ctx } from "../state.js";
 import type { Access, CatalogEntry, Connection, ConnectionCreate, ConnectionKind, CxcState } from "../types.js";
 import { ago, balance, confirmDialog, copyText, dialog, empty, fieldError, icon, pageHead, sk, toast, usd, val } from "../ui.js";
 import { linkBank } from "../stripe-bank.js";
+import { generateMnemonic, validateMnemonic } from "@scure/bip39";
+import { wordlist } from "@scure/bip39/wordlists/english.js";
 import { cardanoWallets, connectCardano, connectEvm, hasEvmWallet } from "../wallets.js";
 
 const KIND_ICON: Record<ConnectionKind, string> = {
@@ -29,6 +31,11 @@ let cxcLinked = false;
 
 /** Whose CashXChain account a connection reads: the workspace's own key, its sub-account, or the shared one. */
 function cxcOwner(c: Connection): string {
+  if (c.kind === "cardano_agent_wallet") {
+    return c.keyHint
+      ? `<div class="addr-row owner"><span class="muted small">Your agent wallet · ${esc(c.keyHint)}, stored encrypted</span></div>`
+      : `<div class="addr-row owner"><span class="muted small">PayLorya AI's shared wallet: remove it and connect your own</span></div>`;
+  }
   if (c.kind !== "cashxchain") return "";
   if (c.keyHint) return `<div class="addr-row owner"><span class="muted small">Your account · key</span><span class="mono" title="Stored encrypted">${esc(c.keyHint)}</span></div>`;
   return `<div class="addr-row owner"><span class="muted small">${cxcLinked ? "Your linked CashXChain sub-account · payouts need your API key" : "No API key: remove and connect again with your key"}</span></div>`;
@@ -125,15 +132,33 @@ async function addDialog(entry: CatalogEntry): Promise<Connection | null> {
         <span class="fine">From your CashXChain sandbox dashboard: a secret key, or a restricted key with accounts:read (to pay, also payments:read, payments:write and beneficiaries:write). Stored encrypted; shown again only by its last four characters.${entry.linkedFallback ? " Leave empty to read your linked CashXChain sub-account; payouts need the key." : ""}</span></div>`
           : ""
       }
+      ${
+        entry.acceptsRecoveryPhrase
+          ? `<div class="field"><label for="c-phrase">Recovery phrase</label><textarea id="c-phrase" name="recoveryPhrase" class="mono" rows="3" placeholder="12, 15 or 24 words" autocomplete="off" autocapitalize="off" spellcheck="false"></textarea>
+        <span class="fine">Use a wallet made for PayLorya AI that holds test tADA only, never the phrase of a wallet with real funds. Stored encrypted; the AI CFO signs with it on Cardano Preprod only, within your policy.</span>
+        <div style="margin-top:8px"><button type="button" class="btn ghost xs" data-new-wallet>${icon("plus", 14, 2.4)}Create a new wallet</button></div>
+        <div class="callout info sm" id="c-phrase-new" hidden>${icon("info", 14)}<span>New wallet created in your browser. Write the phrase down now: it is the only way to recover this wallet. After connecting, fund its address from the Cardano Preprod faucet.</span></div></div>`
+          : ""
+      }
       <div class="field"><span class="lbl">Agent access</span>
         <div class="radio-cards">
           <label><input type="radio" name="access" value="read" checked><span>${icon("eye", 16)}<b>Read-only</b><em>See balances and history</em></span></label>
-          <label class="${entry.supports.write ? "" : "off"}"><input type="radio" name="access" value="read_write" ${entry.supports.write ? "" : "disabled"}><span>${icon("pay", 16)}<b>Read &amp; write</b><em>${entry.supports.write ? (entry.kind === "cardano_wallet" ? "Pays tADA: you sign each payment in your wallet" : "May also send payments, within your policy") : "Not supported by this connection"}</em></span></label>
+          <label class="${entry.supports.write ? "" : "off"}"><input type="radio" name="access" value="read_write" ${entry.supports.write ? "" : "disabled"}><span>${icon("pay", 16)}<b>Read &amp; write</b><em>${entry.supports.write ? (entry.kind === "cardano_wallet" ? "Pays tADA: you sign each payment in your wallet" : entry.kind === "cardano_agent_wallet" ? "Pays verifications and tADA on its own, within your policy" : "May also send payments, within your policy") : "Not supported by this connection"}</em></span></label>
         </div>
       </div>
       ${entry.kind === "cardano_agent_wallet" || entry.kind === "cardano_wallet" ? `<p class="fine">${icon("info", 13)} Cardano Preprod is a test network. Balances are tADA with no real value.</p>` : ""}
       ${entry.kind === "cashxchain" ? `<p class="fine">${icon("info", 13)} CashXChain sandbox: a test ledger, no real money moves.</p>` : ""}`,
     onOpen: form => {
+      form.addEventListener("click", e => {
+        if (!(e.target as HTMLElement).closest("[data-new-wallet]")) return;
+        const area = form.elements.namedItem("recoveryPhrase") as HTMLTextAreaElement | null;
+        if (!area) return;
+        // 24 words from the browser's CSPRNG; the phrase leaves the browser only to be stored encrypted.
+        area.value = generateMnemonic(wordlist, 256);
+        form.querySelector<HTMLElement>("#c-phrase-new")!.hidden = false;
+        const rw = form.querySelector<HTMLInputElement>('input[name="access"][value="read_write"]');
+        if (rw) rw.checked = true;
+      });
       form.addEventListener("click", async e => {
         const b = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-wallet]");
         if (!b || b.disabled) return;
@@ -159,6 +184,12 @@ async function addDialog(entry: CatalogEntry): Promise<Connection | null> {
       const body: ConnectionCreate = { kind: entry.kind, access: (val(form, "access") || "read") as Access };
       const label = val(form, "label");
       if (label) body.label = label;
+      if (entry.acceptsRecoveryPhrase) {
+        const phrase = val(form, "recoveryPhrase").toLowerCase().replace(/\s+/g, " ");
+        if (!phrase) return fieldError(form, "recoveryPhrase", "Paste the wallet's recovery phrase, or create a new wallet.");
+        if (!validateMnemonic(phrase, wordlist)) return fieldError(form, "recoveryPhrase", "That is not a valid recovery phrase: 12, 15 or 24 English words.");
+        body.recoveryPhrase = phrase;
+      }
       if (entry.acceptsApiKey) {
         const apiKey = val(form, "apiKey");
         if (apiKey && !CXC_KEY.test(apiKey)) return fieldError(form, "apiKey", "Use a CashXChain sandbox key: cxc_sk_sandbox_… or cxc_rk_sandbox_…");
@@ -218,7 +249,7 @@ export async function renderConnections(view: HTMLElement, ctx: Ctx): Promise<vo
   const paint = () => {
     grid.innerHTML = conns.length
       ? conns.map(connCard).join("")
-      : `<div class="card wide-empty">${empty({ icon: "link", title: "No connections yet", text: "Connect your own Cardano wallet, an EVM wallet or your CashXChain sandbox account below. Your AI CFO starts reading balances right away." })}</div>`;
+      : `<div class="card wide-empty">${empty({ icon: "link", title: "No connections yet", text: "Start with your agent wallet: it pays the verification on Cardano before every payout. Then add your CashXChain sandbox account, or wallets to watch." })}</div>`;
   };
   const paintCatalog = () => {
     catEl.innerHTML = catalog

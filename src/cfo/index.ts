@@ -2,8 +2,11 @@ import { StripeFc } from "./stripe.js";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { toClientCardanoSigner } from "@x402/cardano";
+import { BuyerAgent } from "../agent.js";
 import { CashXChainClient } from "../cashxchain.js";
-import { blockfrostProvider, type Config } from "../config.js";
+import { blockfrostProvider, CARDANO_NETWORK, type Config } from "../config.js";
+import { WorkspaceAgents } from "./agents.js";
 import type { CfoDeps } from "./api.js";
 import { CODE_MINUTES, createAuth } from "./auth.js";
 import { migrate } from "./db.js";
@@ -45,6 +48,8 @@ export async function createCfo(
     noSweep?: boolean;
     /** Tests: a shorter limit for the paid verification step. */
     checkTimeoutMs?: number;
+    /** Tests: the payout engine for an account's agent wallet (its recovery phrase). */
+    agentFor?: (recoveryPhrase: string) => BuyerAgent;
   } = {},
 ): Promise<CfoDeps> {
   const { sql, files } = storage(config, opts);
@@ -65,7 +70,15 @@ export async function createCfo(
   });
   // A workspace's own CashXChain account, connected with its API key (sealed with BETTER_AUTH_SECRET).
   const keys = new CxcKeys(store, config.BETTER_AUTH_SECRET, opts.cashxchainFor ?? (apiKey => new CashXChainClient({ apiKey })));
+  // Each account pays from its own agent wallet; PayLorya AI's wallet (BUYER_MNEMONIC) is the public demo's only.
+  const agents = new WorkspaceAgents(
+    store,
+    keys,
+    opts.agentFor ??
+      (phrase => new BuyerAgent(config, engine.runs, toClientCardanoSigner({ mnemonic: phrase, network: CARDANO_NETWORK, provider: blockfrostProvider(config) }))),
+  );
   const payments = new Payments(store, engine, keys, {
+    agents,
     ...(opts.walletKit ? { kit: opts.walletKit } : config.BLOCKFROST_PROJECT_ID ? { kit: evolutionKit(blockfrostProvider(config).blockfrost) } : {}),
     explorerTxUrl: config.EXPLORER_TX_URL,
     ...(opts.checkTimeoutMs ? { checkTimeoutMs: opts.checkTimeoutMs } : {}),
@@ -83,9 +96,6 @@ export async function createCfo(
     connections: {
       acceptsApiKey: keys.ready,
       ...(config.BLOCKFROST_PROJECT_ID ? { blockfrost: blockfrostProvider(config).blockfrost } : {}),
-      get agentWalletAddress() {
-        return engine.agent?.buyerAddress;
-      },
       ...(config.CASHXCHAIN_API_KEY ? { cashxchain: new CashXChainClient({ apiKey: config.CASHXCHAIN_API_KEY }) } : {}),
       ...(config.STRIPE_SECRET_KEY && config.STRIPE_PUBLISHABLE_KEY ? { stripe: new StripeFc(config.STRIPE_SECRET_KEY) } : {}),
     },

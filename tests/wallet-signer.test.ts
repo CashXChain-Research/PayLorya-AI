@@ -5,7 +5,8 @@ import { Address, Client, preprod, Transaction, TransactionWitnessSet } from "@e
 import { addressFromSeed } from "@evolution-sdk/evolution/sdk/wallet/Derivation";
 import { generateMnemonic } from "@scure/bip39";
 import { wordlist } from "@scure/bip39/wordlists/english.js";
-import { decodeCardanoTransaction } from "@x402/cardano";
+import { decodeCardanoTransaction, toClientCardanoSigner } from "@x402/cardano";
+import { agentWalletAddress } from "../src/cfo/connections.js";
 import express from "express";
 import { afterEach, describe, expect, it } from "vitest";
 import { bech32FromHex, evolutionKit, InsufficientFunds, walletUtxo } from "../src/cfo/wallet-signer.js";
@@ -90,6 +91,14 @@ describe("tADA payout from the owner's own wallet (CIP-30)", () => {
     expect(await kit.confirmed("a".repeat(64))).toBe(true);
     expect(await kit.confirmed("c".repeat(64))).toBe(false);
     expect(await kit.tipTime()).toBe(1_793_000_000_000);
+  });
+
+  it("the agent wallet's shown address is the one its x402 signer pays from", () => {
+    for (const phrase of [generateMnemonic(wordlist), generateMnemonic(wordlist, 256)]) {
+      const signer = toClientCardanoSigner({ mnemonic: phrase, network: "cardano:preprod", provider: { blockfrost: { baseUrl: "http://127.0.0.1:9", projectId: "preprodTest" } } });
+      expect(agentWalletAddress(phrase)).toBe(signer.getAddress());
+      expect(agentWalletAddress(phrase)).toMatch(/^addr_test1/);
+    }
   });
 
   it("a malformed witness set or unreadable funds are refused", () => {

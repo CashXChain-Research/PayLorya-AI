@@ -2,6 +2,8 @@ import { once } from "node:events";
 import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import express, { type Express } from "express";
+import { generateMnemonic } from "@scure/bip39";
+import { wordlist } from "@scure/bip39/wordlists/english.js";
 import { afterEach, describe, expect, it } from "vitest";
 import type { BuyerAgent } from "../src/agent.js";
 import { createCfo, mountCfo, type PaymentEngine } from "../src/cfo/index.js";
@@ -18,6 +20,10 @@ import type { Invoice } from "../src/types.js";
 import { createFakeCxc, FAKE_KEY } from "./fake-cashxchain.js";
 
 const SECRET = "s".repeat(40);
+// The account's own agent wallet: it pays the verification on Cardano before every payout.
+const AGENT_PHRASE = generateMnemonic(wordlist, 256);
+const agentWallet = (me: (method: string, path: string, body?: unknown) => Promise<unknown>) =>
+  me("POST", "/api/v1/connections", { kind: "cardano_agent_wallet", recoveryPhrase: AGENT_PHRASE, access: "read_write" });
 const servers: Server[] = [];
 afterEach(async () => {
   await Promise.all(servers.splice(0).map(s => new Promise<void>(resolve => (s.closeAllConnections(), s.close(() => resolve())))));
@@ -68,7 +74,7 @@ async function start(env: Record<string, string> = {}) {
   const config = loadConfig({ PUBLIC_BASE_URL: base, BETTER_AUTH_SECRET: SECRET, ...env });
   const { agent, given } = routeAgent();
   const engine: PaymentEngine = { runs: new RunStore(), agent };
-  const deps = await createCfo(config, engine, { memory: true, cashxchainFor: apiKey => new CashXChainClient({ apiKey, baseUrl: cxcUrl }) });
+  const deps = await createCfo(config, engine, { memory: true, cashxchainFor: apiKey => new CashXChainClient({ apiKey, baseUrl: cxcUrl }), agentFor: () => agent });
   mountCfo(app, deps);
 
   async function user(email: string) {
@@ -122,6 +128,7 @@ describe("a workspace connects its own CashXChain account by API key", () => {
     const s = await start();
     const me = await s.user("owner@brenner.example");
     const created = await me("POST", "/api/v1/connections", { kind: "cashxchain", apiKey: FAKE_KEY, access: "read_write" });
+    await agentWallet(me);
     expect(created.status).toBe(201);
     expect(created.json).toMatchObject({ kind: "cashxchain", access: "read_write", keyHint: "cxc_sk_sandbox_…y123", status: "active" });
     expect(created.json.balances).toEqual([expect.objectContaining({ asset: "EUR", amount: "50000.0000" })]);
@@ -144,6 +151,7 @@ describe("a workspace connects its own CashXChain account by API key", () => {
     const s = await start();
     const me = await s.user("owner@brenner.example");
     await me("POST", "/api/v1/connections", { kind: "cashxchain", apiKey: FAKE_KEY, access: "read_write" });
+    await agentWallet(me);
     const payee = (await me("POST", "/api/v1/payees", { name: "Brenner GmbH", iban: "DE89370400440532013000" })).json;
     const draft = await me("POST", "/api/v1/payments", { payeeId: payee.id, amountMinor: 12_000, currency: "EUR", reason: "INV-1042" });
     expect(draft.status).toBe(201);
@@ -162,6 +170,7 @@ describe("a workspace connects its own CashXChain account by API key", () => {
     const s = await start();
     const me = await s.user("owner@brenner.example");
     const conn = (await me("POST", "/api/v1/connections", { kind: "cashxchain", apiKey: FAKE_KEY, access: "read_write" })).json;
+    await agentWallet(me);
     // As after a BETTER_AUTH_SECRET rotation: sealed under another secret.
     const ws = (await me("GET", "/api/v1/me")).json.workspace.id;
     const foreign = new Vault("x".repeat(40)).seal(FAKE_KEY, connectionContext(ws));
@@ -183,6 +192,7 @@ describe("a CashXChain payout cut off by a restart", () => {
     const s = await start();
     const me = await s.user("owner@brenner.example");
     await me("POST", "/api/v1/connections", { kind: "cashxchain", apiKey: FAKE_KEY, access: "read_write" });
+    await agentWallet(me);
     const payee = (await me("POST", "/api/v1/payees", { name: "Brenner GmbH", iban: "DE89370400440532013000" })).json;
     const draft = (await me("POST", "/api/v1/payments", { payeeId: payee.id, amountMinor: 12_000, currency: "EUR", reason: "INV-1042" })).json;
     if (draft.status === "pending_approval") await me("POST", `/api/v1/payments/${draft.id}/approve`, { amountMinor: draft.amountMinor, currency: draft.currency });
@@ -206,6 +216,7 @@ describe("a CashXChain payout cut off by a restart", () => {
     const s = await start();
     const me = await s.user("owner@brenner.example");
     await me("POST", "/api/v1/connections", { kind: "cashxchain", apiKey: FAKE_KEY, access: "read_write" });
+    await agentWallet(me);
     const payee = (await me("POST", "/api/v1/payees", { name: "Brenner GmbH", iban: "DE89370400440532013000" })).json;
     const draft = (await me("POST", "/api/v1/payments", { payeeId: payee.id, amountMinor: 12_000, currency: "EUR", reason: "INV-1042" })).json;
     if (draft.status === "pending_approval") await me("POST", `/api/v1/payments/${draft.id}/approve`, { amountMinor: draft.amountMinor, currency: draft.currency });
@@ -227,6 +238,7 @@ describe("no shared CashXChain account for workspaces", () => {
     const me = await s.user("owner@brenner.example");
     const ws = (await me("GET", "/api/v1/me")).json.workspace.id;
     const legacy = await s.deps.store.addConnection(ws, { kind: "cashxchain", label: "CashXChain account (sandbox)", network: "cashxchain:sandbox", access: "read_write" });
+    await agentWallet(me);
 
     expect((await me("POST", `/api/v1/connections/${legacy.id}/refresh`)).json.error).toMatch(/connect CashXChain again with your API key/);
     const payee = (await me("POST", "/api/v1/payees", { name: "Brenner GmbH", iban: "DE89370400440532013000" })).json;

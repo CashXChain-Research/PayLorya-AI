@@ -106,7 +106,7 @@ export async function renderOverview(view: HTMLElement, ctx: Ctx): Promise<void>
   const onboarding = isNew
     ? `<section class="card onboard reveal"><div class="onboard-head"><h2>Set up your AI CFO</h2><p class="muted">Three steps and your AI CFO has the full picture. It reads; code enforces your rules; you approve what moves.</p></div>
       <ol class="steps">
-        <li><a href="/app/connections"><span class="step-n">1</span><span class="step-ic">${icon("wallet", 20)}</span><b>Connect a wallet or account</b><span>Add your own Cardano wallet or your CashXChain sandbox account (API key).</span><em>Connect${icon("arrowRight", 14, 2.2)}</em></a></li>
+        <li><a href="/app/connections"><span class="step-n">1</span><span class="step-ic">${icon("wallet", 20)}</span><b>Connect your agent wallet and accounts</b><span>Your agent wallet (recovery phrase) pays on Cardano; add your CashXChain sandbox account (API key) for fiat.</span><em>Connect${icon("arrowRight", 14, 2.2)}</em></a></li>
         <li><a href="/app/documents"><span class="step-n">2</span><span class="step-ic">${icon("upload", 20)}</span><b>Upload financial documents</b><span>Invoices, receipts, bank statements, contracts. PDFs, photos, CSV.</span><em>Upload${icon("arrowRight", 14, 2.2)}</em></a></li>
         <li><a href="/app/agent"><span class="step-n">3</span><span class="step-ic">${icon("shield", 20)}</span><b>Decide what the agent may do</b><span>Start read-only. Move to guarded with limits when you are ready.</span><em>Review${icon("arrowRight", 14, 2.2)}</em></a></li>
       </ol></section>`

@@ -38,6 +38,8 @@ export interface PaymentFacts {
   accountMismatch?: boolean;
   /** A connection for this rail exists with read & write access. */
   railWritable: boolean;
+  /** The account's own agent wallet, which pays the verification on Cardano before every payout. */
+  agentWallet: "ready" | "missing" | "read_only";
   /** Payments the agent executed on its own this calendar month, USD cents. */
   agentExecutedThisMonthUsdMinor: number;
 }
@@ -52,6 +54,19 @@ export function decidePayment(autonomy: Autonomy, limits: AgentLimits, p: Paymen
     return { decision: "blocked", checks };
   }
   checks.push({ id: "rail", status: "pass", message: p.rail === "cardano_preprod" ? "Cardano Preprod (testnet)" : "CashXChain (sandbox)" });
+
+  if (p.agentWallet !== "ready") {
+    checks.push({
+      id: "agent_wallet",
+      status: "fail",
+      message:
+        p.agentWallet === "read_only"
+          ? "Your agent wallet is read-only: allow read & write so it can pay the verification on Cardano"
+          : "No agent wallet: connect your own (recovery phrase). It pays the verification on Cardano",
+    });
+    return { decision: "blocked", checks };
+  }
+  checks.push({ id: "agent_wallet", status: "pass", message: "Verified on Cardano from your agent wallet" });
 
   if (!p.railWritable) {
     checks.push({ id: "access", status: "fail", message: "No connection with Read & write access for this rail" });

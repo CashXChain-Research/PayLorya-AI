@@ -126,6 +126,8 @@ export interface Payment {
   executedAt?: string;
   /** A tADA payout from the workspace's own wallet: its verification, transaction and confirmation. */
   cardano?: CardanoPayout;
+  /** The x402 verification report bought on Cardano from the account's agent wallet before the payout. */
+  verification?: { txHash: string; explorerUrl: string; verdict?: string; payer?: string };
   /** The payout's idempotency key, fixed at the first attempt: a resumed payment must pay the same. */
   payoutKey?: string;
 }
@@ -564,12 +566,13 @@ export class Store {
     patch: Partial<Pick<Payment, "status" | "policy" | "runId" | "txHash" | "explorerUrl" | "reference" | "error" | "decidedAt" | "executedAt">> & {
       cardano?: CardanoPayout | null;
       payoutKey?: string;
+      verification?: Payment["verification"];
     },
   ): Promise<Payment> {
     const p = (await this.payment(ws, id))!;
     const next = { ...p, ...patch };
     await this.run(
-      `UPDATE payments SET status = ?, policy_json = ?, run_id = ?, tx_hash = ?, explorer_url = ?, reference = ?, error = ?, decided_at = ?, executed_at = ?, sign_request_json = ?, payout_key = ?
+      `UPDATE payments SET status = ?, policy_json = ?, run_id = ?, tx_hash = ?, explorer_url = ?, reference = ?, error = ?, decided_at = ?, executed_at = ?, sign_request_json = ?, payout_key = ?, verification_json = ?
        WHERE workspace_id = ? AND id = ?`,
       next.status,
       JSON.stringify(next.policy),
@@ -582,6 +585,7 @@ export class Store {
       next.executedAt ?? null,
       next.cardano ? JSON.stringify(next.cardano) : null,
       next.payoutKey ?? null,
+      next.verification ? JSON.stringify(next.verification) : null,
       ws,
       id,
     );
@@ -831,5 +835,6 @@ function toPayment(r: Row): Payment {
     executedAt: opt(r.executed_at as string | null),
     ...(r.sign_request_json ? { cardano: json<CardanoPayout>(r.sign_request_json, { from: "", payTo: "", lovelace: "0" }) } : {}),
     ...(r.payout_key ? { payoutKey: String(r.payout_key) } : {}),
+    ...(r.verification_json ? { verification: json<NonNullable<Payment["verification"]>>(r.verification_json, { txHash: "", explorerUrl: "" }) } : {}),
   };
 }

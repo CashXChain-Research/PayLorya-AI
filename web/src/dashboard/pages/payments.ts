@@ -172,6 +172,13 @@ export const decisionButtons = (p: Payment): string =>
       ? signButtons(p)
       : "";
 
+/** The x402 verification the account's agent wallet paid for on Cardano before the payout. */
+function verified(p: Payment): string {
+  const v = p.verification ?? p.cardano?.verification;
+  if (!v) return "";
+  return `<dt>Verified</dt><dd>x402 report paid on Cardano from your agent wallet ${txLink(v.txHash, v.explorerUrl)}</dd>`;
+}
+
 const txLink = (hash: string, url?: string) =>
   url ? `<a class="mono" href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(shortHash(hash))} ${icon("external", 12)}</a>` : `<span class="mono">${esc(shortHash(hash))}</span>`;
 
@@ -223,7 +230,7 @@ export function paymentRow(p: Payment, open = false): string {
         <dt>Pays to</dt><dd>${p.payeeId ? "Saved payee account" : destinationText(p)}</dd>
         <dt>Requested by</dt><dd>${p.requestedBy === "agent" ? "AI CFO agent" : "You"}${p.runId ? ` <span class="mono muted">${esc(p.runId)}</span>` : ""}</dd>
         ${p.cardano ? `<dt>From</dt><dd><span class="mono" title="${esc(p.cardano.from)}">${esc(short(p.cardano.from))}</span> <span class="muted small">your wallet</span></dd>` : ""}
-        ${p.cardano?.verification ? `<dt>Verified</dt><dd>x402 report paid on Cardano ${txLink(p.cardano.verification.txHash, p.cardano.verification.explorerUrl)}</dd>` : ""}
+        ${verified(p)}
         ${p.reference && !p.txHash ? `<dt>Reference</dt><dd class="mono">${esc(p.reference)}</dd>` : ""}
         ${p.txHash ? `<dt>Transaction</dt><dd>${txLink(p.txHash, p.explorerUrl)}${p.cardano ? (p.cardano.confirmedAt ? ' <span class="pill t-ok">in a block</span>' : ' <span class="pill t-neutral">waiting for a block</span>') : ""}</dd>` : ""}
         ${p.documentId ? `<dt>Document</dt><dd><a href="/app/documents/${esc(p.documentId)}">Open source document</a></dd>` : ""}

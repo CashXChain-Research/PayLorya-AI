@@ -38,18 +38,28 @@ export class CxcKeys {
     return { sealed: this.vault.seal(apiKey, connectionContext(ws)), hint: keyHint(apiKey) };
   }
 
-  /** The client for a connection's own key; undefined when it has none. Throws KEY_UNREADABLE. */
-  async client(ws: string, c: Pick<ConnectionRow, "id" | "credentialHint">): Promise<CashXChainClient | undefined> {
+  /** Seals any connection secret for this workspace (an agent wallet's recovery phrase). */
+  seal(ws: string, plaintext: string): string {
+    if (!this.vault) throw new KeyRefused("This server cannot store secrets (BETTER_AUTH_SECRET is not set)");
+    return this.vault.seal(plaintext, connectionContext(ws));
+  }
+
+  /** A connection's own secret; undefined when it has none. Throws `unreadable` when it cannot be opened. */
+  async open(ws: string, c: Pick<ConnectionRow, "id" | "credentialHint">, unreadable = KEY_UNREADABLE): Promise<string | undefined> {
     if (!c.credentialHint) return undefined;
     const sealed = await this.store.connectionSecret(ws, c.id);
-    if (!sealed || !this.vault) throw new Error(KEY_UNREADABLE);
-    let apiKey: string;
+    if (!sealed || !this.vault) throw new Error(unreadable);
     try {
-      apiKey = this.vault.open(sealed, connectionContext(ws));
+      return this.vault.open(sealed, connectionContext(ws));
     } catch {
-      throw new Error(KEY_UNREADABLE);
+      throw new Error(unreadable);
     }
-    return this.clientFor(apiKey);
+  }
+
+  /** The client for a connection's own key; undefined when it has none. Throws KEY_UNREADABLE. */
+  async client(ws: string, c: Pick<ConnectionRow, "id" | "credentialHint">): Promise<CashXChainClient | undefined> {
+    const apiKey = await this.open(ws, c);
+    return apiKey ? this.clientFor(apiKey) : undefined;
   }
 }
 

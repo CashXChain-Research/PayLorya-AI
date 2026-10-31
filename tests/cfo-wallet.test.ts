@@ -5,6 +5,10 @@ import { Address } from "@evolution-sdk/evolution";
 import express, { type Express } from "express";
 import { afterEach, describe, expect, it } from "vitest";
 import type { BuyerAgent } from "../src/agent.js";
+import { generateMnemonic } from "@scure/bip39";
+import { wordlist } from "@scure/bip39/wordlists/english.js";
+import { NEEDS_AGENT_WALLET } from "../src/cfo/agents.js";
+import { agentWalletAddress } from "../src/cfo/connections.js";
 import { createCfo, mountCfo, type PaymentEngine } from "../src/cfo/index.js";
 import { CHECK_TIMED_OUT, INTERRUPTED, NEEDS_OWN_WALLET } from "../src/cfo/payments.js";
 import { InsufficientFunds, type TxKit } from "../src/cfo/wallet-signer.js";
@@ -17,6 +21,8 @@ const OTHER = "addr_test1vz2fxv2umyhttkxyxp8x0dlpdt3k6cwng5pxj3jhsydzerspjrlsz";
 const PAYEE = "addr_test1vpu5vlrf4xkxv2qpwngf6cjhtw542ayty80v8dyr49rf5eg0yu80w";
 const hexOf = (a: string) => Address.toHex(Address.fromBech32(a));
 const TX = "ab".repeat(32);
+const AGENT_TX = "cd".repeat(32);
+const PHRASE = generateMnemonic(wordlist, 256);
 const FEE_TX = "fe".repeat(32);
 
 const servers: Server[] = [];
@@ -32,24 +38,37 @@ async function listen(app: Express): Promise<string> {
 }
 
 /** Payout engine stub: the paid x402 check on Cardano passes and routes to the verified payee. */
-function checkingAgent(opts: { hang?: boolean } = {}) {
+/**
+ * One payout engine per agent wallet, as WorkspaceAgents builds them: it pays the verification from
+ * that wallet (payer = the wallet's address) and, when asked, the tADA payout too.
+ */
+function engines(opts: { hang?: boolean } = {}) {
   const processed: string[] = [];
-  const agent = {
-    useFiatRoute() {},
-    async process(run: Run) {
-      const invoice = JSON.parse(run.input) as Invoice;
-      processed.push(invoice.id);
-      if (opts.hang) await new Promise(() => undefined); // a facilitator that never answers
-      run.state = "DRAFT_READY";
-      run.report = { verdict: "ready_for_review" } as Run["report"];
-      run.payment = { transactionHash: FEE_TX, explorerUrl: `https://preprod.cardanoscan.io/transaction/${FEE_TX}` } as Run["payment"];
-      run.draft = { executable: true, route: { rail: "cardano_preprod", status: "selected", destination: invoice.cardanoAddress } } as unknown as Run["draft"];
-    },
-    approve() {
-      throw new Error("tADA payouts from the owner's wallet never go through the agent's own wallet");
-    },
-  } as unknown as BuyerAgent;
-  return { agent, processed };
+  const made: Array<{ phrase: string; address: string; paid: string[] }> = [];
+  const agentFor = (phrase: string) => {
+    const me = { phrase, address: agentWalletAddress(phrase), paid: [] as string[] };
+    made.push(me);
+    return {
+      useFiatRoute() {},
+      async process(run: Run) {
+        const invoice = JSON.parse(run.input) as Invoice;
+        processed.push(invoice.id);
+        if (opts.hang) await new Promise(() => undefined); // a facilitator that never answers
+        run.state = "DRAFT_READY";
+        run.report = { verdict: "ready_for_review" } as Run["report"];
+        run.payment = { transactionHash: FEE_TX, explorerUrl: `https://preprod.cardanoscan.io/transaction/${FEE_TX}`, buyerAddress: me.address } as Run["payment"];
+        run.draft = { executable: true, route: { rail: "cardano_preprod", status: "selected", destination: invoice.cardanoAddress } } as unknown as Run["draft"];
+      },
+      approve(run: Run) {
+        const invoice = JSON.parse(run.input) as Invoice;
+        me.paid.push(invoice.cardanoAddress!);
+        run.state = "EXECUTED";
+        run.payout = { rail: "cardano_preprod", status: "submitted", simulated: false, amountMinor: invoice.amountMinor, currency: "ADA", destination: invoice.cardanoAddress!, reference: AGENT_TX, explorerUrl: `https://preprod.cardanoscan.io/transaction/${AGENT_TX}`, label: "Paid on Cardano Preprod", executedAt: new Date().toISOString() };
+        return { ok: true, done: Promise.resolve() };
+      },
+    } as unknown as BuyerAgent;
+  };
+  return { agentFor, processed, made };
 }
 
 function stubKit() {
@@ -88,9 +107,9 @@ async function start(opts: { hang?: boolean; checkTimeoutMs?: number } = {}) {
   const base = await listen(app);
   const config = loadConfig({ PUBLIC_BASE_URL: base, BETTER_AUTH_SECRET: "w".repeat(40), BLOCKFROST_PROJECT_ID: "preprodTest", BLOCKFROST_PREPROD_URL: "http://127.0.0.1:9" });
   const { kit, state } = stubKit();
-  const { agent, processed } = checkingAgent(opts);
-  const engine: PaymentEngine = { runs: new RunStore(), agent };
-  const deps = await createCfo(config, engine, { memory: true, walletKit: kit, noSweep: true, ...(opts.checkTimeoutMs ? { checkTimeoutMs: opts.checkTimeoutMs } : {}) });
+  const { agentFor, processed, made } = engines(opts);
+  const engine: PaymentEngine = { runs: new RunStore() };
+  const deps = await createCfo(config, engine, { memory: true, walletKit: kit, noSweep: true, agentFor, ...(opts.checkTimeoutMs ? { checkTimeoutMs: opts.checkTimeoutMs } : {}) });
   mountCfo(app, deps);
 
   async function user(email: string) {
@@ -111,7 +130,7 @@ async function start(opts: { hang?: boolean; checkTimeoutMs?: number } = {}) {
       return { status: r.status, json: (text ? JSON.parse(text) : undefined) as any };
     };
   }
-  return { deps, state, processed, user };
+  return { deps, state, processed, made, user };
 }
 
 type Call = Awaited<ReturnType<Awaited<ReturnType<typeof start>>["user"]>>;
@@ -125,7 +144,12 @@ const settle = async (check: () => Promise<boolean>) => {
 };
 
 /** Own wallet connected for payments, a payee with a Preprod address, a 2 tADA payment approved. */
+/** The account's own agent wallet, read & write: required for any payment. */
+const connectAgentWallet = (me: Call, phrase = PHRASE, access = "read_write") => me("POST", "/api/v1/connections", { kind: "cardano_agent_wallet", recoveryPhrase: phrase, access });
+
+/** Agent wallet, plus the owner's own wallet set to read & write (they sign): a 2 tADA payment approved. */
 async function approvedAdaPayment(me: Call) {
+  await connectAgentWallet(me);
   await me("POST", "/api/v1/connections", { kind: "cardano_wallet", address: WALLET, access: "read_write" });
   const payee = (await me("POST", "/api/v1/payees", { name: "Nordwind Node Services", cardanoAddress: PAYEE })).json;
   const draft = (await me("POST", "/api/v1/payments", { payeeId: payee.id, amountMinor: 2_000_000, currency: "ADA", reason: "Node hosting" })).json;
@@ -142,7 +166,9 @@ describe("tADA payouts from the workspace's own wallet: stored at every step, si
     const me = await s.user("owner@nordwind.example");
     const id = await approvedAdaPayment(me);
     const waiting = await payment(me, id);
-    expect(waiting.cardano).toMatchObject({ from: WALLET, payTo: PAYEE, lovelace: "2000000", verification: { txHash: FEE_TX, verdict: "ready_for_review" } });
+    expect(waiting.cardano).toMatchObject({ from: WALLET, payTo: PAYEE, lovelace: "2000000" });
+    // The verification was paid from the account's own agent wallet; the payout waits for the owner's own wallet.
+    expect(waiting.verification).toMatchObject({ txHash: FEE_TX, verdict: "ready_for_review", payer: agentWalletAddress(PHRASE) });
     expect(s.processed).toHaveLength(1);
 
     const tx = await me("POST", `/api/v1/payments/${id}/transaction`, funds());
@@ -248,6 +274,7 @@ describe("tADA payouts from the workspace's own wallet: stored at every step, si
   it("a payment cut off by a restart goes back to approval, and approving it again continues it", async () => {
     const s = await start();
     const me = await s.user("owner@nordwind.example");
+    await connectAgentWallet(me);
     await me("POST", "/api/v1/connections", { kind: "cardano_wallet", address: WALLET, access: "read_write" });
     const payee = (await me("POST", "/api/v1/payees", { name: "Nordwind Node Services", cardanoAddress: PAYEE })).json;
     const draft = (await me("POST", "/api/v1/payments", { payeeId: payee.id, amountMinor: 2_000_000, currency: "ADA", reason: "Node hosting" })).json;
@@ -263,6 +290,7 @@ describe("tADA payouts from the workspace's own wallet: stored at every step, si
   it("a verification that never finishes sends the payment back to approval, nothing paid", async () => {
     const s = await start({ hang: true, checkTimeoutMs: 200 });
     const me = await s.user("owner@nordwind.example");
+    await connectAgentWallet(me);
     await me("POST", "/api/v1/connections", { kind: "cardano_wallet", address: WALLET, access: "read_write" });
     const payee = (await me("POST", "/api/v1/payees", { name: "Nordwind Node Services", cardanoAddress: PAYEE })).json;
     const draft = (await me("POST", "/api/v1/payments", { payeeId: payee.id, amountMinor: 2_000_000, currency: "ADA", reason: "Node hosting" })).json;
@@ -272,18 +300,82 @@ describe("tADA payouts from the workspace's own wallet: stored at every step, si
     expect(s.state.built).toEqual([]);
   });
 
-  it("the agent wallet never pays a workspace's payout, not even an old read & write connection to it", async () => {
+  it("PayLorya AI's shared wallet never counts: an old agent-wallet row without a phrase is no agent wallet", async () => {
     const s = await start();
     const me = await s.user("owner@nordwind.example");
-    const catalog = (await me("GET", "/api/v1/connections/catalog")).json;
-    expect(catalog.find((c: { kind: string }) => c.kind === "cardano_agent_wallet").supports.write).toBe(false);
-    expect(catalog.find((c: { kind: string }) => c.kind === "cardano_wallet").supports.write).toBe(true);
     const ws = (await me("GET", "/api/v1/me")).json.workspace.id;
-    await s.deps.store.addConnection(ws, { kind: "cardano_agent_wallet", label: "Agent wallet", network: "cardano:preprod", address: WALLET, access: "read_write" });
+    const shared = await s.deps.store.addConnection(ws, { kind: "cardano_agent_wallet", label: "Agent wallet", network: "cardano:preprod", address: WALLET, access: "read_write" });
+    expect((await me("POST", `/api/v1/connections/${shared.id}/refresh`)).json.error).toMatch(/shared wallet, not yours/);
     const payee = (await me("POST", "/api/v1/payees", { name: "Nordwind Node Services", cardanoAddress: PAYEE })).json;
     const draft = (await me("POST", "/api/v1/payments", { payeeId: payee.id, amountMinor: 2_000_000, currency: "ADA", reason: "Node hosting" })).json;
     expect(draft.status).toBe("blocked");
-    expect(draft.policy.checks.find((c: { id: string }) => c.id === "access").status).toBe("fail");
-    expect(NEEDS_OWN_WALLET).toMatch(/your own wallet/);
+    expect(draft.policy.checks.find((c: { id: string }) => c.id === "agent_wallet").status).toBe("fail");
+    expect(s.made).toEqual([]);
+  });
+});
+
+describe("each account pays from its own agent wallet, connected with its recovery phrase", () => {
+  it("connects by recovery phrase: address derived, phrase sealed and never shown again, one per account", async () => {
+    const s = await start();
+    const me = await s.user("owner@nordwind.example");
+    const entry = (await me("GET", "/api/v1/connections/catalog")).json.find((c: { kind: string }) => c.kind === "cardano_agent_wallet");
+    expect(entry).toMatchObject({ available: true, acceptsRecoveryPhrase: true, supports: { write: true } });
+    expect((await connectAgentWallet(me, "")).json.error).toMatch(/Paste the agent wallet's recovery phrase/);
+    expect((await connectAgentWallet(me, "abandon ".repeat(12).trim())).json.error).toMatch(/not a valid recovery phrase/);
+
+    const created = await connectAgentWallet(me, `  ${PHRASE.toUpperCase().replace(/ /g, "   ")} `);
+    expect(created.status).toBe(201);
+    expect(created.json).toMatchObject({ kind: "cardano_agent_wallet", address: agentWalletAddress(PHRASE), access: "read_write", keyHint: "24-word recovery phrase" });
+    const ws = (await me("GET", "/api/v1/me")).json.workspace.id;
+    const sealed = await s.deps.store.connectionSecret(ws, created.json.id);
+    for (const word of PHRASE.split(" ").slice(0, 3)) expect(sealed).not.toContain(word);
+    expect(JSON.stringify((await me("GET", "/api/v1/connections")).json)).not.toContain(PHRASE.split(" ")[0]! + " " + PHRASE.split(" ")[1]);
+    expect((await connectAgentWallet(me, generateMnemonic(wordlist))).status).toBe(409);
+  });
+
+  it("without one, or read-only, nothing is paid", async () => {
+    const s = await start();
+    const me = await s.user("owner@nordwind.example");
+    const payee = (await me("POST", "/api/v1/payees", { name: "Nordwind Node Services", cardanoAddress: PAYEE })).json;
+    await me("POST", "/api/v1/connections", { kind: "cardano_wallet", address: WALLET, access: "read_write" });
+    const none = (await me("POST", "/api/v1/payments", { payeeId: payee.id, amountMinor: 2_000_000, currency: "ADA", reason: "A" })).json;
+    expect(none.policy.checks.find((c: { id: string }) => c.id === "agent_wallet").message).toMatch(/No agent wallet/);
+    await connectAgentWallet(me, PHRASE, "read");
+    // Another bill (a second draft of the same one would be refused as a duplicate).
+    const readOnly = (await me("POST", "/api/v1/payments", { payeeId: payee.id, amountMinor: 3_000_000, currency: "ADA", reason: "B" })).json;
+    expect(readOnly.status).toBe("blocked");
+    expect(readOnly.policy.checks.find((c: { id: string }) => c.id === "agent_wallet").message).toMatch(/read-only/);
+    expect(s.made).toEqual([]);
+    expect(NEEDS_AGENT_WALLET).toMatch(/recovery phrase/);
+  });
+
+  it("the agent wallet verifies and pays tADA on its own, like a CashXChain payout", async () => {
+    const s = await start();
+    const me = await s.user("owner@nordwind.example");
+    await connectAgentWallet(me);
+    const payee = (await me("POST", "/api/v1/payees", { name: "Nordwind Node Services", cardanoAddress: PAYEE })).json;
+    const draft = (await me("POST", "/api/v1/payments", { payeeId: payee.id, amountMinor: 2_000_000, currency: "ADA", reason: "Node hosting" })).json;
+    if (draft.status === "pending_approval") await me("POST", `/api/v1/payments/${draft.id}/approve`, { amountMinor: draft.amountMinor, currency: draft.currency });
+    await settle(async () => (await payment(me, draft.id)).status === "executed");
+    const paid = await payment(me, draft.id);
+    expect(paid).toMatchObject({ txHash: AGENT_TX, verification: { txHash: FEE_TX, payer: agentWalletAddress(PHRASE) } });
+    expect(s.made.map(m => m.phrase)).toEqual([PHRASE]);
+    expect(s.made[0]!.paid).toEqual([PAYEE]);
+    expect(s.state.built).toEqual([]); // no wallet popup: the agent wallet signs
+  });
+
+  it("two accounts, two engines, two wallets", async () => {
+    const s = await start();
+    const other = generateMnemonic(wordlist, 256);
+    for (const [email, phrase] of [["a@one.example", PHRASE], ["b@two.example", other]] as const) {
+      const me = await s.user(email);
+      await connectAgentWallet(me, phrase);
+      const payee = (await me("POST", "/api/v1/payees", { name: "Nordwind Node Services", cardanoAddress: PAYEE })).json;
+      const draft = (await me("POST", "/api/v1/payments", { payeeId: payee.id, amountMinor: 2_000_000, currency: "ADA", reason: "Node hosting" })).json;
+      if (draft.status === "pending_approval") await me("POST", `/api/v1/payments/${draft.id}/approve`, { amountMinor: draft.amountMinor, currency: draft.currency });
+      await settle(async () => (await payment(me, draft.id)).status === "executed");
+      expect((await payment(me, draft.id)).verification.payer).toBe(agentWalletAddress(phrase));
+    }
+    expect(s.made.map(m => m.address)).toEqual([agentWalletAddress(PHRASE), agentWalletAddress(other)]);
   });
 });
