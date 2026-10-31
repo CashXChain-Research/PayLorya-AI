@@ -96,10 +96,14 @@ export interface BudgetRow {
   createdAt: string;
 }
 
+/** Where a payment goes: the saved payee's account, or details carried by the draft. */
+export type Destination = Omit<PayeeInput, "name">;
+
 export interface Payment {
   id: string;
   payeeName: string;
   payeeId?: string;
+  destination?: Destination;
   amountMinor: number;
   currency: string;
   usdMinor: number;
@@ -161,6 +165,11 @@ export const DEFAULT_LIMITS: AgentLimits = { perPaymentUsdMinor: 50_000, monthly
 
 /** Data access for the AI CFO. Every query is scoped by workspace id; files live in `files`. */
 export class Store {
+  // Workspaces are read on every request (permissions, limits). One container instance serves the
+  // app and every workspace write goes through this class, so a write-through cache stays exact.
+  private readonly workspaces = new Map<string, Workspace>();
+  private readonly workspaceOfUser = new Map<string, string>();
+
   constructor(
     readonly sql: Sql,
     readonly files: Files,
@@ -178,9 +187,18 @@ export class Store {
 
   // Workspaces -----------------------------------------------------------------------------
 
+  private remember(row: Row): Workspace {
+    const ws = toWorkspace(row);
+    this.workspaces.set(ws.id, ws);
+    this.workspaceOfUser.set(String(row.owner_user_id), ws.id);
+    return ws;
+  }
+
   async workspaceForUser(userId: string, defaultName: string): Promise<Workspace> {
+    const cached = this.workspaceOfUser.get(userId);
+    if (cached && this.workspaces.has(cached)) return this.workspaces.get(cached)!;
     const row = await this.get("SELECT * FROM workspaces WHERE owner_user_id = ?", userId);
-    if (row) return toWorkspace(row);
+    if (row) return this.remember(row);
     // Two first requests at once: the unique owner column keeps one, both read it back.
     await this.run(
       "INSERT INTO workspaces (id, owner_user_id, name, autonomy, per_payment_usd_minor, monthly_usd_minor, known_payees_only, created_at) VALUES (?, ?, ?, 'guarded', ?, ?, 1, ?) ON CONFLICT (owner_user_id) DO NOTHING",
@@ -191,16 +209,25 @@ export class Store {
       DEFAULT_LIMITS.monthlyUsdMinor,
       now(),
     );
-    return toWorkspace((await this.get("SELECT * FROM workspaces WHERE owner_user_id = ?", userId))!);
+    return this.remember((await this.get("SELECT * FROM workspaces WHERE owner_user_id = ?", userId))!);
   }
 
   async setCxcLink(id: string, link: CxcLink): Promise<void> {
     await this.run("UPDATE workspaces SET cxc_link_json = ? WHERE id = ?", JSON.stringify(link), id);
+    await this.reloadWorkspace(id);
+  }
+
+  private async reloadWorkspace(id: string): Promise<Workspace | undefined> {
+    const row = await this.get("SELECT * FROM workspaces WHERE id = ?", id);
+    if (!row) {
+      this.workspaces.delete(id);
+      return undefined;
+    }
+    return this.remember(row);
   }
 
   async workspace(id: string): Promise<Workspace | undefined> {
-    const row = await this.get("SELECT * FROM workspaces WHERE id = ?", id);
-    return row ? toWorkspace(row) : undefined;
+    return this.workspaces.get(id) ?? this.reloadWorkspace(id);
   }
 
   async updateWorkspace(id: string, patch: { name?: string; autonomy?: Autonomy; limits?: Partial<AgentLimits> }): Promise<Workspace> {
@@ -215,7 +242,7 @@ export class Store {
       limits.knownPayeesOnly ? 1 : 0,
       id,
     );
-    return (await this.workspace(id))!;
+    return (await this.reloadWorkspace(id))!;
   }
 
   // Connections ----------------------------------------------------------------------------
@@ -452,8 +479,8 @@ export class Store {
   async addPayment(ws: string, p: Omit<Payment, "id" | "createdAt">): Promise<Payment> {
     const id = randomUUID();
     await this.run(
-      `INSERT INTO payments (id, workspace_id, payee_id, payee_name, amount_minor, currency, usd_minor, rail, reason, document_id, status, requested_by, policy_json, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO payments (id, workspace_id, payee_id, payee_name, amount_minor, currency, usd_minor, rail, reason, document_id, status, requested_by, policy_json, created_at, destination_json)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       id,
       ws,
       p.payeeId ?? null,
@@ -468,6 +495,7 @@ export class Store {
       p.requestedBy,
       JSON.stringify(p.policy),
       now(),
+      p.destination ? JSON.stringify(p.destination) : null,
     );
     return (await this.payment(ws, id))!;
   }
@@ -728,6 +756,7 @@ function toPayment(r: Row): Payment {
     id: String(r.id),
     payeeName: String(r.payee_name),
     payeeId: opt(r.payee_id as string | null),
+    ...(r.destination_json ? { destination: json<Destination>(r.destination_json, {}) } : {}),
     amountMinor: Number(r.amount_minor),
     currency: String(r.currency),
     usdMinor: Number(r.usd_minor),

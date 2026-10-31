@@ -5,7 +5,7 @@ import type { Run, RunStore } from "../runs.js";
 import type { Invoice } from "../types.js";
 import { toUsdMinor } from "./fx.js";
 import { decidePayment, type PolicyDecision, type Rail } from "./policy.js";
-import type { Payee, Payment, Store } from "./store.js";
+import type { Destination, Payee, Payment, Store } from "./store.js";
 
 // CashXChain sandbox payout currencies (fiat rail). ADA goes over Cardano Preprod.
 const CXC_CURRENCIES = new Set(["EUR", "USD", "GBP", "CHF", "AED", "PLN", "SEK"]);
@@ -18,6 +18,8 @@ export function railFor(currency: string): Rail {
 export interface DraftInput {
   payeeId?: string;
   payeeName?: string;
+  /** Account details for a payee that is not saved; else taken from the linked invoice. */
+  destination?: Destination;
   amountMinor: number;
   currency: string;
   reason: string;
@@ -44,7 +46,10 @@ export class Payments {
     return (await this.store.connections(ws)).some(c => c.kind === kind && c.access === "read_write");
   }
 
-  async evaluate(ws: string, p: { requestedBy: "agent" | "user"; rail: Rail; usdMinor: number; payeeKnown: boolean }): Promise<PolicyDecision> {
+  async evaluate(
+    ws: string,
+    p: { requestedBy: "agent" | "user"; rail: Rail; usdMinor: number; payeeKnown: boolean; hasAccount: boolean; accountMismatch?: boolean },
+  ): Promise<PolicyDecision> {
     const workspace = (await this.store.workspace(ws))!;
     return decidePayment(workspace.autonomy, workspace.limits, {
       ...p,
@@ -53,17 +58,49 @@ export class Payments {
     });
   }
 
-  /** Creates a payment with its policy decision. An "auto" decision starts execution right away. */
+  /**
+   * Where the money would go. A saved payee's account always wins; a draft's own details (from the
+   * agent or the linked invoice) are used only for a payee that is not saved.
+   */
+  private async destinationFor(ws: string, payee: Payee | undefined, given: Destination | undefined, documentId: string | undefined) {
+    const fromDraft = clean(given) ?? clean(await this.fromDocument(ws, documentId));
+    if (payee) {
+      const saved = clean(payee) ?? {};
+      return { destination: saved, accountMismatch: Boolean(fromDraft && differs(fromDraft, saved)) };
+    }
+    return { destination: fromDraft ?? {}, accountMismatch: false };
+  }
+
+  private async fromDocument(ws: string, documentId: string | undefined): Promise<Destination | undefined> {
+    if (!documentId) return undefined;
+    const pd = (await this.store.document(ws, documentId))?.extracted?.paymentDetails as Record<string, string | null> | undefined;
+    if (!pd) return undefined;
+    return {
+      ...(pd.iban ? { iban: pd.iban } : {}),
+      ...(pd.bic ? { bic: pd.bic } : {}),
+      ...(pd.routingNumber ? { routingNumber: pd.routingNumber } : {}),
+      ...(pd.accountNumber ? { accountNumber: pd.accountNumber } : {}),
+      ...(pd.cardanoAddress ? { cardanoAddress: pd.cardanoAddress } : {}),
+    };
+  }
+
+  /**
+   * Creates a payment with its policy decision. Drafting always works, for saved and unsaved payees
+   * alike, and moves no money; an "auto" decision starts execution right away.
+   */
   async draft(ws: string, input: DraftInput): Promise<Payment> {
     const payee = input.payeeId ? await this.store.payee(ws, input.payeeId) : findPayeeByName(await this.store.payees(ws), input.payeeName);
     const payeeName = payee?.name ?? input.payeeName?.trim() ?? "Unknown payee";
     const rail = railFor(input.currency);
     const usdMinor = toUsdMinor(input.amountMinor, input.currency);
-    const policy = await this.evaluate(ws, { requestedBy: input.requestedBy, rail, usdMinor, payeeKnown: Boolean(payee) });
+    const { destination, accountMismatch } = await this.destinationFor(ws, payee, input.destination, input.documentId);
+    const policy = await this.evaluate(ws, { requestedBy: input.requestedBy, rail, usdMinor, payeeKnown: Boolean(payee), hasAccount: hasAccount(destination, rail), accountMismatch });
     const status = policy.decision === "blocked" ? "blocked" : policy.decision === "auto" ? "executing" : "pending_approval";
     const payment = await this.store.addPayment(ws, {
       payeeId: payee?.id,
       payeeName,
+      // Only an unsaved payee's details are stored with the payment; a saved payee is read at execution.
+      ...(payee ? {} : { destination }),
       amountMinor: input.amountMinor,
       currency: input.currency,
       usdMinor,
@@ -74,24 +111,24 @@ export class Payments {
       requestedBy: input.requestedBy,
       policy,
     });
-    const verb = status === "executing" ? "executing payment" : status === "blocked" ? "drafted blocked payment" : "drafted payment";
+    const verb = status === "executing" ? "executing payment" : "drafted payment";
     await this.store.log(ws, input.requestedBy, verb, `${payeeName}: ${fmt(input.amountMinor, input.currency)} (${policy.decision})`, { type: "payment", id: payment.id });
     if (status === "executing") void this.execute(ws, payment.id);
     return payment;
   }
 
-  /** Human approval. Re-checks the policy: access may have changed since the draft. */
+  /** Human approval. Re-checks the policy: access or the payee may have changed since the draft. */
   async approve(ws: string, id: string): Promise<{ ok: true; payment: Payment } | { ok: false; error: string }> {
     const p = await this.store.payment(ws, id);
     if (!p) return { ok: false, error: "payment not found" };
     if (p.status !== "pending_approval" && p.status !== "blocked") return { ok: false, error: `payment is ${p.status}` };
     const payee = p.payeeId ? await this.store.payee(ws, p.payeeId) : undefined;
-    const policy = await this.evaluate(ws, { requestedBy: "user", rail: p.rail, usdMinor: p.usdMinor, payeeKnown: Boolean(payee) });
-    if (policy.decision === "blocked") {
-      await this.store.updatePayment(ws, id, { status: "blocked", policy });
+    const destination = payee ? (clean(payee) ?? {}) : (p.destination ?? {});
+    const policy = await this.evaluate(ws, { requestedBy: "user", rail: p.rail, usdMinor: p.usdMinor, payeeKnown: Boolean(payee), hasAccount: hasAccount(destination, p.rail) });
+    if (policy.decision === "blocked" || !hasAccount(destination, p.rail)) {
+      await this.store.updatePayment(ws, id, { status: policy.decision === "blocked" ? "blocked" : p.status, policy });
       return { ok: false, error: policy.checks.find(c => c.status === "fail")?.message ?? "blocked by policy" };
     }
-    if (!payee) return { ok: false, error: "Add the payee to your payee directory before paying" };
     // Atomic claim: of two approvals at once, only one starts the payment.
     if (!(await this.store.claimPayment(ws, id, ["pending_approval", "blocked"], "executing", new Date().toISOString()))) {
       return { ok: false, error: "payment was already decided" };
@@ -138,11 +175,13 @@ export class Payments {
     };
     const agent = this.engine.agent;
     if (!agent) return fail("The payment engine is not configured on this server");
-    const payee = p.payeeId ? await this.store.payee(ws, p.payeeId) : undefined;
-    if (!payee) return fail("Payee is not in the payee directory");
+    const saved = p.payeeId ? await this.store.payee(ws, p.payeeId) : undefined;
+    // The account paid to: the saved payee's, else the one shown in the approved draft.
+    const payee = verifiedPayee({ name: saved?.name ?? p.payeeName, ...(saved ? clean(saved) : p.destination) });
+    if (!hasAccount(payee, p.rail)) return fail("No account details to pay to");
 
-    const run = this.engine.runs.create(JSON.stringify(invoiceFor(p, payee)));
-    run.payees = [verifiedPayee(payee)];
+    const run = this.engine.runs.create(JSON.stringify(invoiceFor(p, payee, saved?.country ?? p.destination?.country)));
+    run.payees = [payee];
     await this.store.updatePayment(ws, id, { runId: run.id });
     try {
       await agent.process(run);
@@ -201,26 +240,51 @@ export function findPayeeByName(payees: Payee[], name?: string): Payee | undefin
   return payees.find(p => p.name.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "") === key);
 }
 
-function verifiedPayee(p: Payee): VerifiedPayee {
+/** Account fields only, normalised; undefined when none is set. */
+function clean(d: Destination | Payee | undefined): Destination | undefined {
+  if (!d) return undefined;
+  const out: Destination = {
+    ...(d.country ? { country: d.country.toUpperCase() } : {}),
+    ...(d.iban ? { iban: normalizeIban(d.iban) } : {}),
+    ...(d.bic ? { bic: d.bic.replace(/\s+/g, "").toUpperCase() } : {}),
+    ...(d.routingNumber ? { routingNumber: d.routingNumber.replace(/\D/g, "") } : {}),
+    ...(d.accountNumber ? { accountNumber: d.accountNumber.replace(/\s+/g, "") } : {}),
+    ...(d.accountType ? { accountType: d.accountType } : {}),
+    ...(d.cardanoAddress ? { cardanoAddress: d.cardanoAddress.replace(/\s+/g, "") } : {}),
+  };
+  return out.iban || out.routingNumber || out.accountNumber || out.cardanoAddress ? out : undefined;
+}
+
+/** True when the destination can receive on this rail: a wallet for tADA, bank details for fiat. */
+export function hasAccount(d: Destination, rail: Rail): boolean {
+  if (rail === "cardano_preprod") return Boolean(d.cardanoAddress);
+  return Boolean(d.iban || (d.routingNumber && d.accountNumber));
+}
+
+function differs(a: Destination, b: Destination): boolean {
+  return (["iban", "routingNumber", "accountNumber", "cardanoAddress"] as const).some(k => a[k] !== undefined && a[k] !== b[k]);
+}
+
+function verifiedPayee(d: Destination & { name: string }): VerifiedPayee {
+  const c = clean(d) ?? {};
   return {
-    name: p.name,
-    ...(p.iban ? { iban: normalizeIban(p.iban) } : {}),
-    ...(p.bic ? { bic: p.bic.replace(/\s+/g, "").toUpperCase() } : {}),
-    ...(p.routingNumber ? { routingNumber: p.routingNumber } : {}),
-    ...(p.accountNumber ? { accountNumber: p.accountNumber } : {}),
-    ...(p.accountType ? { accountType: p.accountType } : {}),
-    ...(p.cardanoAddress ? { cardanoAddress: p.cardanoAddress } : {}),
+    name: d.name,
+    ...(c.iban ? { iban: c.iban } : {}),
+    ...(c.bic ? { bic: c.bic } : {}),
+    ...(c.routingNumber ? { routingNumber: c.routingNumber } : {}),
+    ...(c.accountNumber ? { accountNumber: c.accountNumber } : {}),
+    ...(c.accountType ? { accountType: c.accountType } : {}),
+    ...(c.cardanoAddress ? { cardanoAddress: c.cardanoAddress } : {}),
   };
 }
 
-/** The payment as an invoice for the payout engine; account details come from the payee record. */
-function invoiceFor(p: Payment, payee: Payee): Invoice {
-  const v = verifiedPayee(payee);
-  const country = payee.country?.toUpperCase() ?? v.iban?.slice(0, 2) ?? (v.routingNumber ? "US" : "DE");
+/** The payment as an invoice for the payout engine, paying exactly the given account. */
+function invoiceFor(p: Payment, v: VerifiedPayee, country?: string): Invoice {
+  const cc = country?.toUpperCase() ?? v.iban?.slice(0, 2) ?? (v.routingNumber ? "US" : "DE");
   return {
     id: `CFO-${p.id.slice(0, 8).toUpperCase()}`,
-    supplier: payee.name,
-    destinationCountry: country,
+    supplier: v.name,
+    destinationCountry: cc,
     currency: p.currency,
     amountMinor: p.amountMinor,
     reference: p.reason.slice(0, 140),

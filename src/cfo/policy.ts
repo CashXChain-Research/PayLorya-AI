@@ -32,6 +32,10 @@ export interface PaymentFacts {
   rail: Rail;
   usdMinor: number;
   payeeKnown: boolean;
+  /** Account details to pay to exist (from the saved payee, or carried by the draft). */
+  hasAccount: boolean;
+  /** The draft's account details differ from the saved payee's (the saved ones would be used). */
+  accountMismatch?: boolean;
   /** A connection for this rail exists with read & write access. */
   railWritable: boolean;
   /** Payments the agent executed on its own this calendar month, USD cents. */
@@ -60,15 +64,29 @@ export function decidePayment(autonomy: Autonomy, limits: AgentLimits, p: Paymen
     return { decision: "blocked", checks };
   }
 
-  checks.push(
-    p.payeeKnown
-      ? { id: "payee", status: "pass", message: "Payee is in your payee directory" }
-      : { id: "payee", status: limits.knownPayeesOnly ? "fail" : "warn", message: "Payee is not in your payee directory" },
-  );
+  // Drafting is always allowed; these checks only decide who may execute it.
+  if (p.payeeKnown) {
+    checks.push({ id: "payee", status: "pass", message: "Payee is saved in your payee directory" });
+  } else {
+    checks.push({
+      id: "payee",
+      status: "warn",
+      message: limits.knownPayeesOnly
+        ? "Payee is not saved: the agent may not pay it on its own (Known payees only)"
+        : "Payee is not saved: pays to the account details in this draft",
+    });
+  }
+  if (p.accountMismatch) {
+    checks.push({ id: "account", status: "warn", message: "Account details differ from the saved payee: the saved account is used" });
+  }
+  if (!p.hasAccount) {
+    checks.push({ id: "account", status: "fail", message: "No account details yet: save the payee or add its bank details or wallet" });
+    return { decision: "approval", checks };
+  }
 
   // A human-drafted payment is always confirmed by a human; the agent's autonomy is not involved.
   if (p.requestedBy === "user") {
-    checks.push({ id: "autonomy", status: "pass", message: "Drafted by you: confirm to execute" });
+    checks.push({ id: "autonomy", status: "pass", message: "A person confirms this payment" });
     return { decision: "approval", checks };
   }
 
@@ -77,7 +95,7 @@ export function decidePayment(autonomy: Autonomy, limits: AgentLimits, p: Paymen
     return { decision: "approval", checks };
   }
 
-  let withinLimits = true;
+  let withinLimits = !p.accountMismatch;
   if (limits.knownPayeesOnly && !p.payeeKnown) withinLimits = false;
 
   if (autonomy === "guarded") {
@@ -102,7 +120,7 @@ export function decidePayment(autonomy: Autonomy, limits: AgentLimits, p: Paymen
   checks.push({
     id: "autonomy",
     status: "warn",
-    message: withinLimits ? "Full access: the agent executes without approval" : "Full access, but payee rule requires your approval",
+    message: withinLimits ? "Full access: the agent executes without approval" : "Full access, but the payee rules require your approval",
   });
   return { decision: withinLimits ? "auto" : "approval", checks };
 }

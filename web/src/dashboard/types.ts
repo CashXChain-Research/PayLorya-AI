@@ -167,6 +167,8 @@ export interface Payment {
   id: string;
   payeeName: string;
   payeeId?: string;
+  /** Account details carried by the draft; set only when the payee is not saved. */
+  destination?: Omit<PayeeInput, "name">;
   amountMinor: number;
   currency: string;
   usdMinor: number;

@@ -22,7 +22,10 @@ export function createAuth(sql: Sql, opts: { baseUrl: string; secret?: string })
     baseURL: opts.baseUrl,
     trustedOrigins: [opts.baseUrl],
     emailAndPassword: { enabled: true, minPasswordLength: 8, autoSignIn: true },
-    session: { expiresIn: 60 * 60 * 24 * 14 },
+    // The session is re-read from the database at most every 5 minutes; in between a signed cookie
+    // vouches for it. Saves database round trips on every request; a sign-out elsewhere takes effect
+    // within those 5 minutes.
+    session: { expiresIn: 60 * 60 * 24 * 14, cookieCache: { enabled: true, maxAge: 5 * 60 } },
   });
   return {
     auth,
