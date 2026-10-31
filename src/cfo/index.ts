@@ -45,6 +45,10 @@ export async function createCfo(
     trustedOrigins: config.AUTH_TRUSTED_ORIGINS?.split(",").map(o => o.trim().replace(/\/+$/, "")).filter(Boolean),
     secret: config.BETTER_AUTH_SECRET,
     mailer,
+    google:
+      config.GOOGLE_CLIENT_ID && config.GOOGLE_CLIENT_SECRET
+        ? { clientId: config.GOOGLE_CLIENT_ID, clientSecret: config.GOOGLE_CLIENT_SECRET }
+        : undefined,
   });
   // A workspace's own CashXChain account, connected with its API key (sealed with BETTER_AUTH_SECRET).
   const keys = new CxcKeys(store, config.BETTER_AUTH_SECRET, opts.cashxchainFor ?? (apiKey => new CashXChainClient({ apiKey })));
