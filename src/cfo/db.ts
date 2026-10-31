@@ -168,6 +168,8 @@ const MIGRATIONS: string[][] = [
   [`ALTER TABLE payments ADD COLUMN payout_key TEXT`],
   // The x402 verification bought on Cardano from the account's agent wallet before the payout.
   [`ALTER TABLE payments ADD COLUMN verification_json TEXT`],
+  // Test tADA granted once to the account's agent wallet (src/cfo/funder.ts); funded_at counts grants per day.
+  [`ALTER TABLE workspaces ADD COLUMN funded_json TEXT`, `ALTER TABLE workspaces ADD COLUMN funded_at TEXT`],
 ];
 
 export async function migrate(sql: Sql): Promise<void> {

@@ -1089,3 +1089,4 @@ a.file-chip:hover { box-shadow: var(--shadow); }
 
 /* A deploy happened while the page was open (web/src/dashboard/api.ts). */
 .update-bar { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 90; display: flex; align-items: center; gap: 12px; max-width: calc(100vw - 32px); padding: 10px 10px 10px 16px; border-radius: 14px; background: var(--ink, #1f2328); color: #fff; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25); font-size: 14px; }
+.fund-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 2px 0 4px; }

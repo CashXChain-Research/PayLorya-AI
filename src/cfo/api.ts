@@ -8,6 +8,7 @@ import { runChatTurn, toPublic, type Attachment, type ChatDeps, type ChatEvent }
 import { catalog, fetchBalances, networkOf, prepareConnection, supportsWrite, type ConnectionEnv } from "./connections.js";
 import { accountLabel } from "./stripe.js";
 import { KeyRefused, type CxcKeys } from "./cxc-keys.js";
+import type { Funder } from "./funder.js";
 import { CXC_SANDBOX_SIGNUP, type CxcLinker } from "./cxc-link.js";
 import { SUPPORTED_CURRENCIES } from "./fx.js";
 import { ingestDocument, type Extractor } from "./ingest.js";
@@ -29,6 +30,8 @@ export interface CfoDeps {
   cxc?: CxcLinker;
   /** A workspace's own CashXChain account by API key; absent in tests that do not need it. */
   keys?: CxcKeys;
+  /** "Get test tADA" for a new agent wallet (FUNDER_MNEMONIC); absent without one. */
+  funder?: Funder;
   /** Stripe.js key for linking bank accounts (with connections.stripe). */
   stripePublishableKey?: string;
 }
@@ -300,6 +303,18 @@ export function mountCfo(app: Express, deps: CfoDeps): void {
     };
   };
   api.get("/cashxchain", async (_req, res) => res.json(await cxcState(ctx(res).ws.id)));
+
+  // "Get test tADA": the account's agent wallet, topped up once from PayLorya AI's funding wallet.
+  api.get("/funding", async (_req, res) => {
+    if (!deps.funder) return void res.json({ available: false, reason: "Test tADA is not offered on this server" });
+    res.json(await deps.funder.status(ctx(res).ws.id));
+  });
+  api.post("/funding", async (_req, res) => {
+    if (!deps.funder) throw new HttpError(503, "Test tADA is not offered on this server: use the Cardano Preprod faucet.");
+    const result = await deps.funder.grant(ctx(res).ws.id);
+    if (!result.ok) throw new HttpError(result.status, result.error);
+    res.status(201).json(result.value);
+  });
   // Retry after the owner signed up at CashXChain with the same email.
   api.post("/cashxchain/link", async (_req, res) => {
     const { user, ws } = ctx(res);

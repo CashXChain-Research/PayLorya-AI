@@ -32,6 +32,10 @@ const EnvSchema = z.object({
   BLOCKFROST_PROJECT_ID: optional,
   SELLER_ADDRESS: optional,
   BUYER_MNEMONIC: optional,
+  // Test tADA for new agent wallets ("Get test tADA" in the AI CFO), from a separate platform wallet.
+  FUNDER_MNEMONIC: optional,
+  FUNDER_LOVELACE: z.coerce.bigint().default(20_000_000n),
+  FUNDER_DAILY_GRANTS: z.coerce.number().int().positive().default(30),
   FACILITATOR_URL: z.string().default("https://x402.preprod.dev.ecosyseng.cf-deployments.org"),
   LOCAL_FACILITATOR: bool,
   CARDANO_L1_CONFIRMATIONS: optional.refine(

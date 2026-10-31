@@ -306,3 +306,11 @@ export interface CxcState {
   accounts?: Array<{ id: string; currency: string; status: string; available?: string }>;
   accountsError?: string;
 }
+
+/** GET /api/v1/funding: "Get test tADA" for the agent wallet, once per account. */
+export interface FundingStatus {
+  available: boolean;
+  lovelace?: string;
+  granted?: { address: string; lovelace: string; at: string; status: "sending" | "sent"; txHash?: string; explorerUrl?: string };
+  reason?: string;
+}
