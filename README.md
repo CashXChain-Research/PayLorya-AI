@@ -2,7 +2,7 @@
 
 # PayLorya AI
 
-**The AI CFO that checks before it pays.** Claude reads. Code decides. You approve.
+**A personal AI CFO for every business.** Claude reads. Code decides. You approve.
 
 PayLorya AI reads every financial document a business receives (invoices, receipts, statements,
 contracts), turns it into a live ledger, plans budgets and cash, and drafts payments. Before the
@@ -55,6 +55,11 @@ sets, from the customer's own wallet (signed in Lace) or their CashXChain accoun
 - Dashboard: overview, AI CFO chat with files and photos, documents, payments and approvals, budgets,
   cash forecast, payees, connections (read or read & write), agent autonomy (read-only, guarded,
   full access), activity log.
+- The AI CFO researches payees on the web (web search and fetch, sources cited) and builds deliverables
+  in a code sandbox: Excel forecasts, Word or PDF reports, charts, saved to the workspace as downloads.
+- Connections: own Cardano wallet (read, or read & write with signing in Lace), the agent's x402 wallet,
+  EVM addresses via MetaMask (watch-only), CashXChain sandbox account, bank accounts via
+  Stripe Financial Connections (read-only balances).
 - Runs on Cloudflare: Worker + Container (Node), D1 for data, R2 for documents.
 
 Details: [docs/AI-CFO.md](docs/AI-CFO.md) · Deployment: [docs/DEPLOY.md](docs/DEPLOY.md)
