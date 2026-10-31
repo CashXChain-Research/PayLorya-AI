@@ -49,6 +49,8 @@ const EnvSchema = z.object({
 
   // AI (ANTHROPIC_BASE_URL can point at a Cloudflare AI Gateway; the SDK reads it from env)
   // CashXChain fiat payouts (sandbox only). Unset: fiat payouts use the simulated stand-in.
+  // Required on POST /api/runs/:id/approve|reject as `Authorization: Bearer <token>`. Unset: closed.
+  OPERATOR_TOKEN: optional.refine(v => v === undefined || v.length >= 24, "at least 24 characters (e.g. openssl rand -hex 32)"),
   CASHXCHAIN_API_KEY: optional.refine(
     v => v === undefined || CXC_SANDBOX_KEY.test(v),
     "must be a CashXChain sandbox key (cxc_sk_sandbox_… or cxc_rk_sandbox_…); live keys are refused",

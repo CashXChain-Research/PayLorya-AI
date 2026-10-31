@@ -68,8 +68,11 @@ executable. `PAID -> BLOCKED` also covers a payout route the policy blocks.
   and config refuses anything but `cxc_sk_sandbox_` / `cxc_rk_sandbox_` keys. Without the key the
   fiat rail is simulated and labeled. The seller's report keeps `payoutExecuted: false`: the report
   itself never pays anyone.
-- Invoice payouts need a human approval per invoice. The approval endpoint is public on the
-  demo deployment; payouts are capped by `PAYOUT_MAX_LOVELACE` and `PAYOUT_BUDGET_LOVELACE`.
+- Invoice payouts need a human approval per invoice. `POST /api/runs/:id/approve|reject` requires
+  the operator token (`OPERATOR_TOKEN`, sent as `Authorization: Bearer`, compared in constant time,
+  checked before the run lookup). Without a configured token, decisions answer 503: closed, not
+  open. The UI asks for the token once per tab (sessionStorage). tADA payouts are also capped by
+  `PAYOUT_MAX_LOVELACE` and `PAYOUT_BUDGET_LOVELACE`; CashXChain payouts by the sandbox plan limits.
 - Route, fees and FX are `demo-fixture` and labeled "Simulated route/fees".
 - The report is a data-quality and routing check, not an AML, sanctions or KYB decision.
 

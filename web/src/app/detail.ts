@@ -98,15 +98,48 @@ function renderDetail(run: Run): void {
   });
 }
 
+// The operator token lives in this tab only (sessionStorage), never in the page or the URL.
+const TOKEN_KEY = "cxc-operator-token";
+
+function operatorToken(): string | undefined {
+  try {
+    const stored = sessionStorage.getItem(TOKEN_KEY);
+    if (stored) return stored;
+  } catch {
+    // storage blocked: ask every time
+  }
+  const entered = window.prompt("Operator token (required to approve or reject):")?.trim();
+  if (!entered) return undefined;
+  try {
+    sessionStorage.setItem(TOKEN_KEY, entered);
+  } catch {
+    // not remembered
+  }
+  return entered;
+}
+
+function forgetOperatorToken(): void {
+  try {
+    sessionStorage.removeItem(TOKEN_KEY);
+  } catch {
+    // nothing stored
+  }
+}
+
 async function act(button: HTMLButtonElement): Promise<void> {
   const id = selected;
   if (!id) return;
+  const token = operatorToken();
+  if (!token) return;
   const buttons = [...$("detail").querySelectorAll<HTMLButtonElement>("[data-act]")];
   for (const b of buttons) b.disabled = true;
   button.classList.add("loading");
   try {
-    const res = await decide(id, button.dataset.act as Decision);
-    if (!res.ok) toast(res.error);
+    const res = await decide(id, button.dataset.act as Decision, token);
+    if (!res.ok && res.status === 401) {
+      forgetOperatorToken();
+      toast("Wrong operator token. Nothing was approved; try again.");
+    } else if (!res.ok) toast(res.error);
   } catch {
     toast("Could not reach the agent.");
   }

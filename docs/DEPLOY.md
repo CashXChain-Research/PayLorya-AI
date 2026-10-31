@@ -25,6 +25,7 @@ Cloudflare docs, 2026-10-30). `wrangler deploy --dry-run` passes with this confi
 | `BUYER_MNEMONIC` | secret (**buyer-cloud** wallet) | `npx wrangler secret put` |
 | `SELLER_ADDRESS` | secret | `npx wrangler secret put` |
 | `CASHXCHAIN_API_KEY` | secret, optional: CashXChain **sandbox** key for fiat payouts (see below) | `npx wrangler secret put` |
+| `OPERATOR_TOKEN` | secret, **required to approve or reject** payouts (at least 24 characters) | `npx wrangler secret put` |
 | `PUBLIC_BASE_URL` | var | `vars` in `wrangler.jsonc`, after the first deploy |
 | `LOCAL_FACILITATOR`, `PRICE_LOVELACE`, `MAX_PRICE_LOVELACE`, `SESSION_BUDGET_LOVELACE`, `MAX_PAYMENTS_PER_RUN` | var | `vars` in `wrangler.jsonc` |
 | `FACILITATOR_URL`, `CARDANO_L1_CONFIRMATIONS`, `BLOCKFROST_PREPROD_URL`, `EXPLORER_TX_URL`, `DEMO_AMOUNT_CEILING_MINOR`, `CLAUDE_MODEL`, `ANTHROPIC_BASE_URL` | optional var | add to `vars` only to override the default in `src/config.ts` |
@@ -48,6 +49,7 @@ npx wrangler secret put BLOCKFROST_PROJECT_ID
 npx wrangler secret put BUYER_MNEMONIC
 npx wrangler secret put SELLER_ADDRESS
 npx wrangler secret put CASHXCHAIN_API_KEY   # optional: real CashXChain sandbox payouts
+npx wrangler secret put OPERATOR_TOKEN       # required for approve/reject; e.g. openssl rand -hex 32
 npx wrangler deploy
 ```
 
@@ -60,6 +62,15 @@ Workers & Pages → `cxc-agentpay` → Settings → Variables and Secrets, type 
 `wrangler deploy`; plain variables added in the dashboard do not (deploy replaces them with `vars`).
 Redeploy afterwards so the container restarts with the new env. The first container start after a deploy can take
 a while; retry `/api/health` until it answers.
+
+### Operator token (approve and reject)
+
+`POST /api/runs/:id/approve|reject` is the only path to a payout, so it needs `OPERATOR_TOKEN` as
+`Authorization: Bearer <token>`. Without the secret, approve and reject answer 503 (closed).
+`/api/health` reports `approvals: "operator-token"` once it is set. The UI asks for the token on the
+first Approve/Reject and keeps it in that browser tab only; a wrong token is forgotten and asked
+again. Share it only with the people who approve during the demo; rotate it with another
+`wrangler secret put` and a redeploy.
 
 ### CashXChain sandbox payouts
 

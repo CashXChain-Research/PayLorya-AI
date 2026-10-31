@@ -2,6 +2,7 @@ import express from "express";
 import { BuyerAgent } from "./agent.js";
 import { CashXChainClient, CXC_SANDBOX_API } from "./cashxchain.js";
 import { loadConfig } from "./config.js";
+import { checkOperator } from "./operator.js";
 import { mountLocalFacilitator } from "./facilitator.js";
 import { sampleInvoices } from "./fixtures.js";
 import { CashXChainPayoutRoute } from "./payout-cashxchain.js";
@@ -39,6 +40,8 @@ app.get(["/health", "/api/health"], (_req, res) => {
     payoutBudgetLovelace: config.PAYOUT_BUDGET_LOVELACE.toString(),
     paidOutLovelace: agent?.paidOutLovelace.toString() ?? "0",
     cashxchain: { ready: config.cxcReady, environment: "sandbox", api: CXC_SANDBOX_API },
+    // Approve/reject need the operator token; without one configured they are closed.
+    approvals: config.OPERATOR_TOKEN ? "operator-token" : "disabled",
   });
 });
 
@@ -88,10 +91,18 @@ app.get("/api/runs/:id", (req, res) => {
   res.json(run);
 });
 
-// Human decision on a draft. Public on the demo deployment. tADA payouts are capped by
-// PAYOUT_MAX/BUDGET_LOVELACE; CashXChain sandbox payouts only by the demo amount ceiling and the
-// sandbox plan limits (test money).
+// Human decision on a draft: the only path to a payout, so it needs the operator token. Checked
+// before the run lookup, so callers without it learn nothing about runs.
 app.post("/api/runs/:id/:decision", (req, res) => {
+  const operator = checkOperator(req.header("authorization"), config.OPERATOR_TOKEN);
+  if (operator === "unconfigured") {
+    res.status(503).json({ error: "approvals are disabled: OPERATOR_TOKEN is not set on the server" });
+    return;
+  }
+  if (operator === "denied") {
+    res.status(401).set("www-authenticate", "Bearer").json({ error: "operator token required" });
+    return;
+  }
   const run = runs.get(req.params.id);
   const decision = req.params.decision;
   if (!agent || !run || (decision !== "approve" && decision !== "reject")) {
