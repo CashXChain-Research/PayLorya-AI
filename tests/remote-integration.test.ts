@@ -151,6 +151,7 @@ async function startServer(opts: { ai?: boolean; health?: Record<string, unknown
     PRICE_LOVELACE: PRICE.toString(),
     // The default live invoice (EUR 12,480.00) is above the demo fiat cap; keep its draft executable.
     FIAT_PAYOUT_MAX_MINOR: "5000000",
+    FIAT_BUDGET_MINOR: "50000000",
     ...(opts.ai ? { ANTHROPIC_API_KEY: "test-key" } : {}),
   });
   mountSeller(app, config);

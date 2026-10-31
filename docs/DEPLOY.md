@@ -28,7 +28,7 @@ Cloudflare docs, 2026-10-30). `wrangler deploy --dry-run` passes with this confi
 | `APPROVE_TOKEN` | secret, **required for approvals** (fail-closed): only requests carrying it may approve or reject a draft; unset, approve/reject answer 503 and `/api/health` shows `approvals: "disabled"` | `npx wrangler secret put` |
 | `PUBLIC_BASE_URL` | var | `vars` in `wrangler.jsonc`, after the first deploy |
 | `LOCAL_FACILITATOR`, `PRICE_LOVELACE`, `MAX_PRICE_LOVELACE`, `SESSION_BUDGET_LOVELACE`, `MAX_PAYMENTS_PER_RUN` | var | `vars` in `wrangler.jsonc` |
-| `FACILITATOR_URL`, `CARDANO_L1_CONFIRMATIONS`, `BLOCKFROST_PREPROD_URL`, `EXPLORER_TX_URL`, `DEMO_AMOUNT_CEILING_MINOR`, `FIAT_PAYOUT_MAX_MINOR` (1,000.00), `FIAT_PAYOUTS_PER_SESSION` (5), `CLAUDE_MODEL`, `ANTHROPIC_BASE_URL` | optional var | add to `vars` only to override the default in `src/config.ts` |
+| `FACILITATOR_URL`, `CARDANO_L1_CONFIRMATIONS`, `BLOCKFROST_PREPROD_URL`, `EXPLORER_TX_URL`, `DEMO_AMOUNT_CEILING_MINOR`, `FIAT_PAYOUT_MAX_MINOR` (1,000.00), `FIAT_PAYOUTS_PER_SESSION` (5), `FIAT_BUDGET_MINOR` (5,000.00 per currency), `CLAUDE_MODEL`, `ANTHROPIC_BASE_URL` | optional var | add to `vars` only to override the default in `src/config.ts` |
 | `RUNS_PER_MINUTE_PER_CLIENT` (10), `RUNS_PER_HOUR` (120, all clients together), `MAX_TEXT_CHARS` (20,000), `MAX_RUNS` (500) | optional var: limits for the public `POST /api/runs` (`src/ratelimit.ts`); `/api/health` shows the effective values under `limits` | add to `vars` only to override the default in `src/config.ts` |
 
 Every key in `src/config.ts` (except `PORT`) is forwarded into the container by `cloudflare/env.ts`.

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
-import { CashXChainClient, CxcApiError, type CxcAccountInput, type CxcBeneficiaryInput, type CxcPayout } from "./cashxchain.js";
-import type { FiatPayoutClient, FiatPayoutRequest } from "./payout.js";
+import { CashXChainClient, CxcApiError, type CxcAccount, type CxcAccountInput, type CxcBeneficiaryInput, type CxcPayout } from "./cashxchain.js";
+import type { FiatAccount, FiatPayoutClient, FiatPayoutRequest } from "./payout.js";
 import type { VerifiedPayee } from "./routing.js";
 import { CURRENCY_EXPONENT, type Invoice } from "./types.js";
 
@@ -109,12 +109,31 @@ export class CashXChainPayoutRoute implements FiatPayoutClient {
     }
   }
 
+  async accounts(): Promise<FiatAccount[]> {
+    const { accounts } = await this.client.listAccounts();
+    return Promise.all(accounts.map(account => this.withBalance(account)));
+  }
+
+  async sourceAccount(currency: string): Promise<FiatAccount | undefined> {
+    const source = sourceFor((await this.client.listAccounts()).accounts, currency);
+    return source && this.withBalance(source);
+  }
+
+  private async withBalance(account: CxcAccount): Promise<FiatAccount> {
+    const base = { id: account.id, currency: account.currency, status: account.status, ...(account.display_name ? { name: account.display_name } : {}) };
+    const balance = await this.client.balance(account.id).then(
+      all => all.find(b => b.currency === account.currency),
+      () => undefined, // display only: a missing balance never blocks anything
+    );
+    return balance ? { ...base, available: balance.available } : base;
+  }
+
   private async prepare(invoice: Invoice, payee: VerifiedPayee): Promise<{ sourceAccountId: string; beneficiaryId: string }> {
     const target = beneficiaryTarget(payee);
     if (!target) throw new PayoutRefusedError("no_bank_account", `verified payee ${payee.name} has no bank account on record`);
 
     const { accounts } = await this.client.listAccounts();
-    const source = accounts.find(a => a.currency === invoice.currency && a.status === "active");
+    const source = sourceFor(accounts, invoice.currency);
     if (!source) {
       throw new PayoutRefusedError("no_source_account", `no active ${invoice.currency} account in the CashXChain sandbox`);
     }
@@ -133,6 +152,10 @@ export class CashXChainPayoutRoute implements FiatPayoutClient {
     return { sourceAccountId: source.id, beneficiaryId: id };
   }
 }
+
+/** The account a payout in `currency` is sent from: the first active one in that currency. */
+const sourceFor = (accounts: CxcAccount[], currency: string): CxcAccount | undefined =>
+  accounts.find(a => a.currency === currency && a.status === "active");
 
 /**
  * A 4xx on the payout POST proves nothing was sent only if no payout can exist under the key.
