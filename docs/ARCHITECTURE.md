@@ -76,7 +76,10 @@ executable. `PAID -> BLOCKED` also covers a payout route the policy blocks.
 ## Payment safety
 
 - **Idempotency:** the seller handler runs after verify and before settle and can be retried.
-  Requests carry `Idempotency-Key` (the run id); the same key returns the cached report.
+  Requests carry `Idempotency-Key` (the run id); the same key returns the cached report. Run ids
+  are public (`GET /api/runs`), so the key is bound to the invoice: a key reused for a different
+  invoice gets 409 from the handler (no settle), and the agent refuses a report whose
+  `invoiceFingerprint` is not the run's.
 - **Duplicates:** a different key for the same supplier + invoice id + currency + amount is
   flagged `duplicate` and the verdict is `blocked`.
 - **In-flight hold:** `SpendLedger.reserve()` checks and holds budget + invoice in one step
@@ -85,23 +88,49 @@ executable. `PAID -> BLOCKED` also covers a payout route the policy blocks.
 - **One payment per wallet at a time:** `BuyerAgent` queues the pay step (402 -> sign -> settle)
   per buyer wallet. Two signers reading the same UTxO set could spend the same input; both would
   pass verify and the second broadcast would fail after signing. Runs wait in `PRECHECKED` for
-  their turn. Settle waits for confirmation, so the next payment sees the updated UTxO set. Use a
+  their turn. Settle waits for block inclusion, so the next payment sees the updated UTxO set. Use a
   separate buyer wallet per deployment (laptop vs cloud) for the same reason.
+- **Settle depth (A8):** the deployment sets `CARDANO_L1_CONFIRMATIONS=0` (`wrangler.jsonc` vars):
+  settle reports success on canonical block inclusion (`@x402/cardano` README), inside the hosted
+  facilitator's range [0, 20]. With the default 1, settle took 32.4 s once and hit an nginx 504
+  after ~65 s once (A7). Trade-off: a one-block rollback could undo a paid report; fine on testnet,
+  revisit before mainnet.
 - **Wallet sync:** before the next wallet tx (report payment or invoice payout), the queue waits
   until Blockfrost has indexed the previous one (`GET /txs/{hash}`, up to 90 s), plus 30 s after it
   settled for other indexers such as the hosted facilitator's. A7 (2026-10-30) showed why: a payment
-  built ~27 s after the previous block was rejected at verify. Only txs that were (or may have been)
-  broadcast are waited for; a verify rejection is not.
+  built ~27 s after the previous block was rejected at verify. Every tx that was or may have been
+  broadcast is waited for: a request that died after signing, a failed settle (including A7's 504
+  with an empty hash, where the tx still landed) and a settle "success" without a hash. Only a
+  verify rejection (HTTP 402 without `PAYMENT-RESPONSE`) is skipped; `@x402/core` sets that header
+  on every settle failure, network errors included.
 - **SETTLEMENT_UNKNOWN:** if anything fails after the buyer signed a transaction, the tx may
   already be on-chain. The run moves to `SETTLEMENT_UNKNOWN`, the amount counts against the
   budget, and the invoice is locked against re-payment until resolved. This includes verify
-  rejections (the seller holds the signed tx) and a settle "success" without a tx hash.
+  rejections (the seller holds the signed tx), a settle "success" without a tx hash, and a settle
+  "success" for a hash other than the tx we signed (our own tx is then the one looked up).
   `run.settlement = { transactionHash?, explorerUrl?, reason }` says what to look up before anyone
   pays again. The hash comes from the settle response, or else from decoding the tx we signed, so
   a lost response still leaves an explorer link.
+- **Reconciliation from chain evidence** (`BuyerAgent.reconcile`): for a `SETTLEMENT_UNKNOWN` or a
+  Cardano `PAYOUT_UNKNOWN` with a known tx hash, a background check polls Blockfrost every 15 s for
+  up to 20 min (outside the wallet queue).
+  - Tx on chain with an output of exactly the signed amount to the expected address
+    (`GET /txs/{hash}/utxos`, collateral outputs ignored): report fee -> `FAILED` with an on-chain
+    payment proof, counted once, invoice locked as paid (the report itself was never delivered);
+    payout -> `EXECUTED`, `status: "confirmed"`.
+  - Outputs that do not match: stays unknown with a timeline note; a human checks.
+  - Proven expired: only for the tx we signed ourselves, when its validity end (TTL) is at least
+    600 slots (~10 min) behind Blockfrost's latest block and the tx is still not indexed. The tip
+    is read before the tx lookup, so a tx indexed in between counts as paid. Report fee ->
+    `FAILED`, refunded, invoice unlocked; payout -> `DRAFT_READY`, approve again. This rests on the
+    ledger rule (no tx lands at or after its TTL) and a ~30-block rollback margin, not on Cardano's
+    formal 2160-block finality.
+  - Fiat `PAYOUT_UNKNOWN` is not reconciled automatically: `run.payout.reference` keeps the
+    CashXChain payout id when one exists, and the label names the `Idempotency-Key`.
 - **Paid without a usable report:** if settle succeeded but the body is not a well-formed report
-  (not JSON, or no valid verdict/checks), the run ends `FAILED` with the payment proof kept and
-  the invoice locked as paid. It is a failed delivery, not a free retry.
+  (not JSON, or no valid verdict/checks) or is a report for another invoice, the run ends `FAILED`
+  with the payment proof kept and the invoice locked as paid. It is a failed delivery, not a free
+  retry.
 - **Offer filter:** only `exact` / `cardano:preprod` / `lovelace`, allowlisted `payTo`, price
   cap, and the plain `default` transfer method (no Masumi or script locks).
 - The facilitator broadcasts a given Cardano tx at most once (`@x402/cardano` duplicate
@@ -125,9 +154,11 @@ are not offered.
 Payout safety mirrors the report payment:
 
 - `approve()` switches to `EXECUTING` synchronously; a second click gets 409.
-- **Who may decide:** with `APPROVE_TOKEN` set, `POST /api/runs/:id/approve|reject` needs
-  `Authorization: Bearer <token>` (or `X-Approve-Token`), compared in constant time; 401 otherwise.
-  `/api/health` reports `approvalTokenRequired` so the UI knows to ask. Unset: open (demo default).
+- **Who may decide (fail-closed):** `POST /api/runs/:id/approve|reject` needs
+  `Authorization: Bearer <token>` (or `X-Approve-Token`) matching `APPROVE_TOKEN`, compared in
+  constant time; 401 otherwise. Without `APPROVE_TOKEN` approvals are disabled: 503
+  `approvals disabled: APPROVE_TOKEN not configured`. `/api/health` reports
+  `approvals: "operator-token" | "disabled"` (and `approvalTokenRequired: true`) so the UI knows.
 - **Fiat caps:** fiat payouts hold no lovelace, so they are capped separately:
   `FIAT_PAYOUT_MAX_MINOR` per payout (above it the route is `unavailable` and the draft stays for
   manual handling; not `blocked`, which is reserved for fraud signals) and `FIAT_PAYOUTS_PER_SESSION`
@@ -168,16 +199,30 @@ Payout safety mirrors the report payment:
     `returned`; polling errors.
 - Payouts go through the same wallet queue as report payments (one tx in flight per wallet).
 
+## Public endpoint limits
+
+`POST /api/runs` starts a model call and possibly a paid request, so it is gated before either
+(`src/ratelimit.ts`), in this order: 400 (no input), 413 (free text over `MAX_TEXT_CHARS`,
+default 20,000; structured invoice JSON is exempt), 429 (fixed windows:
+`RUNS_PER_MINUTE_PER_CLIENT` 10 per client IP, `RUNS_PER_HOUR` 120 overall; `Retry-After` set),
+503 (store full), else 202. Refused requests count against nothing. The client is identified by
+`CF-Connecting-IP`, else the first `X-Forwarded-For` entry, else the socket; `/api/health` reports
+which one under `limits.clientIdFrom`. `RunStore` keeps at most `MAX_RUNS` (500): settled runs are
+evicted first (oldest first), then parked ones (`DRAFT_READY`, `*_UNKNOWN`), never in-flight ones.
+An evicted run disappears from the UI, but the spend and payout ledgers still block paying its
+invoice twice.
+
 ## Readiness checks
 
 | Check | Source | Logic |
 | --- | --- | --- |
 | account | deterministic | IBAN mod-97 + country length; BIC format + country; ABA routing checksum; Cardano address bech32 checksum, `addr_test1` prefix, key credential |
-| corridor | demo-fixture | destination country + currency in the demo corridor table |
+| corridor | demo-fixture | destination country + currency in the demo corridor table; the fail message names a currency mismatch for a served country |
 | required_fields | demo-fixture | per corridor (SEPA: IBAN; US: routing + account; AE: IBAN + BIC; ADA: Cardano address) |
 | duplicate | deterministic | fingerprint ledger keyed by Idempotency-Key |
 | amount | deterministic | demo ceiling |
 | quote | demo-fixture | simulated fee / FX / ETA |
+| reference | deterministic | informational, always `pass`: payment reference present, or reconcile by invoice id |
 
 Verdict: `blocked` (corridor, duplicate, amount), `needs_info` (fields, account, warnings),
 otherwise `ready_for_review`.
@@ -216,7 +261,7 @@ otherwise `ready_for_review`.
 
 ## Not verified yet
 
-- No live payout has run. `blockfrostSubmitter` uses `@x402/cardano`'s provider-only
+- No live payout is recorded in `evidence/` yet. `blockfrostSubmitter` uses `@x402/cardano`'s provider-only
   `submitTransaction` (Blockfrost `/tx/submit`, then evolution `awaitTx` with a 120 s timeout),
   read from the installed source and covered offline with a stub only.
 - Whether Claude copies a 100+ character bech32 address exactly. A single wrong character fails
@@ -226,7 +271,11 @@ otherwise `ready_for_review`.
   `api.sandbox.cashxchain.com`.
 - With `LOCAL_FACILITATOR=true`, verify also calls Blockfrost `POST /utils/txs/evaluate/utxos`;
   untested against real Blockfrost for a script-free tx.
-- Cloudflare Containers deploy is written against `@cloudflare/containers@0.3.7` and the
-  wrangler 4.156 schema but not deployed yet.
+- Reconciliation against real Blockfrost: the `/txs/{hash}/utxos` body of a landed tx, a non-null
+  `slot` from `/blocks/latest`, and an end-to-end resolution on the deployment (the remote scripts
+  treat `SETTLEMENT_UNKNOWN` as final; fetch `/api/runs/:id` again within 20 min).
+- Settle times with `CARDANO_L1_CONFIRMATIONS=0` on the hosted facilitator.
+- That `CF-Connecting-IP` reaches the container (`/api/health` -> `limits.clientIdFrom` should be
+  `cf-connecting-ip`). Judges on one conference Wi-Fi share one per-client quota.
 - `EXPLORER_TX_URL` default (Cardanoscan preprod) to be confirmed with the first real tx, in a
   browser: Cardanoscan serves a Cloudflare challenge to scripts, so it cannot be checked automatically.
