@@ -219,11 +219,16 @@ export function mountCfo(app: Express, deps: CfoDeps): void {
   const envFor = async (ws: string): Promise<ConnectionEnv> => {
     const workspace = await store.workspace(ws);
     const sub = workspace && deps.cxc?.clientFor(workspace);
-    return sub ? { ...deps.connections, cashxchain: sub } : deps.connections;
+    return sub ? { ...deps.connections, cashxchain: sub, linkedSubAccount: true } : deps.connections;
   };
   // A connection with its own key reads that account; the others read what envFor gives.
+  // A CashXChain connection without a key reads only a linked sub-account, never the shared one.
   const envForConnection = async (ws: string, c: ConnectionRow): Promise<ConnectionEnv> => {
-    if (!c.credentialHint) return envFor(ws);
+    if (!c.credentialHint) {
+      const env = await envFor(ws);
+      if (c.kind === "cashxchain" && !env.linkedSubAccount) throw new Error("No API key on this connection: remove it and connect CashXChain again with your API key");
+      return env;
+    }
     if (!deps.keys) throw new Error("This server cannot use stored API keys");
     return { ...deps.connections, cashxchain: await deps.keys.client(ws, c) };
   };

@@ -35,6 +35,8 @@ export interface PaymentEngine {
   runs: RunStore;
 }
 
+export const NEEDS_OWN_KEY = "CashXChain payouts leave from your own account: connect CashXChain with your API key on the Connections page";
+
 const monthStart = () => `${new Date().toISOString().slice(0, 7)}-01T00:00:00.000Z`;
 
 /** Drafts, decides, approves and executes payments for a workspace. */
@@ -46,13 +48,14 @@ export class Payments {
   ) {}
 
   /**
-   * The fiat route of a workspace that connected its own CashXChain account (by API key): its
-   * payouts leave from that account. Undefined: the engine's route (PayLorya AI's shared sandbox
-   * account). Throws when the stored key can no longer be opened; never falls back then.
+   * The fiat route of a workspace: its own CashXChain account, connected by API key. Its payouts
+   * leave from that account and from nowhere else: a connection without a key (one made before keys
+   * were required, or one reading a linked sub-account) cannot pay out, and PayLorya AI's shared
+   * sandbox account never pays for a workspace. Throws with the reason shown on the payment.
    */
-  private async ownFiatRoute(ws: string): Promise<FiatPayoutClient | undefined> {
+  private async ownFiatRoute(ws: string): Promise<FiatPayoutClient> {
     const c = (await this.store.connections(ws)).find(x => x.kind === "cashxchain" && x.access === "read_write");
-    if (!c?.credentialHint) return undefined;
+    if (!c?.credentialHint) throw new Error(NEEDS_OWN_KEY);
     const client = await this.keys?.client(ws, c);
     if (!client) throw new Error("This server cannot use the stored CashXChain API key");
     return new CashXChainPayoutRoute(client);

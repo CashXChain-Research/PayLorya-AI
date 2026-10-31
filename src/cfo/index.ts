@@ -32,7 +32,7 @@ function storage(config: Config, opts: { memory?: boolean }): { sql: Sql; files:
 export async function createCfo(
   config: Config,
   engine: PaymentEngine,
-  opts: { memory?: boolean; mailer?: Mailer; /** Tests: a fake CashXChain for workspace keys. */ cashxchainBaseUrl?: string } = {},
+  opts: { memory?: boolean; mailer?: Mailer; /** Tests: the CashXChain client for a workspace key. */ cashxchainFor?: (apiKey: string) => CashXChainClient } = {},
 ): Promise<CfoDeps> {
   const { sql, files } = storage(config, opts);
   await migrate(sql);
@@ -42,9 +42,7 @@ export async function createCfo(
     (config.RESEND_API_KEY ? resendMailer({ apiKey: config.RESEND_API_KEY, from: config.RESEND_FROM, expiresMinutes: CODE_MINUTES, baseUrl: config.baseUrl }) : undefined);
   const auth = createAuth(sql, { baseUrl: config.baseUrl, secret: config.BETTER_AUTH_SECRET, mailer });
   // A workspace's own CashXChain account, connected with its API key (sealed with BETTER_AUTH_SECRET).
-  const keys = new CxcKeys(store, config.BETTER_AUTH_SECRET, apiKey =>
-    new CashXChainClient({ apiKey, ...(opts.cashxchainBaseUrl ? { baseUrl: opts.cashxchainBaseUrl } : {}) }),
-  );
+  const keys = new CxcKeys(store, config.BETTER_AUTH_SECRET, opts.cashxchainFor ?? (apiKey => new CashXChainClient({ apiKey })));
   return {
     store,
     auth,
