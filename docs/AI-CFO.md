@@ -42,9 +42,9 @@ password by default. Codes are mailed through Resend (`POST https://api.resend.c
 ## What a customer can do
 
 - **Connect** wallets and accounts:
-  - The CashXChain agent wallet on Cardano Preprod (read & write).
-  - A CashXChain account on the sandbox (read & write).
-  - Any Cardano Preprod address (watch-only).
+  - Their own Cardano Preprod wallet (read, or read & write: they sign each tADA payout in it).
+  - Their own CashXChain sandbox account by API key (read & write).
+  - The PayLorya AI agent wallet on Cardano Preprod (read-only: it pays the x402 verification fees).
   - Any EVM address, with balances on Ethereum, Base and Polygon mainnet (watch-only).
   - Bank accounts are listed as coming soon.
   - Each connection is Read-only or Read & write. Watch-only kinds cannot be switched to write.
@@ -108,7 +108,9 @@ src/cfo/
   - CashXChain payouts are sandbox payouts, or simulated when no key is set.
   - USD figures use fixed indicative rates (`src/cfo/fx.ts`), not market data. tADA has a nominal
     rate only, so that USD limits also constrain tADA payments.
-- **Shared wallet**: all workspaces share one agent wallet, and its platform caps apply to all of them.
+- **Shared agent wallet for fees only**: the x402 verification fees of all workspaces come from one
+  agent wallet, and the agent's platform caps (session payout limits and budgets) apply to all
+  workspaces together. Payouts leave from each workspace's own wallet or account.
 - **Cost guard**: `CFO_AI_DAILY_LIMIT` caps model calls (documents and chat messages) per workspace
   per day. The default is 150.
 - **Not advice**: reports are financial analysis, not tax, legal or investment advice, and they are
@@ -152,10 +154,26 @@ A workspace uses its own accounts (Connections page). PayLorya AI's shared sandb
 - **Without a key** a CashXChain connection is allowed only for a linked sub-account, and it only
   reads. A key-less connection made before keys were required shows an error and cannot pay
   (`NEEDS_OWN_KEY`); remove it and connect again with the key.
-- **Wallets by browser popup.** The Cardano and EVM watch-only connections offer "Connect Lace /
-  Eternl / …" (CIP-30) and "Connect browser wallet" (EIP-1193, MetaMask). The wallet's permission
-  popup hands over an address only; Cardano must be on a testnet (network id 0). The AI CFO reads
-  balances and never signs from these wallets.
+- **Wallets by browser popup.** The Cardano and EVM connections offer "Connect Lace / Eternl / …"
+  (CIP-30) and "Connect browser wallet" (EIP-1193, MetaMask). The wallet's permission popup hands
+  over an address only; Cardano must be on a testnet (network id 0).
+- **tADA payouts from the workspace's own wallet (required).** They leave only from a Cardano
+  wallet connected with read & write; the agent wallet never pays a workspace's payout, and an old
+  read & write connection to it no longer counts (`NEEDS_OWN_WALLET`). Nothing holds the
+  customer's keys:
+  1. On approval the agent buys the verification report as before (agent wallet).
+  2. The server builds the payout from the wallet address's UTxOs, with change back to it
+     (Evolution SDK over Blockfrost, `src/cfo/wallet-signer.ts`). The transaction is valid
+     10 minutes.
+  3. The payment shows it (`signRequest`) under Approvals with "Sign with Lace". The wallet shows
+     payee, amount and fee, and signs (`signTx`, partial).
+  4. `POST /api/v1/payments/:id/signature` `{txHash, witnessSet}` hands the witnesses back; the
+     server splices them in without touching the body (`Transaction.addVKeyWitnessesHex`) and
+     the agent broadcasts as for any payout (`BuyerAgent.useCardanoSigner`).
+  5. `{declined: true}`, or no signature within 9 minutes: the payment fails and nothing is sent.
+     The wait is in memory: a restart while it waits fails the payment, also with nothing sent.
+  - Only plain lovelace transfers on Cardano Preprod; only UTxOs at the connected address are
+    spent (funds on other addresses of the same wallet are not used).
 - **Not possible today:** a "Sign in with CashXChain" popup (the CashXChain auth portal is an OAuth
   client for Google/Apple/Microsoft, not an OAuth provider), and a platform creating CashXChain
   accounts for customers (attach-only by design, see above).

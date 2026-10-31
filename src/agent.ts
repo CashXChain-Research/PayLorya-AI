@@ -72,6 +72,8 @@ export class BuyerAgent {
   private readonly fiatCommitted = new Map<string, Money>();
   // Runs that pay fiat over another route than the agent's default (an AI CFO workspace's own key).
   private readonly runFiat = new WeakMap<Run, FiatPayoutClient>();
+  // Runs that pay tADA from another wallet than the agent's (an AI CFO workspace's own wallet).
+  private readonly runSigner = new WeakMap<Run, ClientCardanoSigner>();
 
   constructor(
     private readonly config: Config,
@@ -117,6 +119,16 @@ export class BuyerAgent {
 
   private fiatFor(run: Run): FiatPayoutClient {
     return this.runFiat.get(run) ?? this.fiat;
+  }
+
+  /**
+   * Pays this run's tADA payout from another wallet than the agent's: an AI CFO workspace's own
+   * wallet, signed by its owner (CIP-30 in the browser). That payout does not queue behind the
+   * agent wallet and is not tracked for its sync (other UTxOs). Report fees stay with the agent
+   * wallet; session limits and budgets stay the agent's. Set it before process().
+   */
+  useCardanoSigner(run: Run, signer: ClientCardanoSigner): void {
+    this.runSigner.set(run, signer);
   }
 
   get buyerAddress(): string {
@@ -266,10 +278,12 @@ export class BuyerAgent {
     let to: PaymentDestination | undefined;
     let budget: BudgetLine;
     if (rail === "cardano_preprod") {
-      const balance = await this.walletLovelace();
-      from = { kind: "cardano_wallet", address: this.buyerAddress, network: CARDANO_NETWORK, ...(balance !== undefined ? { balanceLovelace: balance.toString() } : {}) };
+      const own = this.runSigner.get(run);
+      const address = own ? own.getAddress() : this.buyerAddress;
+      const balance = own ? await this.lovelaceAt(address) : await this.walletLovelace();
+      from = { kind: "cardano_wallet", address, network: CARDANO_NETWORK, ...(balance !== undefined ? { balanceLovelace: balance.toString() } : {}) };
       if (balance !== undefined && balance < BigInt(invoice.amountMinor) + FEE_MARGIN_LOVELACE) {
-        warnings.push(`The buyer wallet holds ${formatMinor(Number(balance), "ADA")}, too little for this payout plus network fees`);
+        warnings.push(`The ${own ? "paying" : "buyer"} wallet holds ${formatMinor(Number(balance), "ADA")}, too little for this payout plus network fees`);
       }
       if (route.destination) to = { kind: "cardano_address", address: route.destination };
       const used = Number(usage.cardanoPaidLovelace);
@@ -365,6 +379,13 @@ export class BuyerAgent {
     }
   }
 
+  /** Lovelace at any address, for display; undefined if it cannot be read. */
+  private async lovelaceAt(address: string): Promise<bigint | undefined> {
+    const chain = this.chainView();
+    if (!chain?.addressLovelace) return undefined;
+    return chain.addressLovelace(address).catch(() => undefined);
+  }
+
   /** The CashXChain account a fiat payout would leave from, or the simulation label. */
   private async fiatSource(fiat: FiatPayoutClient, invoice: Invoice, warnings: string[]): Promise<PaymentSource> {
     if (fiat.simulated || !fiat.sourceAccount) return { kind: "simulated", label: fiat.label };
@@ -421,7 +442,10 @@ export class BuyerAgent {
       // decideRoute selected this payee, so the record exists. Payouts key on it, not on extracted text.
       const payee = findPayee(this.directory(run), invoice.supplier)!;
       const key = payoutKey(payee, invoice);
-      if (route.rail === "cardano_preprod") await this.withWallet(() => this.payOnCardano(run, invoice, route.destination!, key));
+      const own = route.rail === "cardano_preprod" ? this.runSigner.get(run) : undefined;
+      // Another wallet's payout waits for its owner's signature: never while holding the agent wallet's queue.
+      if (own) await this.payOnCardano(run, invoice, route.destination!, key, own);
+      else if (route.rail === "cardano_preprod") await this.withWallet(() => this.payOnCardano(run, invoice, route.destination!, key, this.signer));
       else await this.payViaCxc(run, invoice, route.destination!, payee, key);
     } catch (error) {
       run.error = error instanceof Error ? error.message : String(error);
@@ -429,15 +453,19 @@ export class BuyerAgent {
     }
   }
 
-  /** tADA from the buyer wallet to the verified payee wallet. Signed locally, broadcast via Blockfrost. */
-  private async payOnCardano(run: Run, invoice: Invoice, destination: string, key: string): Promise<void> {
+  /**
+   * tADA to the verified payee wallet, broadcast via Blockfrost. From the buyer wallet (signed
+   * locally), or from the run's own signer (a workspace wallet its owner signs for).
+   */
+  private async payOnCardano(run: Run, invoice: Invoice, destination: string, key: string, signer: ClientCardanoSigner): Promise<void> {
+    const agentWallet = signer === this.signer;
     const amount = BigInt(invoice.amountMinor);
     const hold = this.payoutLedger.reserve(key, amount);
     if (!hold.ok) throw new Error(`payout refused before signing: ${hold.reason}`);
 
     let signed: ClientCardanoSignResult;
     try {
-      signed = await this.signer.buildAndSignPaymentTransaction({
+      signed = await signer.buildAndSignPaymentTransaction({
         network: CARDANO_NETWORK,
         payTo: destination,
         asset: "lovelace",
@@ -466,7 +494,7 @@ export class BuyerAgent {
       // The broadcast may have reached the chain: count it and lock the invoice.
       const ours = decodeSigned(signed.transaction);
       const tx = ours?.txHash;
-      if (tx) this.noteTx(tx);
+      if (tx && agentWallet) this.noteTx(tx);
       this.payoutLedger.markUnknown(key, amount);
       const unknown: PayoutResult = { ...base, status: "unknown", ...explorer(tx), label: "Payout outcome unknown: check the explorer before paying again", executedAt: new Date().toISOString() };
       run.payout = unknown;
@@ -474,7 +502,7 @@ export class BuyerAgent {
       if (ours) this.watchPayout(run, key, { txHash: ours.txHash, payTo: destination, lovelace: amount, ttlSlot: ours.ttlSlot }, unknown);
       return;
     }
-    this.noteTx(sent.txHash);
+    if (agentWallet) this.noteTx(sent.txHash);
     this.payoutLedger.markPaid(key, amount);
     const confirmed = sent.status === "confirmed";
     run.payout = {

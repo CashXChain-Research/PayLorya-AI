@@ -448,6 +448,17 @@ export function mountCfo(app: Express, deps: CfoDeps): void {
     if (body.documentId && !await store.document(ws, body.documentId)) throw new HttpError(400, "document not found");
     res.status(201).json(await deps.payments.draft(ws, { ...body, requestedBy: "user" }));
   });
+  // The owner's wallet signed (CIP-30 signTx) the tADA payout shown on the payment, or declined it.
+  const Signature = z.union([
+    z.object({ txHash: z.string().regex(/^[0-9a-f]{64}$/), witnessSet: z.string().regex(/^(?:[0-9a-fA-F]{2}){1,16384}$/) }),
+    z.object({ declined: z.literal(true) }),
+  ]);
+  api.post("/payments/:id/signature", json, async (req, res) => {
+    const ws = ctx(res).ws.id;
+    const result = await deps.payments.signature(ws, req.params.id as string, Signature.parse(req.body));
+    if (!result.ok) throw new HttpError(result.status, result.error);
+    res.status(202).json({ ok: true });
+  });
   api.post("/payments/:id/:decision", async (req, res) => {
     const ws = ctx(res).ws.id;
     const decision = req.params.decision;
