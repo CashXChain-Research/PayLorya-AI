@@ -1,5 +1,5 @@
 import { $, esc, money } from "../shared/dom.js";
-import { decide, getRun, type Decision, type Run } from "./api.js";
+import { decide, getRun, type Decision, type PostResult, type Run } from "./api.js";
 import { health, loadHealth } from "./health.js";
 import { loadList } from "./list.js";
 import { TERMINAL, stageHtml, stagesFor } from "./stages.js";
@@ -98,48 +98,50 @@ function renderDetail(run: Run): void {
   });
 }
 
-// The operator token lives in this tab only (sessionStorage), never in the page or the URL.
-const TOKEN_KEY = "cxc-operator-token";
+// The approval token (server: APPROVE_TOKEN) lives in this tab only (sessionStorage), never in the
+// page or the URL. It is asked for only when the server answers 401.
+const TOKEN_KEY = "cxc-approve-token";
 
-function operatorToken(): string | undefined {
+function storedToken(): string | undefined {
   try {
-    const stored = sessionStorage.getItem(TOKEN_KEY);
-    if (stored) return stored;
+    return sessionStorage.getItem(TOKEN_KEY) ?? undefined;
   } catch {
-    // storage blocked: ask every time
+    return undefined; // storage blocked: ask every time
   }
-  const entered = window.prompt("Operator token (required to approve or reject):")?.trim();
-  if (!entered) return undefined;
+}
+
+function rememberToken(token: string | undefined): void {
   try {
-    sessionStorage.setItem(TOKEN_KEY, entered);
+    if (token) sessionStorage.setItem(TOKEN_KEY, token);
+    else sessionStorage.removeItem(TOKEN_KEY);
   } catch {
     // not remembered
   }
-  return entered;
 }
 
-function forgetOperatorToken(): void {
-  try {
-    sessionStorage.removeItem(TOKEN_KEY);
-  } catch {
-    // nothing stored
-  }
+/** A 401 is answered before anything happens, so retrying with an entered token is safe. */
+async function decideWithToken(id: string, decision: Decision): Promise<PostResult> {
+  const stored = storedToken();
+  const first = await decide(id, decision, stored);
+  if (first.ok || first.status !== 401) return first;
+  rememberToken(undefined);
+  const entered = window.prompt(stored ? "Wrong approval token. Enter it again:" : "Approval token (required to approve or reject):")?.trim();
+  if (!entered) return { ok: false, status: 401, error: "Approval needs the operator's token. Nothing was approved." };
+  const second = await decide(id, decision, entered);
+  if (second.ok) rememberToken(entered);
+  else if (second.status === 401) return { ok: false, status: 401, error: "Wrong approval token. Nothing was approved." };
+  return second;
 }
 
 async function act(button: HTMLButtonElement): Promise<void> {
   const id = selected;
   if (!id) return;
-  const token = operatorToken();
-  if (!token) return;
   const buttons = [...$("detail").querySelectorAll<HTMLButtonElement>("[data-act]")];
   for (const b of buttons) b.disabled = true;
   button.classList.add("loading");
   try {
-    const res = await decide(id, button.dataset.act as Decision, token);
-    if (!res.ok && res.status === 401) {
-      forgetOperatorToken();
-      toast("Wrong operator token. Nothing was approved; try again.");
-    } else if (!res.ok) toast(res.error);
+    const res = await decideWithToken(id, button.dataset.act as Decision);
+    if (!res.ok) toast(res.error);
   } catch {
     toast("Could not reach the agent.");
   }

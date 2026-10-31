@@ -20,8 +20,7 @@
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["AgentPayContainer"] }],
   "observability": { "enabled": true },
   // Non-secret config. Every deploy overwrites vars with these values; keep them here, not in the dashboard.
-  // Secrets (never here): ANTHROPIC_API_KEY, BLOCKFROST_PROJECT_ID, BUYER_MNEMONIC, SELLER_ADDRESS, CASHXCHAIN_API_KEY,
-  // OPERATOR_TOKEN
+  // Secrets (never here): ANTHROPIC_API_KEY, BLOCKFROST_PROJECT_ID, BUYER_MNEMONIC, SELLER_ADDRESS, CASHXCHAIN_API_KEY
   // via `npx wrangler secret put <NAME>`. See docs/DEPLOY.md.
   "vars": {
     "PUBLIC_BASE_URL": "https://cxc-agentpay.cashxchain.workers.dev",

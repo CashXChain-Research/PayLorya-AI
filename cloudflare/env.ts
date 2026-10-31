@@ -18,8 +18,10 @@ export const FORWARDED = [
   "SUPPLIER_CARDANO_ADDRESS",
   "PAYOUT_MAX_LOVELACE",
   "PAYOUT_BUDGET_LOVELACE",
+  "FIAT_PAYOUT_MAX_MINOR",
+  "FIAT_PAYOUTS_PER_SESSION",
+  "APPROVE_TOKEN",
   "CASHXCHAIN_API_KEY",
-  "OPERATOR_TOKEN",
   "ANTHROPIC_API_KEY",
   "CLAUDE_MODEL",
   // Not in the schema: the Anthropic SDK reads it from env (Cloudflare AI Gateway).

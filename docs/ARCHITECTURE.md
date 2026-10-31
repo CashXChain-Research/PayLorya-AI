@@ -68,11 +68,8 @@ executable. `PAID -> BLOCKED` also covers a payout route the policy blocks.
   and config refuses anything but `cxc_sk_sandbox_` / `cxc_rk_sandbox_` keys. Without the key the
   fiat rail is simulated and labeled. The seller's report keeps `payoutExecuted: false`: the report
   itself never pays anyone.
-- Invoice payouts need a human approval per invoice. `POST /api/runs/:id/approve|reject` requires
-  the operator token (`OPERATOR_TOKEN`, sent as `Authorization: Bearer`, compared in constant time,
-  checked before the run lookup). Without a configured token, decisions answer 503: closed, not
-  open. The UI asks for the token once per tab (sessionStorage). tADA payouts are also capped by
-  `PAYOUT_MAX_LOVELACE` and `PAYOUT_BUDGET_LOVELACE`; CashXChain payouts by the sandbox plan limits.
+- Invoice payouts need a human approval per invoice. The approval endpoint is public on the
+  demo deployment; payouts are capped by `PAYOUT_MAX_LOVELACE` and `PAYOUT_BUDGET_LOVELACE`.
 - Route, fees and FX are `demo-fixture` and labeled "Simulated route/fees".
 - The report is a data-quality and routing check, not an AML, sanctions or KYB decision.
 
@@ -128,6 +125,14 @@ are not offered.
 Payout safety mirrors the report payment:
 
 - `approve()` switches to `EXECUTING` synchronously; a second click gets 409.
+- **Who may decide:** with `APPROVE_TOKEN` set, `POST /api/runs/:id/approve|reject` needs
+  `Authorization: Bearer <token>` (or `X-Approve-Token`), compared in constant time; 401 otherwise.
+  `/api/health` reports `approvalTokenRequired` so the UI knows to ask. Unset: open (demo default).
+- **Fiat caps:** fiat payouts hold no lovelace, so they are capped separately:
+  `FIAT_PAYOUT_MAX_MINOR` per payout (above it the route is `unavailable` and the draft stays for
+  manual handling; not `blocked`, which is reserved for fraud signals) and `FIAT_PAYOUTS_PER_SESSION`
+  (payouts sent or possibly sent; a definitive refusal frees its slot). Defaults 1,000.00 and 5 keep
+  the public demo under the CashXChain sandbox day limit (USD 5,000).
 - The payout ledger reserves the invoice before signing and releases it only if signing threw.
 - A definitive node rejection before broadcast (Blockfrost `submitTx` HTTP 400, e.g. a spent
   input) returns the run to `DRAFT_READY` with the hold released: nothing was sent, approve again.
@@ -199,6 +204,15 @@ otherwise `ready_for_review`.
   tx `4e959d66ee947505292fbb48c1ec10356ed70b1751dab98b1ad2f37591ea87b2`, block 5354949, fee
   0.168581 tADA, PAYING -> PAID in 32.4 s, run ended `DRAFT_READY`. Outputs checked on Koios.
   Evidence: `evidence/live-run-2026-10-30T23-32-37-254Z.json`.
+
+- 2026-10-31 (A7 safety, live): `repeat-invoice` PASS (tx `7df56c37…d063`, the repeat was refused
+  before signing) and `missing-account` PASS (`NEEDS_INFO`, nothing paid). `prompt-injection` ended
+  `SETTLEMENT_UNKNOWN`: the hosted facilitator answered settle with nginx **504 after ~65 s**, but tx
+  `8f05dd119428d53511de6c1dade9ed189c62e0cae53dbeefe3b85ce7ce54ffc1` is on chain (block 5355152)
+  with exactly 2 tADA to the seller and change to the buyer. Nothing went to the attacker address.
+  On the earlier run (2026-10-30), tx `3f1acfbd…` was rejected at verify and never broadcast; its
+  reason was lost, which led to the verify-reason fix in #10.
+  Evidence: `evidence/safety-2026-10-30T23-56-11-205Z.json`, `evidence/safety-2026-10-31T00-46-10-335Z.json`.
 
 ## Not verified yet
 

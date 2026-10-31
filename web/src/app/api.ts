@@ -65,8 +65,8 @@ async function post(url: string, body?: unknown, headers: Record<string, string>
 
 export const createRun = (input: string): Promise<PostResult> => post("/api/runs", { input });
 /**
- * Needs the operator token (401 without or with a wrong one; 503 when the server has none).
+ * 401 when the server has APPROVE_TOKEN set and the token is missing or wrong.
  * 409 when the run is no longer awaiting approval or the draft cannot execute.
  */
-export const decide = (id: string, decision: Decision, operatorToken: string): Promise<PostResult> =>
-  post(`/api/runs/${encodeURIComponent(id)}/${decision}`, undefined, { authorization: `Bearer ${operatorToken}` });
+export const decide = (id: string, decision: Decision, approveToken?: string): Promise<PostResult> =>
+  post(`/api/runs/${encodeURIComponent(id)}/${decision}`, undefined, approveToken ? { authorization: `Bearer ${approveToken}` } : {});
