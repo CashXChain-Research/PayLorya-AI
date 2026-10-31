@@ -32,13 +32,13 @@ conflicts, a visible unknown-settlement state, and live proof of the safety scen
 | Task | Status |
 | --- | --- |
 | A1 Wallets | Done: seller, buyer-local and buyer-cloud created locally. Mnemonics are in the password manager, never in chat or git |
-| A2 First real payment | Waiting for C's live URL |
+| A2 First real payment | **Done** (#8): run `8a1e92b8`, tx `4e959d66ee947505292fbb48c1ec10356ed70b1751dab98b1ad2f37591ea87b2`, 32.4 s, fee 0.168581 tADA |
 | A3 Reconcile with live services | Done: hosted facilitator `/supported` and Blockfrost error codes verified live (see ARCHITECTURE "Verified live") |
-| A4 Full agent run | Waiting for C's live URL |
+| A4 Full agent run | Structured invoice done on the live URL. Text samples (`--sample sepa_ok`) still open |
 | A5 Wallet queue | Done (merged in #3) |
 | A6 `run.settlement` | Done (merged in #3) |
-| A7 Safety scenarios | Tooling ready (`remote:safety`); the run waits for C |
-| A8 Demo settings | Waiting for A2 timings |
+| A7 Safety scenarios | Ready to run on the laptop: `npm run remote:safety -- --url <live> --yes` |
+| A8 Demo settings | Recommendation: keep 1 confirmation (32 s settle is fine; changing it needs a redeploy that resets in-memory state) |
 | A9 Hand-off | buyer-cloud mnemonic and seller address to Valentin |
 
 ## Tasks

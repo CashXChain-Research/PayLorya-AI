@@ -174,7 +174,10 @@ const env = (facilitatorUrl: string, overrides: Env = {}): Env => ({
   ...overrides,
 });
 
-async function startStack(opts: { seller?: Env; buyer?: Env } = {}) {
+/** Replaces the seller's report on its way out; `send` is the original res.json. */
+type Tamper = (res: Response, send: (body: unknown) => Response) => Response;
+
+async function startStack(opts: { seller?: Env; buyer?: Env; tamperReport?: Tamper } = {}) {
   const events: string[] = [];
   const handled: ReadinessReport[] = [];
   const fac = await startFacilitator(events);
@@ -188,6 +191,7 @@ async function startStack(opts: { seller?: Env; buyer?: Env } = {}) {
       if ((body as ReadinessReport | undefined)?.verdict) {
         events.push("handler");
         handled.push(body as ReadinessReport);
+        if (opts.tamperReport) return opts.tamperReport(res, json);
       }
       return json(body);
     };
@@ -430,6 +434,28 @@ describe("buyer agent over real x402 (stub signer + stub facilitator)", () => {
       reason: "HTTP 402, fetch failed",
     });
     expect(lastNote(run)).toBe(`tx ${signed}: HTTP 402, fetch failed`);
+  });
+
+  const tampers: Array<{ name: string; tamper: Tamper }> = [
+    { name: "not JSON", tamper: res => res.type("text/plain").send("<html>oops</html>") },
+    { name: "JSON but not a report", tamper: (_res, send) => send({ ok: true }) },
+  ];
+
+  it.each(tampers)("paid but the report body is $name -> FAILED, payment kept, invoice locked", async ({ tamper }) => {
+    const s = await startStack({ tamperReport: tamper });
+    const run = await s.run();
+
+    expect(states(run)).toEqual(["CREATED", "EXTRACTED", "PRECHECKED", "PAYING", "PAID", "FAILED"]);
+    expect(run.error).toBe(`paid (tx ${TX}), but the seller returned no readable report; the invoice stays locked as paid`);
+    expect(run.payment?.transactionHash).toBe(TX);
+    expect(run.report).toBeUndefined();
+    expect(run.draft).toBeUndefined();
+    expect(s.agent.spentLovelace).toBe(PRICE);
+
+    const again = await s.run();
+    expect(again.state).toBe("FAILED");
+    expect(again.error).toContain("already paid");
+    expect(s.signer.calls).toHaveLength(1);
   });
 
   it("two concurrent runs for the same invoice sign only once", async () => {

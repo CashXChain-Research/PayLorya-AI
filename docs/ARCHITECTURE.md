@@ -70,6 +70,9 @@ CREATED -> EXTRACTED -> PRECHECKED -> PAYING -> PAID -> DRAFT_READY
   `run.settlement = { transactionHash?, explorerUrl?, reason }` says what to look up before anyone
   pays again. The hash comes from the settle response, or else from decoding the tx we signed, so
   a lost response still leaves an explorer link.
+- **Paid without a usable report:** if settle succeeded but the body is not a well-formed report
+  (not JSON, or no valid verdict/checks), the run ends `FAILED` with the payment proof kept and
+  the invoice locked as paid. It is a failed delivery, not a free retry.
 - **Offer filter:** only `exact` / `cardano:preprod` / `lovelace`, allowlisted `payTo`, price
   cap, and the plain `default` transfer method (no Masumi or script locks).
 - The facilitator broadcasts a given Cardano tx at most once (`@x402/cardano` duplicate
