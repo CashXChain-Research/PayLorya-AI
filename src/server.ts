@@ -1,6 +1,6 @@
 import express from "express";
 import { BuyerAgent } from "./agent.js";
-import { approvalAllowed } from "./approval.js";
+import { decisionRefusal } from "./approval.js";
 import { CashXChainClient, CXC_SANDBOX_API } from "./cashxchain.js";
 import { loadConfig } from "./config.js";
 import { mountLocalFacilitator } from "./facilitator.js";
@@ -45,7 +45,9 @@ app.get(["/health", "/api/health"], (req, res) => {
     fiatPayoutMaxMinor: config.FIAT_PAYOUT_MAX_MINOR,
     fiatPayoutsPerSession: config.FIAT_PAYOUTS_PER_SESSION,
     fiatPayoutsUsed: agent?.fiatPayoutsUsed ?? 0,
-    approvalTokenRequired: Boolean(config.APPROVE_TOKEN),
+    // Fail-closed: a token is always required; without APPROVE_TOKEN approvals are disabled (503).
+    approvalTokenRequired: true,
+    approvals: config.APPROVE_TOKEN ? "operator-token" : "disabled",
     cashxchain: { ready: config.cxcReady, environment: "sandbox", api: CXC_SANDBOX_API },
     // clientIdFrom: which header identified this caller (live check that CF-Connecting-IP reaches the container).
     limits: {
@@ -105,17 +107,18 @@ app.get("/api/runs/:id", (req, res) => {
   res.json(run);
 });
 
-// Human decision on a draft. With APPROVE_TOKEN set, only an operator holding it can decide; without
-// it the endpoint is open (demo default). Payouts are capped either way: tADA by
-// PAYOUT_MAX/BUDGET_LOVELACE, fiat by FIAT_PAYOUT_MAX_MINOR and FIAT_PAYOUTS_PER_SESSION.
+// Human decision on a draft. Only an operator holding APPROVE_TOKEN can decide; without it approvals
+// are disabled (fail-closed). Payouts are capped on top: tADA by PAYOUT_MAX/BUDGET_LOVELACE, fiat by
+// FIAT_PAYOUT_MAX_MINOR and FIAT_PAYOUTS_PER_SESSION.
 app.post("/api/runs/:id/:decision", (req, res) => {
   const decision = req.params.decision;
   if (decision !== "approve" && decision !== "reject") {
     res.status(404).json({ error: "not found" });
     return;
   }
-  if (!approvalAllowed(config.APPROVE_TOKEN, req.header("authorization"), req.header("x-approve-token"))) {
-    res.status(401).json({ error: "approval token required" });
+  const refusal = decisionRefusal(config.APPROVE_TOKEN, req.header("authorization"), req.header("x-approve-token"));
+  if (refusal) {
+    res.status(refusal.status).json({ error: refusal.error });
     return;
   }
   const run = runs.get(req.params.id);
