@@ -1086,3 +1086,6 @@ a.file-chip:hover { box-shadow: var(--shadow); }
 /* A checkbox, not a text field: undo the generic .field input look. */
 .field .appr-tick input[type="checkbox"] { width: 18px; height: 18px; min-height: 0; margin: 2px 0 0; padding: 0; flex: none; border: 0; background: none; box-shadow: none; appearance: auto; accent-color: var(--primary); }
 .field.invalid .appr-tick { border-color: var(--danger); box-shadow: 0 0 0 4px var(--danger-soft); }
+
+/* A deploy happened while the page was open (web/src/dashboard/api.ts). */
+.update-bar { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 90; display: flex; align-items: center; gap: 12px; max-width: calc(100vw - 32px); padding: 10px 10px 10px 16px; border-radius: 14px; background: var(--ink, #1f2328); color: #fff; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25); font-size: 14px; }
