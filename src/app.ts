@@ -69,7 +69,15 @@ export function createApp(config: Config, { runs, agent, cfo }: AppDeps): Expres
       approvals,
       // POST /api/chat answers with Claude and its functions; false: the UI uses its rule-based answers.
       chatReady: Boolean(agent && config.aiReady),
-      cashxchain: { ready: config.cxcReady, environment: "sandbox", api: CXC_SANDBOX_API },
+      cashxchain: {
+        ready: config.cxcReady,
+        environment: "sandbox",
+        api: CXC_SANDBOX_API,
+        // Sub-accounts for AI CFO workspaces (platform master key).
+        platform: Boolean(config.CASHXCHAIN_MASTER_KEY),
+        // A configured key that was dropped (live or unknown format), with the reason.
+        refused: Object.values(config.cxcRefused),
+      },
       // clientIdFrom: which header identified this caller (live check that CF-Connecting-IP reaches the container).
       limits: {
         runsPerMinutePerClient: config.RUNS_PER_MINUTE_PER_CLIENT,

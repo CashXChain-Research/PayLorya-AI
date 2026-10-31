@@ -281,12 +281,24 @@ describe("helpers and config", () => {
     expect(toDecimal(1_000, "JPY")).toBe("1000");
   });
 
-  it("accepts CashXChain sandbox keys only", () => {
+  it("accepts CashXChain sandbox keys only; any other key is dropped with a reason, never a crash", () => {
     expect(loadConfig({ CASHXCHAIN_API_KEY: "cxc_sk_sandbox_abc123" }).cxcReady).toBe(true);
     expect(loadConfig({ CASHXCHAIN_API_KEY: "cxc_rk_sandbox_abc123" }).cxcReady).toBe(true);
     expect(loadConfig({}).cxcReady).toBe(false);
-    expect(() => loadConfig({ CASHXCHAIN_API_KEY: "cxc_sk_live_abc123" })).toThrow(/sandbox key/);
-    expect(() => loadConfig({ CASHXCHAIN_API_KEY: "sk_sandbox_abc123" })).toThrow(/sandbox key/); // legacy format
+    for (const key of ["cxc_sk_live_abc123", "sk_sandbox_abc123", "cxc_mk_sandbox_abc123"]) {
+      const config = loadConfig({ CASHXCHAIN_API_KEY: key });
+      expect(config.cxcReady).toBe(false);
+      expect(config.CASHXCHAIN_API_KEY).toBeUndefined();
+      expect(config.cxcRefused.apiKey).toMatch(/^CASHXCHAIN_API_KEY: not a CashXChain sandbox key; live keys are refused/);
+    }
+  });
+
+  it("takes a sandbox master key only; a live master key is dropped with a reason", () => {
+    expect(loadConfig({ CASHXCHAIN_MASTER_KEY: "cxc_mk_sandbox_abc123" }).CASHXCHAIN_MASTER_KEY).toBe("cxc_mk_sandbox_abc123");
+    const live = loadConfig({ CASHXCHAIN_MASTER_KEY: "cxc_mk_live_abc123" });
+    expect(live.CASHXCHAIN_MASTER_KEY).toBeUndefined();
+    expect(live.cxcRefused).toEqual({ masterKey: expect.stringMatching(/^CASHXCHAIN_MASTER_KEY: not a CashXChain sandbox key/) });
+    expect(loadConfig({ CASHXCHAIN_MASTER_KEY: "cxc_sk_sandbox_abc123" }).CASHXCHAIN_MASTER_KEY).toBeUndefined();
   });
 });
 

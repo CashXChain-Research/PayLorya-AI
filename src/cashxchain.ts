@@ -6,6 +6,8 @@ export const CXC_SANDBOX_API = "https://api.sandbox.cashxchain.com";
 // Secret or restricted sandbox key. Live keys (`cxc_sk_live_`) and the legacy unprefixed
 // format (`sk_sandbox_…`, which can be a production key) are refused.
 export const CXC_SANDBOX_KEY = /^cxc_(sk|rk)_sandbox_[A-Za-z0-9]+$/;
+// Platform master key (managed accounts, `Cxc-Account`), sandbox only. Live master keys are refused.
+export const CXC_SANDBOX_MASTER_KEY = /^cxc_mk_sandbox_[A-Za-z0-9]+$/;
 
 /** Canonical payout status. `submitted`/`processing` are in flight; only `settled` means arrived. */
 export type CxcPayoutStatus = "created" | "submitted" | "processing" | "settled" | "failed" | "cancelled" | "returned";
@@ -122,6 +124,24 @@ export interface CxcClientOptions {
   baseUrl?: string; // tests point this at a local fake; production code never sets it
   fetch?: typeof fetch;
   timeoutMs?: number;
+  /** Managed account to act for (`Cxc-Account` header); only with a platform master key. */
+  account?: string;
+}
+
+/** POST /v1/accounts body: attach a business that signed up for CashXChain itself (Platforms). */
+export interface CxcAttachInput {
+  contact_email: string;
+  display_name: string;
+  country_code: string;
+}
+
+/** One entry of GET /v1/platform/accounts (docs.cashxchain.com, Platforms). */
+export interface CxcManagedAccount {
+  account_id: string;
+  display_name?: string;
+  kyb_status?: string;
+  can_move_money?: boolean;
+  grant?: { id: string; scopes: string[] };
 }
 
 export class CashXChainClient {
@@ -133,6 +153,21 @@ export class CashXChainClient {
     this.baseUrl = opts.baseUrl ?? CXC_SANDBOX_API;
     this.fetchImpl = opts.fetch ?? fetch;
     this.timeoutMs = opts.timeoutMs ?? 30_000;
+  }
+
+  /** The same key acting for a managed account: every request carries `Cxc-Account`. */
+  forAccount(accountId: string): CashXChainClient {
+    return new CashXChainClient({ ...this.opts, account: accountId });
+  }
+
+  /** Attaches a business by its sign-up email (master key). 409: no such account, or another platform's. */
+  attachAccount(input: CxcAttachInput, idempotencyKey: string): Promise<unknown> {
+    return this.call("POST", "/v1/accounts", input, idempotencyKey);
+  }
+
+  /** The managed accounts this platform may act for (master key). */
+  platformAccounts(): Promise<CxcManagedAccount[]> {
+    return this.call("GET", "/v1/platform/accounts");
   }
 
   async listAccounts(): Promise<{ accounts: CxcAccount[]; primaryCurrency?: string }> {
@@ -182,6 +217,7 @@ export class CashXChainClient {
           authorization: `Bearer ${this.opts.apiKey}`,
           ...(body !== undefined ? { "content-type": "application/json" } : {}),
           ...(idempotencyKey ? { "idempotency-key": idempotencyKey } : {}),
+          ...(this.opts.account ? { "cxc-account": this.opts.account } : {}),
         },
         body: body !== undefined ? JSON.stringify(body) : undefined,
         signal: AbortSignal.timeout(this.timeoutMs),
