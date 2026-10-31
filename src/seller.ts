@@ -27,6 +27,13 @@ export function mountSeller(app: Express, config: Config): void {
 
   const server = new x402ResourceServer(new HTTPFacilitatorClient({ url: config.facilitatorUrl }));
   server.register(CARDANO_NETWORK, new ExactCardanoScheme());
+  // The buyer only sees invalidReason; invalidMessage and settle errors exist only here.
+  server
+    .onAfterVerify(async ({ result }) => {
+      if (!result.isValid) console.warn(`x402 verify rejected: ${result.invalidReason}${result.invalidMessage ? `: ${result.invalidMessage}` : ""}`);
+    })
+    .onVerifyFailure(async ({ error }) => console.warn(`x402 verify failed: ${error.message}`))
+    .onSettleFailure(async ({ error }) => console.warn(`x402 settle failed: ${error.message}`));
 
   app.use(
     paymentMiddleware(

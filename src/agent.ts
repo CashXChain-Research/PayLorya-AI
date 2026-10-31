@@ -145,15 +145,18 @@ export class BuyerAgent {
       return this.failPayment(run, fingerprint, signedAmount, error, signedTx);
     }
 
+    const http = new x402HTTPClient(client);
     let settle: ReturnType<x402HTTPClient["getPaymentSettleResponse"]> | undefined;
     try {
-      settle = new x402HTTPClient(client).getPaymentSettleResponse(name => response.headers.get(name));
+      settle = http.getPaymentSettleResponse(name => response.headers.get(name));
     } catch {
       settle = undefined;
     }
 
     if (!response.ok || !settle?.success) {
-      const detail = `HTTP ${response.status}${settle?.errorReason ? `, ${settle.errorReason}` : ""}`;
+      // Verify rejections carry no PAYMENT-RESPONSE; core puts the facilitator's reason in PAYMENT-REQUIRED `error`.
+      const reason = settle?.errorReason ?? paymentRequiredError(http, response);
+      const detail = `HTTP ${response.status}${reason ? `, ${reason}` : ""}`;
       return this.failPayment(run, fingerprint, signedAmount, new Error(detail), settle?.transaction || signedTx);
     }
     // A proof needs an on-chain tx hash for a payment we actually signed.
@@ -189,6 +192,16 @@ export class BuyerAgent {
     } else {
       this.runs.transition(run, "FAILED", run.error);
     }
+    return undefined;
+  }
+}
+
+/** Reason from a 402's PAYMENT-REQUIRED header (verify failure), if the seller sent one. */
+function paymentRequiredError(http: x402HTTPClient, response: Response): string | undefined {
+  if (response.status !== 402) return undefined;
+  try {
+    return http.getPaymentRequiredResponse(name => response.headers.get(name)).error;
+  } catch {
     return undefined;
   }
 }
