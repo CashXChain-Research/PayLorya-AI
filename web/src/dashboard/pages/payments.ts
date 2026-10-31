@@ -1,5 +1,5 @@
 // Payments: approvals queue, full history with policy checks, new payment dialog.
-import { esc, shortHash } from "../../shared/dom.js";
+import { esc, short, shortHash } from "../../shared/dom.js";
 import { get, post } from "../api.js";
 import { type Ctx, refreshBadges } from "../state.js";
 import type { Payee, PayeeInput, Payment, PaymentCreate } from "../types.js";
@@ -51,6 +51,18 @@ const DECISION: Record<Payment["policy"]["decision"], [string, string]> = {
   approval: ["Needs your approval", "t-warn"],
   blocked: ["Blocked by policy", "t-bad"],
 };
+/** An unsaved payee's account, as carried by the draft: what approving would pay. */
+function destinationText(p: Payment): string {
+  const d = p.destination;
+  const parts = [
+    d?.iban ? `IBAN ${d.iban}` : "",
+    d?.bic ? `BIC ${d.bic}` : "",
+    d?.routingNumber ? `ABA ${d.routingNumber} / ${d.accountNumber ?? "?"}` : "",
+    d?.cardanoAddress ? short(d.cardanoAddress) : "",
+  ].filter(Boolean);
+  return parts.length ? `<span class="mono">${esc(parts.join(" · "))}</span> <span class="pill t-warn">not saved</span>` : `<span class="muted">No account details</span>`;
+}
+
 function checkSummary(p: Payment): string {
   const c = p.policy.checks;
   const fail = c.filter(x => x.status === "fail").length;
@@ -86,6 +98,7 @@ export function paymentRow(p: Payment, open = false): string {
       <dl class="pd-col kv">
         <dt>Amount</dt><dd>${esc(amount(p.amountMinor, p.currency))}${isAda ? ' <span class="pill t-neutral">testnet</span>' : ""}</dd>
         <dt>Rail</dt><dd>${railChip(p.rail)}</dd>
+        <dt>Pays to</dt><dd>${p.payeeId ? "Saved payee account" : destinationText(p)}</dd>
         <dt>Requested by</dt><dd>${p.requestedBy === "agent" ? "AI CFO agent" : "You"}${p.runId ? ` <span class="mono muted">${esc(p.runId)}</span>` : ""}</dd>
         ${p.reference ? `<dt>Reference</dt><dd class="mono">${esc(p.reference)}</dd>` : ""}
         ${p.txHash ? `<dt>Transaction</dt><dd>${p.explorerUrl ? `<a class="mono" href="${esc(p.explorerUrl)}" target="_blank" rel="noopener noreferrer">${esc(shortHash(p.txHash))} ${icon("external", 12)}</a>` : `<span class="mono">${esc(shortHash(p.txHash))}</span>`}</dd>` : ""}

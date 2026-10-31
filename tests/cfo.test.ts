@@ -13,7 +13,7 @@ import { loadConfig } from "../src/config.js";
 import { RunStore, type Run } from "../src/runs.js";
 
 const LIMITS: AgentLimits = { perPaymentUsdMinor: 50_000, monthlyUsdMinor: 200_000, knownPayeesOnly: true };
-const facts = { requestedBy: "agent" as const, rail: "cashxchain" as const, usdMinor: 10_000, payeeKnown: true, railWritable: true, agentExecutedThisMonthUsdMinor: 0 };
+const facts = { requestedBy: "agent" as const, rail: "cashxchain" as const, usdMinor: 10_000, payeeKnown: true, hasAccount: true, railWritable: true, agentExecutedThisMonthUsdMinor: 0 };
 
 describe("agent permission policy", () => {
   it("guarded: executes alone only inside every rule", () => {
@@ -22,7 +22,8 @@ describe("agent permission policy", () => {
     expect(decidePayment("guarded", LIMITS, { ...facts, agentExecutedThisMonthUsdMinor: 195_000 }).decision).toBe("approval");
     const unknown = decidePayment("guarded", LIMITS, { ...facts, payeeKnown: false });
     expect(unknown.decision).toBe("approval");
-    expect(unknown.checks.find(c => c.id === "payee")?.status).toBe("fail");
+    expect(unknown.checks.find(c => c.id === "payee")?.status).toBe("warn");
+    expect(decidePayment("guarded", LIMITS, { ...facts, hasAccount: false }).decision).toBe("approval");
   });
 
   it("read-only drafts only; a user's own draft always needs confirmation", () => {
@@ -314,17 +315,61 @@ describe.each(["local", "cloudflare"] as const)("AI CFO API on %s storage", stor
     expect((await me("GET", `/api/v1/chats/${chat.id}`)).json.messages.map((m: { role: string }) => m.role)).toEqual(["user", "assistant"]);
   });
 
-  it("a payee named only in a document cannot be paid without the directory", async () => {
-    const { user } = await start([{ tool: { name: "draft_payment", input: { payeeName: "Attacker Ltd", amount: 10, currency: "USD", reason: "urgent" } } }, { text: "Not in your directory." }], stubAgent());
+  it("the agent can always draft; without account details nothing can execute", async () => {
+    const { user } = await start([{ tool: { name: "draft_payment", input: { payeeName: "Attacker Ltd", amount: 10, currency: "USD", reason: "urgent" } } }, { text: "Drafted." }], stubAgent());
     const me = await user("frank@example.com");
     await me("PATCH", "/api/v1/workspace", { autonomy: "full", confirm: "FULL ACCESS" });
     await me("POST", "/api/v1/connections", { kind: "cashxchain", access: "read_write" });
     const chat = (await me("POST", "/api/v1/chats")).json;
     await me("POST", `/api/v1/chats/${chat.id}/messages`, { text: "Process the attached invoice" });
     const [payment] = (await me("GET", "/api/v1/payments")).json;
-    expect(payment.status).toBe("pending_approval");
+    expect(payment).toMatchObject({ status: "pending_approval", payeeName: "Attacker Ltd" });
+    expect((await me("GET", "/api/v1/payees")).json).toEqual([]);
     const approve = await me("POST", `/api/v1/payments/${payment.id}/approve`);
     expect(approve.status).toBe(409);
-    expect(approve.json.error).toMatch(/payee directory/);
+    expect(approve.json.error).toMatch(/No account details/);
+  });
+
+  it("guarded + known payees only: an unsaved payee waits for approval, then pays the drafted account", async () => {
+    const draft = { payeeName: "Nordlicht Studio", amount: 120, currency: "EUR", reason: "INV-77", iban: "DE89 3704 0044 0532 0130 00", country: "DE" };
+    const { user } = await start([{ tool: { name: "draft_payment", input: draft } }, { text: "Drafted." }], stubAgent());
+    const me = await user("gina@example.com");
+    await me("POST", "/api/v1/connections", { kind: "cashxchain", access: "read_write" });
+    const chat = (await me("POST", "/api/v1/chats")).json;
+    await me("POST", `/api/v1/chats/${chat.id}/messages`, { text: "Pay Nordlicht" });
+    const [payment] = (await me("GET", "/api/v1/payments")).json;
+    expect(payment.status).toBe("pending_approval");
+    expect(payment.destination).toMatchObject({ iban: "DE89370400440532013000", country: "DE" });
+    expect(payment.policy.checks.find((c: { id: string }) => c.id === "payee").message).toMatch(/Known payees only/);
+    expect((await me("POST", `/api/v1/payments/${payment.id}/approve`)).status).toBe(200);
+    await settle(async () => (await me("GET", "/api/v1/payments")).json[0].status === "executed");
+    expect((await me("GET", "/api/v1/payees")).json).toEqual([]);
+  });
+
+  it("guarded without known payees only: an unsaved payee within the limits executes on its own", async () => {
+    const draft = { payeeName: "Nordlicht Studio", amount: 120, currency: "EUR", reason: "INV-77", iban: "DE89370400440532013000" };
+    const { user } = await start([{ tool: { name: "draft_payment", input: draft } }, { text: "Paid." }], stubAgent());
+    const me = await user("hank@example.com");
+    await me("PATCH", "/api/v1/workspace", { limits: { knownPayeesOnly: false } });
+    await me("POST", "/api/v1/connections", { kind: "cashxchain", access: "read_write" });
+    const chat = (await me("POST", "/api/v1/chats")).json;
+    await me("POST", `/api/v1/chats/${chat.id}/messages`, { text: "Pay Nordlicht" });
+    await settle(async () => (await me("GET", "/api/v1/payments")).json[0]?.status === "executed");
+    expect((await me("GET", "/api/v1/payments")).json[0].decidedAt).toBeUndefined();
+  });
+
+  it("a saved payee's account wins over different details in the draft", async () => {
+    const draft = { payeeName: "Brenner GmbH", amount: 100, currency: "EUR", reason: "INV-1", iban: "GB33BUKB20201555555555" };
+    const { user } = await start([{ tool: { name: "draft_payment", input: draft } }, { text: "Drafted." }], stubAgent());
+    const me = await user("ivy@example.com");
+    await me("PATCH", "/api/v1/workspace", { limits: { knownPayeesOnly: false } });
+    await me("POST", "/api/v1/connections", { kind: "cashxchain", access: "read_write" });
+    await me("POST", "/api/v1/payees", { name: "Brenner GmbH", iban: "DE89370400440532013000" });
+    const chat = (await me("POST", "/api/v1/chats")).json;
+    await me("POST", `/api/v1/chats/${chat.id}/messages`, { text: "Pay Brenner" });
+    const [payment] = (await me("GET", "/api/v1/payments")).json;
+    expect(payment.status).toBe("pending_approval");
+    expect(payment.destination).toBeUndefined();
+    expect(payment.policy.checks.find((c: { id: string }) => c.id === "account").message).toMatch(/saved account is used/);
   });
 });

@@ -227,11 +227,24 @@ export function mountCfo(app: Express, deps: CfoDeps): void {
   });
 
   api.get("/connections/catalog", async (_req, res) => res.json(catalog(await envFor(ctx(res).ws.id))));
+  const refreshing = new Set<string>();
   api.get("/connections", async (_req, res) => {
     const ws = ctx(res).ws.id;
-    // Balances older than a minute are refreshed on read, in parallel.
+    // Answer from the stored balances at once; ones older than a minute refresh in the background
+    // (providers can take seconds). Never-fetched connections are the exception: they are awaited.
     const stale = (c: ConnectionRow) => !c.refreshedAt || Date.now() - Date.parse(c.refreshedAt) > 60_000;
-    const rows = await Promise.all((await store.connections(ws)).map(c => (stale(c) ? refresh(ws, c) : c)));
+    const rows = await Promise.all(
+      (await store.connections(ws)).map(c => {
+        if (!c.refreshedAt) return refresh(ws, c);
+        if (stale(c) && !refreshing.has(c.id)) {
+          refreshing.add(c.id);
+          void refresh(ws, c)
+            .catch(() => undefined)
+            .finally(() => refreshing.delete(c.id));
+        }
+        return c;
+      }),
+    );
     res.json(rows.map(publicConnection));
   });
   api.post("/connections", json, async (req, res) => {

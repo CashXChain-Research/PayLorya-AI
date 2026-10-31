@@ -157,6 +157,8 @@ const MIGRATIONS: string[][] = [
   ],
   // CashXChain sandbox sub-account (Platform managed account) per workspace: src/cfo/cxc-link.ts.
   [`ALTER TABLE workspaces ADD COLUMN cxc_link_json TEXT`],
+  // Account details a draft carries when its payee is not saved (from the invoice or the agent).
+  [`ALTER TABLE payments ADD COLUMN destination_json TEXT`],
 ];
 
 export async function migrate(sql: Sql): Promise<void> {
