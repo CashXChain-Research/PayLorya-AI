@@ -7,6 +7,7 @@ import { renderAgent } from "./pages/agent.js";
 import { renderBudgets } from "./pages/budgets.js";
 import { renderChat } from "./pages/chat.js";
 import { renderConnections } from "./pages/connections.js";
+import { renderDevelopers } from "./pages/developers.js";
 import { renderDocument, renderDocuments } from "./pages/documents.js";
 import { renderOverview } from "./pages/overview.js";
 import { renderPayees } from "./pages/payees.js";
@@ -36,6 +37,7 @@ const ROUTES: Route[] = [
   { re: /^\/app\/connections\/?$/, title: "Connections", nav: "connections", render: renderConnections },
   { re: /^\/app\/agent\/?$/, title: "Agent access", nav: "agent", render: renderAgent },
   { re: /^\/app\/activity\/?$/, title: "Activity", nav: "activity", render: renderActivity },
+  { re: /^\/app\/developers\/?$/, title: "Developers", nav: "developers", render: renderDevelopers },
   { re: /^\/app\/settings\/?$/, title: "Settings", nav: "settings", render: renderSettings },
 ];
 
@@ -49,6 +51,7 @@ const NAV: Array<[string, string, string, string]> = [
   ["payees", "/app/payees", "payees", "Payees"],
   ["connections", "/app/connections", "link", "Connections"],
   ["agent", "/app/agent", "shield", "Agent & access"],
+  ["developers", "/app/developers", "code", "Developers"],
 ];
 
 /** Routes shown as sub-tabs of one sidebar item: route nav key -> sidebar key. */

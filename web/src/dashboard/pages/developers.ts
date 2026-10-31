@@ -1,4 +1,4 @@
-// Settings › Developers: API keys and webhooks for the public API (/api/v1 with
+// Developers (/app/developers, its own sidebar item): API keys and webhooks for the public API (/api/v1 with
 // Authorization: Bearer ply_sk_…), and where the API docs and the MCP endpoint are. A new key or
 // webhook secret is shown once, right after it is made: the server keeps only its hash.
 // Rows reuse the Payees list (.payee-list).
@@ -6,7 +6,7 @@ import { esc } from "../../shared/dom.js";
 import { ApiError, del, get, post } from "../api.js";
 import type { Ctx } from "../state.js";
 import type { ApiKey, ApiKeyCreated, ApiKeyScope, Webhook, WebhookCreated, WebhookEvent } from "../types.js";
-import { ago, confirmDialog, copyText, date, dialog, empty, fieldError, icon, skLines, toast, val } from "../ui.js";
+import { ago, confirmDialog, copyText, date, dialog, empty, fieldError, icon, pageHead, skLines, toast, val } from "../ui.js";
 
 /** Active keys per account (src/cfo/api.ts answers 409 beyond this). */
 const MAX_KEYS = 20;
@@ -28,10 +28,14 @@ const scopeLabel = (scopes: ApiKeyScope[]): string => (scopes.includes("write") 
 const copyRow = (value: string, label: string): string =>
   `<div class="addr-row"><span class="mono" title="${esc(value)}">${esc(value)}</span><button type="button" class="icon-btn xs" data-copy="${esc(value)}" aria-label="${esc(label)}">${icon("copy", 13)}</button></div>`;
 
-export function developersSection(): string {
+export function renderDevelopers(view: HTMLElement, ctx: Ctx): void {
+  view.innerHTML = `${pageHead("Developers", 'Connect your own software to this account with the REST API, webhooks or MCP. <a href="/developers.html" target="_blank" rel="noopener">Read the API docs</a>')}${developersSection()}`;
+  wireDevelopers(view.querySelector<HTMLElement>("#developers")!, ctx);
+}
+
+function developersSection(): string {
   const origin = location.origin;
-  return `<section class="dev" id="developers" aria-labelledby="dev-h">
-    <div class="section-h"><h2 id="dev-h">Developers</h2><p class="muted">Connect your own software to this account with the REST API, webhooks or MCP. <a href="/developers.html" target="_blank" rel="noopener">Read the API docs</a></p></div>
+  return `<section class="dev" id="developers" aria-label="Developers">
     <div class="settings">
       <section class="card dev-wide" id="dev-keys">
         <div class="card-head"><div><h2>API keys</h2><p class="muted small">For your own software and scripts. A key acts for this account; it is shown once, when you create it.</p></div><button type="button" class="btn primary sm" data-key-new>${icon("plus", 16, 2.4)}Create key</button></div>
@@ -154,7 +158,7 @@ async function addHookDialog(): Promise<WebhookCreated | null> {
 }
 
 /** Loads the lists and handles every button in the section. `root` is #developers. */
-export function wireDevelopers(root: HTMLElement, ctx: Ctx): void {
+function wireDevelopers(root: HTMLElement, ctx: Ctx): void {
   const keysEl = root.querySelector<HTMLElement>("[data-key-list]")!;
   const hooksCard = root.querySelector<HTMLElement>("#dev-hooks")!;
   const hooksEl = root.querySelector<HTMLElement>("[data-hook-list]")!;
@@ -305,5 +309,4 @@ export function wireDevelopers(root: HTMLElement, ctx: Ctx): void {
 
   void loadKeys();
   void loadHooks();
-  if (location.hash === "#developers") root.scrollIntoView({ block: "start" });
 }
