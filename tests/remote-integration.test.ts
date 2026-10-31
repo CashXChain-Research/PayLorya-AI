@@ -160,7 +160,8 @@ async function startServer(opts: { ai?: boolean; health?: Record<string, unknown
   };
   const runs = new RunStore();
   let created = 0;
-  const agent = new BuyerAgent(config, runs, signer);
+  // Stubbed chain view: the config carries a dummy Blockfrost key, and tests have no network.
+  const agent = new BuyerAgent(config, runs, signer, { chain: { hasTransaction: async () => true }, walletSync: { graceMs: 0 } });
 
   app.get(["/health", "/api/health"], (_req, res) => {
     res.json({
