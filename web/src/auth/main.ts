@@ -144,13 +144,61 @@ function applyMethod(): void {
   if (!usePassword) setFieldError("password", "");
 }
 
+interface AuthOptions {
+  codes?: boolean;
+  /** Present when "Continue with Google" is configured; it only works on this origin. */
+  google?: { origin: string };
+}
+
+const oauth = document.getElementById("oauth");
+const googleButton = document.querySelector<HTMLButtonElement>("[data-google]");
+
+function showGoogle(google: AuthOptions["google"]): void {
+  if (!oauth || !google) return;
+  // On another origin (workers.dev) Google would return to the canonical one: send the user there.
+  if (google.origin !== location.origin) {
+    googleButton?.addEventListener("click", () => location.assign(google.origin + location.pathname + location.search));
+  } else {
+    googleButton?.addEventListener("click", () => void startGoogle());
+  }
+  oauth.hidden = false;
+  // Back from Google with an error (Better Auth appends its code to errorCallbackURL).
+  if (new URLSearchParams(location.search).has("error")) {
+    setFormError("Google sign-in did not complete. Try again, or use your email instead.");
+  }
+}
+
+async function startGoogle(): Promise<void> {
+  if (!googleButton) return;
+  googleButton.disabled = true;
+  googleButton.classList.add("loading");
+  try {
+    const res = await postJson("/api/auth/sign-in/social", {
+      provider: "google",
+      callbackURL: next,
+      errorCallbackURL: `/${mode === "signup" ? "signup" : "login"}?error=google`,
+    });
+    const body = (await res.json().catch(() => ({}))) as { url?: string } & ApiError;
+    if (res.ok && body.url) {
+      location.assign(body.url);
+      return;
+    }
+    setFormError(body.message || "Google sign-in is not available right now. Use your email instead.");
+  } catch {
+    setFormError("Could not reach the server. Check your connection and try again.");
+  }
+  googleButton.disabled = false;
+  googleButton.classList.remove("loading");
+}
+
 const ready: Promise<void> =
   mode === "verify"
     ? Promise.resolve()
     : fetch("/api/auth-options", { headers: { accept: "application/json" } })
-        .then(res => (res.ok ? (res.json() as Promise<{ codes?: boolean }>) : {}))
+        .then(res => (res.ok ? (res.json() as Promise<AuthOptions>) : {}))
         .then(o => {
-          codes = Boolean((o as { codes?: boolean }).codes);
+          codes = Boolean((o as AuthOptions).codes);
+          showGoogle((o as AuthOptions).google);
         })
         .catch(() => undefined) // unknown: passwords, as before
         .then(() => {

@@ -20,6 +20,9 @@ const EnvSchema = z.object({
   PUBLIC_BASE_URL: optional,
   // Extra origins allowed to sign in (comma-separated), e.g. the workers.dev URL next to the custom domain.
   AUTH_TRUSTED_ORIGINS: optional,
+  // "Continue with Google" (Google Cloud OAuth client, type Web application). Both set: offered.
+  GOOGLE_CLIENT_ID: optional,
+  GOOGLE_CLIENT_SECRET: optional,
 
   // Cardano / x402
   BLOCKFROST_PREPROD_URL: z.string().default("https://cardano-preprod.blockfrost.io/api/v0"),

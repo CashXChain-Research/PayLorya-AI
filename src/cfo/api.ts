@@ -130,7 +130,7 @@ export function mountCfo(app: Express, deps: CfoDeps): void {
   app.get("/verify", async (_req, res) => res.sendFile("verify.html", { root: "public" }));
   // Public: lets the sign-up and login pages offer email codes, or fall back to passwords.
   app.get("/api/auth-options", (_req, res) => {
-    res.json({ codes: auth.codes });
+    res.json({ codes: auth.codes, google: auth.googleOrigin ? { origin: auth.googleOrigin } : undefined });
   });
   app.get("/demo", async (_req, res) => res.sendFile("demo.html", { root: "public" }));
 
