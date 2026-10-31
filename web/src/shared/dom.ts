@@ -23,3 +23,8 @@ export function money(minor: number | undefined, currency: string | undefined): 
   const e = EXPONENT[currency] ?? 2;
   return `${currency} ${(minor / 10 ** e).toLocaleString("en-US", { minimumFractionDigits: e, maximumFractionDigits: e })}`;
 }
+
+/** Minor units to major units of the invoice currency (ADA: lovelace -> tADA). */
+export function majorUnits(minor: number, currency: string): number {
+  return minor / 10 ** (currency === "ADA" ? 6 : (EXPONENT[currency] ?? 2));
+}

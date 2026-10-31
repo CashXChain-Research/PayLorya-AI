@@ -5,74 +5,242 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <title>CashXChain AI CFO</title>
+<meta name="description" content="Your AI CFO reads supplier invoices, buys a payment-readiness check per request with x402 on Cardano Preprod, and pays after your approval.">
 <script src="/assets/theme-init.js"></script>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/styles/base.css">
-<link rel="stylesheet" href="/styles/app.css">
-<script type="module" src="/assets/app.js"></script>
+<link rel="stylesheet" href="/styles/home.css">
+<script type="module" src="/assets/home.js"></script>
 </head>
 <body>
 <nav class="nav">
   <div class="wrap nav-in">
-    <a class="logo" href="/"><span class="mark">X</span>CashXChain<span class="tag">AI CFO</span></a>
-    <div class="nav-links"><a href="/" aria-current="page">Demo</a><a href="/about.html">How it works</a></div>
+    <a class="logo" href="/"><span class="mark" aria-hidden="true"><svg width="17" height="17" viewBox="0 0 64 64"><path d="M15 15 49 49" stroke="#5cc0d6" stroke-width="10" stroke-linecap="round"/><path d="M49 15 15 49" stroke="#fff" stroke-width="10" stroke-linecap="round"/></svg></span>CashXChain<span class="tag">AI CFO</span></a>
+    <div class="nav-links"><a href="/" aria-current="page">Home</a><a href="/about">How it works</a></div>
     <div class="nav-right">
-      <span class="chip-sm mono" id="p-wallet">agent wallet</span>
-      <span class="status off" id="p-status"><i></i><span>Connecting</span></span>
       <button class="theme-toggle" type="button" data-theme-toggle aria-label="Toggle dark mode" aria-pressed="false">
         <svg class="sun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
         <svg class="moon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>
       </button>
+      <a class="btn primary nav-cta" href="/app">Open app</a>
     </div>
   </div>
 </nav>
 
+<main>
 <header class="hero wrap">
   <p class="eyebrow reveal">Agentic payments on Cardano</p>
-  <h1 class="reveal" style="--d:60ms">Your AI CFO. <span>It reads, verifies and pays your invoices.</span></h1>
-  <p class="lead reveal" style="--d:120ms">It pays for verification per request with x402, sends money only to verified accounts, and waits for your approval before any payout.</p>
-  <ul class="pillars reveal" style="--d:180ms">
-    <li><span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></span><b>Claude reads.</b><span>Fields only, no wallet.</span></li>
-    <li><span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4v5c0 5-3.4 8.4-8 9-4.6-.6-8-4-8-9V7l8-4z"/></svg></span><b>Code decides.</b><span>Caps, budgets, verified payees.</span></li>
-    <li><span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><b>You approve.</b><span>One tap, then it pays.</span></li>
-  </ul>
+  <h1 class="reveal" style="--d:60ms">Your AI CFO. <span>Reads, verifies and pays your invoices.</span></h1>
+  <p class="lead reveal" style="--d:140ms">It reads a supplier invoice, buys a payment-readiness check per request with x402, and pays once you approve.</p>
+  <div class="cta reveal" style="--d:220ms">
+    <a class="btn primary" href="/app"><span>Open the app</span><svg class="arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+    <a class="btn ghost" href="/about">How it works</a>
+  </div>
 </header>
 
-<section class="stats wrap">
-  <div class="stat reveal" style="--d:220ms"><span class="label">Invoices</span><span class="num" id="k-total">0</span><span class="sub" id="k-total-sub">this session</span></div>
-  <div class="stat reveal" style="--d:270ms"><span class="label">Awaiting you</span><span class="num" id="k-ready">0</span><span class="sub">verified and routed</span></div>
-  <div class="stat reveal" style="--d:320ms"><span class="label">Payouts sent</span><span class="num" id="k-paid">0</span><span class="sub" id="k-paid-sub">after your approval</span></div>
-  <div class="stat reveal" style="--d:370ms"><span class="label">Spent on verification</span><span class="num"><span id="k-spend">0</span><small>tADA</small></span><div class="meter"><i id="k-meter"></i></div><span class="sub" id="k-budget">session budget</span></div>
+<!-- Product shot. Static HTML is the finished state; main.ts arms it and plays the five steps on a loop. -->
+<section class="shot-sec" aria-label="The AI CFO at work">
+  <div class="wrap">
+  <figure class="shot reveal" style="--d:320ms" data-shot data-stage="paid">
+    <div class="win" role="img" aria-label="The AI CFO reads a sample invoice, verifies it with x402 for 2 tADA, routes it to the verified payee, waits for your approval and pays 3.50 tADA on Cardano Preprod.">
+      <div class="win-bar">
+        <i></i><i></i><i></i>
+        <span class="win-title"><span class="mark mini"><svg width="9" height="9" viewBox="0 0 64 64"><path d="M15 15 49 49" stroke="#5cc0d6" stroke-width="12" stroke-linecap="round"/><path d="M49 15 15 49" stroke="#fff" stroke-width="12" stroke-linecap="round"/></svg></span>AI CFO</span>
+      </div>
+      <div class="win-body">
+        <div class="win-side">
+          <span class="ws on"><span class="ic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.5 5.1L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.9A2 2 0 0 0 16.8 4H7.2a2 2 0 0 0-1.7 1.1z"/></svg></span><span class="t">Inbox</span></span>
+          <span class="ws"><span class="ic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/><path d="M8.5 11.5h.01M12 11.5h.01M15.5 11.5h.01"/></svg></span><span class="t">Assistant</span></span>
+          <span class="ws"><span class="ic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></span><span class="t">Agent settings</span></span>
+        </div>
+
+        <div class="win-main">
+          <div class="paper">
+            <div class="paper-top"><b>INVOICE</b><span>NNS-2026-118</span></div>
+            <div class="pf" style="--k:0"><span class="k">From</span><span class="v">Nordwind Node Services OÜ</span></div>
+            <span class="bar" style="width:72%"></span>
+            <span class="bar" style="width:48%"></span>
+            <div class="pf" style="--k:1"><span class="k">Service</span><span class="v">Relay node hosting, October 2026</span></div>
+            <div class="pf" style="--k:2"><span class="k">Amount due</span><span class="v">3.50 tADA</span></div>
+            <div class="pf" style="--k:3"><span class="k">Pay to</span><span class="v">Cardano wallet <span class="mono">addr_test1…</span></span></div>
+            <span class="bar" style="width:64%"></span>
+            <div class="pf" style="--k:4"><span class="k">Due</span><span class="v">2026-11-15</span></div>
+            <span class="scan"></span>
+          </div>
+
+          <div class="agent">
+            <div class="ag-head">
+              <span class="ag-av">NN</span>
+              <span class="ag-who"><b class="val" style="--k:0">Nordwind Node Services OÜ</b><span class="val" style="--k:1">NNS-2026-118 · sample invoice</span></span>
+              <b class="ag-amt val" style="--k:2">3.50 tADA</b>
+            </div>
+            <ol class="sts">
+              <li class="st done" data-step><span class="nd"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span class="st-t"><b>Read</b><span>Claude</span></span><span class="now"><i></i>Reading</span></li>
+              <li class="st done" data-step><span class="nd"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span class="st-t"><b>Verify</b><span>x402 · 2 tADA</span></span><span class="now"><i></i>Paying 2 tADA</span></li>
+              <li class="st done" data-step><span class="nd"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span class="st-t"><b>Route</b><span>Verified payee</span></span><span class="now"><i></i>Matching</span></li>
+              <li class="st done" data-step><span class="nd"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span class="st-t"><b>Approve</b><span>You</span></span><span class="now"><i></i>Waiting for you</span></li>
+              <li class="st done" data-step><span class="nd"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span class="st-t"><b>Paid</b><span>Cardano Preprod</span></span><span class="now"><i></i>Paying</span></li>
+            </ol>
+            <div class="paybox">
+              <div class="pb-ask">
+                <span class="pb-amt"><span>Pay Nordwind</span><b>3.50 tADA</b></span>
+                <span class="btn primary pb-btn">Approve</span>
+                <svg class="cursor" width="22" height="22" viewBox="0 0 24 24"><path d="M5 3l14 8.2-6.1 1.3L10 18.7z" stroke-width="1.6" stroke-linejoin="round"/></svg>
+              </div>
+              <div class="pb-done">
+                <svg class="tick" viewBox="0 0 52 52"><circle cx="26" cy="26" r="24"/><path d="M15 27l7 7 15-15"/></svg>
+                <span><b>Paid</b><span>3.50 tADA on Cardano Preprod</span></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <figcaption>A sample invoice on Cardano Preprod, paid with test funds.</figcaption>
+  </figure>
+  </div>
 </section>
 
-<main class="wrap grid">
-  <div class="col">
-    <section class="card compose reveal" style="--d:420ms">
-      <h2>New invoice</h2>
-      <p class="muted">Paste a supplier invoice or try an example.</p>
-      <div class="group-label" id="g-ex">Examples</div>
-      <div class="opts" id="chips"></div>
-      <div class="group-label" id="g-safe">Safety tests</div>
-      <div class="opts" id="chips-safety"></div>
-      <textarea id="input" placeholder="Free text, an email, or structured JSON" spellcheck="false" aria-label="Invoice text"></textarea>
-      <button class="btn primary block" id="send" type="button"><span>Send to AI CFO</span><svg class="arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
-      <p class="fine" id="send-hint">Each verification costs <span id="price">2</span> tADA on Cardano Preprod (test funds).</p>
-    </section>
-    <section class="card reveal" style="--d:480ms">
-      <div class="card-head"><h2>Inbox</h2><span class="count" id="k-count"></span></div>
-      <ul class="inbox" id="list"><li class="empty">No invoices yet.</li></ul>
-    </section>
+<section class="sec" id="jobs" aria-labelledby="jobs-h">
+  <div class="wrap">
+    <div class="head" data-reveal>
+      <p class="eyebrow">What it does</p>
+      <h2 id="jobs-h">One assistant. <span>Three jobs.</span></h2>
+    </div>
+    <div class="jobs">
+      <article class="job" data-reveal>
+        <span class="ic" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h7l5 5v12a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg></span>
+        <h3>Reads any invoice.</h3>
+        <p>A PDF, an email or plain text. Claude extracts the fields, and nothing else.</p>
+        <ul class="chips"><li>PDF</li><li>Email</li><li>Text</li></ul>
+      </article>
+      <article class="job" data-reveal style="--d:100ms">
+        <span class="ic" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4v5c0 5-3.4 8.4-8 9-4.6-.6-8-4-8-9V7l8-4z"/><path d="M8.5 12l2.5 2.5 4.5-4.5"/></svg></span>
+        <h3>Pays per request.</h3>
+        <p>Each payment-readiness check is bought with x402 on Cardano Preprod, within a price cap and a 20 tADA session budget.</p>
+        <ul class="chips"><li>2 tADA per check</li><li>Cap 3 tADA</li></ul>
+      </article>
+      <article class="job" data-reveal style="--d:200ms">
+        <span class="ic you" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 3L10 14"/><path d="M21 3l-7 18-4-7-7-4 18-7z"/></svg></span>
+        <h3>Pays suppliers after your OK.</h3>
+        <p>One approval, then the payout goes out to the verified payee. Or set limits and let it pay on its own.</p>
+        <ul class="chips"><li>tADA on Cardano Preprod</li><li>CashXChain</li></ul>
+      </article>
+    </div>
   </div>
+</section>
 
-  <section class="card detail reveal" id="detail" style="--d:460ms">
-    <div class="placeholder"><div>
-      <div class="ill"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h7l5 5v12a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg></div>
-      <b>Nothing selected yet</b>
-      <p>Send an example invoice and watch your AI CFO work through it, step by step.</p>
-    </div></div>
-  </section>
+<section class="sec band" id="inside" aria-labelledby="inside-h">
+  <div class="wrap">
+    <div class="head" data-reveal>
+      <p class="eyebrow">Inside the app</p>
+      <h2 id="inside-h">Three views. <span>One workflow.</span></h2>
+    </div>
+    <ul class="tour">
+      <li data-reveal>
+        <a class="view" href="/app#/inbox">
+          <div class="peek" aria-hidden="true">
+            <div class="mini-card">
+              <div class="mi-head"><span class="mi-av">LR</span><span class="mi-who"><b>Lakeside Robotics Inc.</b><span>A-5531</span></span><b class="mi-amt">USD 425.00</b></div>
+              <ol class="mi-steps">
+                <li class="d"><i></i>Read the invoice<small>Claude</small></li>
+                <li class="d"><i></i>Verify with a paid agent<small>x402</small></li>
+                <li class="d"><i></i>Choose the payout rail<small>Code</small></li>
+                <li class="a"><i></i>Your approval<small>You</small></li>
+                <li><i></i>Pay the supplier</li>
+              </ol>
+            </div>
+          </div>
+          <div class="view-txt">
+            <h3>Inbox</h3>
+            <p>Every invoice, step by step. See what was read, checked and paid.</p>
+            <span class="go">Open Inbox<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+          </div>
+        </a>
+      </li>
+      <li data-reveal style="--d:100ms">
+        <a class="view" href="/app#/assistant">
+          <div class="peek" aria-hidden="true">
+            <div class="mini-card chat">
+              <div class="bub me"><span class="file"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h7l5 5v12a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M14 3v5h5"/></svg>brenner-INV-2026-1051.pdf</span></div>
+              <div class="bub ai">INV-2026-1051 from Brenner Maschinenbau GmbH. <b>EUR 312.00</b>, IBAN found.</div>
+              <div class="ask"><span>Message your AI CFO</span><i><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg></i></div>
+            </div>
+          </div>
+          <div class="view-txt">
+            <h3>Assistant</h3>
+            <p>Drop a PDF or paste an email. Your AI CFO reads it for you.</p>
+            <span class="go">Open Assistant<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+          </div>
+        </a>
+      </li>
+      <li data-reveal style="--d:200ms">
+        <a class="view" href="/app#/settings">
+          <div class="peek" aria-hidden="true">
+            <div class="mini-card prefs">
+              <div class="row">Buy verification checks<span class="tog" style="--k:0"></span></div>
+              <div class="row">Pay on Cardano Preprod<span class="tog" style="--k:1"></span></div>
+              <div class="row">Pay with CashXChain<span class="tog" style="--k:2"></span></div>
+              <div class="row">Approval<span class="seg"><span class="on">Ask me</span><span>Auto</span></span></div>
+            </div>
+          </div>
+          <div class="view-txt">
+            <h3>Agent settings</h3>
+            <p>Decide what the agent may do, and when it has to ask you.</p>
+            <span class="go">Open Agent settings<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+          </div>
+        </a>
+      </li>
+    </ul>
+  </div>
+</section>
+
+<section class="sec" id="proof" aria-labelledby="proof-h">
+  <div class="wrap">
+    <article class="proof" data-reveal>
+      <div class="proof-lead">
+        <svg class="tick" viewBox="0 0 52 52" aria-hidden="true"><circle cx="26" cy="26" r="24"/><path d="M15 27l7 7 15-15"/></svg>
+        <div>
+          <h2 id="proof-h">First real x402 payment <span>on Cardano Preprod.</span></h2>
+          <a class="tx" href="https://preprod.cardanoscan.io/transaction/4e959d66ee947505292fbb48c1ec10356ed70b1751dab98b1ad2f37591ea87b2" target="_blank" rel="noopener" title="4e959d66ee947505292fbb48c1ec10356ed70b1751dab98b1ad2f37591ea87b2">
+            <span class="mono">4e959d66…ea87b2</span><span class="tx-l">View on Cardanoscan</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17L17 7M8 7h9v9"/></svg>
+          </a>
+        </div>
+      </div>
+      <div class="proof-num"><b>2<small>tADA</small></b><span>for one readiness check</span></div>
+      <div class="proof-num"><b><span data-count="32.4">32.4</span><small>s</small></b><span>to settle on-chain</span></div>
+    </article>
+  </div>
+</section>
+
+<section class="sec trust" aria-labelledby="trust-h">
+  <div class="wrap" data-reveal>
+    <h2 id="trust-h"><span style="--k:0">Claude reads.</span> <span style="--k:1">Code decides.</span> <span style="--k:2">You approve.</span></h2>
+    <p>Claude extracts the invoice fields. It cannot choose the payee, the price or the budget.</p>
+    <a class="more" href="/about">How it works<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+  </div>
+</section>
+
+<section class="sec" id="start" aria-labelledby="start-h">
+  <div class="wrap">
+    <div class="closer" data-reveal>
+      <span class="mark xl" aria-hidden="true"><svg width="32" height="32" viewBox="0 0 64 64"><path d="M15 15 49 49" stroke="#5cc0d6" stroke-width="10" stroke-linecap="round"/><path d="M49 15 15 49" stroke="#fff" stroke-width="10" stroke-linecap="round"/></svg></span>
+      <h2 id="start-h">Send it an invoice. <span>Watch it work.</span></h2>
+      <p class="closer-lead">Open the assistant and give it a sample invoice. Test funds on Cardano Preprod, no real money.</p>
+      <div class="cta">
+        <a class="btn primary" href="/app#/assistant"><span>Try it with a sample invoice</span><svg class="arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+      </div>
+      <p class="tagline"><b>CashXChain</b>The Infrastructure for the money of tomorrow.</p>
+      <p class="fine">Built at the TUM Blockchain &amp; AI Hackathon 2026, Cardano track.</p>
+    </div>
+  </div>
+</section>
 </main>
 
 <footer class="wrap">
@@ -80,7 +248,5 @@
   Fiat invoices go to the CashXChain sandbox (a test ledger, no real money), or to a labeled simulation when no sandbox
   key is set. Corridors, fees and FX are simulated and labeled as such. The report is a data-quality and routing check, not an AML, sanctions or KYB decision.</p>
 </footer>
-
-<div class="toast" id="toast" role="status" aria-live="polite"></div>
 </body>
 </html>

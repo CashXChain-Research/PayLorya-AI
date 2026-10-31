@@ -20,6 +20,15 @@ export interface Health {
   payoutMaxLovelace: string;
   payoutBudgetLovelace: string;
   paidOutLovelace: string;
+  /** Fiat payouts hold no wallet budget: capped per payout (minor units) and per server session. */
+  fiatPayoutMaxMinor?: number;
+  fiatPayoutsPerSession?: number;
+  fiatPayoutsUsed?: number;
+  /** True when approve/reject need the operator token (Authorization: Bearer). */
+  approvalTokenRequired?: boolean;
+  /** Same, from the OPERATOR_TOKEN variant (PR #19): "disabled" means approve/reject answer 503. */
+  approvals?: "operator-token" | "disabled";
+  cashxchain?: { ready: boolean; environment: string; api: string };
 }
 
 /** One GET /api/runs item (src/server.ts), newest first. The input text stays behind /api/runs/:id. */
@@ -38,7 +47,7 @@ export interface RunSummary {
 
 export type Decision = "approve" | "reject";
 type Accepted = { id: string; state: RunState };
-export type PostResult = { ok: true; data: Accepted } | { ok: false; error: string; status: number };
+export type PostResult = { ok: true; data: Accepted } | { ok: false; error: string; status?: number };
 
 const getJson = async <T>(url: string): Promise<T> => (await fetch(url)).json() as Promise<T>;
 
@@ -64,9 +73,7 @@ async function post(url: string, body?: unknown, headers: Record<string, string>
 }
 
 export const createRun = (input: string): Promise<PostResult> => post("/api/runs", { input });
-/**
- * 401 when the server has APPROVE_TOKEN set and the token is missing or wrong.
- * 409 when the run is no longer awaiting approval or the draft cannot execute.
- */
-export const decide = (id: string, decision: Decision, approveToken?: string): Promise<PostResult> =>
-  post(`/api/runs/${encodeURIComponent(id)}/${decision}`, undefined, approveToken ? { authorization: `Bearer ${approveToken}` } : {});
+/** 409 when the run is no longer awaiting approval or the draft cannot execute. */
+/** Call through decideRun() in approval.ts, which handles the operator token. */
+export const decide = (id: string, decision: Decision, operatorToken?: string): Promise<PostResult> =>
+  post(`/api/runs/${encodeURIComponent(id)}/${decision}`, undefined, operatorToken ? { authorization: `Bearer ${operatorToken}` } : {});
