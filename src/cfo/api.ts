@@ -199,7 +199,7 @@ export function mountCfo(app: Express, deps: CfoDeps): void {
         if (claim.status === 0) return void res.status(409).json({ error: "A request with this Idempotency-Key is still running.", code: "idempotency_in_progress" });
         res.setHeader("idempotent-replayed", "true");
         // A reply that was not JSON (204, a chat stream) is replayed as its status alone.
-        return void (claim.body === null ? res.status(claim.status).end() : res.status(claim.status).json(claim.body));
+        return void (claim.body == null ? res.status(claim.status).end() : res.status(claim.status).json(claim.body));
       }
       let stored = false;
       const store1 = (status: number, body: unknown) => {
