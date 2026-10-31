@@ -172,6 +172,43 @@ describe("CashXChainPayoutRoute: refused means nothing was sent", () => {
   });
 });
 
+describe("CashXChainPayoutRoute: a 4xx is a refusal only when no payout can exist under the key", () => {
+  it("409 (key bound to another body, or a conflict) and 429 are unknown", async () => {
+    const s = await setup();
+    s.fake.state.failNextCreate = { status: 409, error: "idempotency_key_reuse", message: "this Idempotency-Key was used for a different request" };
+    expect(await rejection(s.pay())).toBeInstanceOf(PayoutUnknownError);
+    s.fake.state.failNextCreate = { status: 429, error: "rate_limited", message: "upstream partner rate-limited the request", record: "created" };
+    expect(await rejection(s.pay(sepa, BRENNER, "payout-k2"))).toBeInstanceOf(PayoutUnknownError);
+  });
+
+  it("another 4xx refuses a fresh key, but not a key this process sent before (a replay may follow a settle)", async () => {
+    const s = await setup();
+    const hold = { status: 403, error: "account_on_hold", message: "This account is on hold. Contact support." };
+    s.fake.state.failNextCreate = hold;
+    expect(await rejection(s.pay())).toMatchObject({ constructor: PayoutRefusedError, code: "account_on_hold" });
+    s.fake.state.failNextCreate = hold;
+    expect(await rejection(s.pay())).toBeInstanceOf(PayoutUnknownError);
+  });
+
+  it("plan_limit_exceeded stays a refusal on a resent key: limits run after the replay lookup", async () => {
+    const s = await setup();
+    const limit = { status: 422, error: "plan_limit_exceeded", message: "above the $2500 single-payment limit" };
+    s.fake.state.failNextCreate = limit;
+    expect(await rejection(s.pay())).toBeInstanceOf(PayoutRefusedError);
+    s.fake.state.failNextCreate = limit;
+    expect(await rejection(s.pay())).toBeInstanceOf(PayoutRefusedError);
+  });
+
+  it("a re-extracted invoice id in another case keeps the body identical under the same key", async () => {
+    const s = await setup();
+    const first = await s.pay();
+    const again = await s.pay({ ...sepa, id: " inv-2026-1042 " });
+    expect(again.reference).toBe(first.reference);
+    expect(s.fake.payoutCreates().map(c => (c.body as { reference: string }).reference)).toEqual(["INV-2026-1042", "INV-2026-1042"]);
+    expect(s.fake.payoutCount()).toBe(1);
+  });
+});
+
 describe("CashXChainPayoutRoute: unknown means lock and check", () => {
   it("a 5xx or timeout on the payout POST", async () => {
     const s = await setup();

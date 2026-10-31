@@ -88,7 +88,9 @@ app.get("/api/runs/:id", (req, res) => {
   res.json(run);
 });
 
-// Human decision on a draft. Public on the demo deployment: payouts are testnet or simulated and capped.
+// Human decision on a draft. Public on the demo deployment. tADA payouts are capped by
+// PAYOUT_MAX/BUDGET_LOVELACE; CashXChain sandbox payouts only by the demo amount ceiling and the
+// sandbox plan limits (test money).
 app.post("/api/runs/:id/:decision", (req, res) => {
   const run = runs.get(req.params.id);
   const decision = req.params.decision;

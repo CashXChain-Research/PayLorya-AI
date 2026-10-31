@@ -20,6 +20,9 @@ export class PayoutUnknownError extends Error {
 
 // Production rails take at most 18 characters; the sandbox does not check.
 const REFERENCE_MAX = 18;
+// 4xx codes that prove no payout exists under the key: a replay would have returned the stored
+// payout first (plan limits run after the replay lookup; a funds refusal replays as `failed`).
+const NOTHING_UNDER_KEY = new Set(["plan_limit_exceeded", "insufficient_balance"]);
 
 export interface CashXChainPayoutOptions {
   pollIntervalMs?: number;
@@ -36,6 +39,8 @@ export class CashXChainPayoutRoute implements FiatPayoutClient {
   readonly label = "CashXChain sandbox payout (test ledger, no real money)";
   private readonly pollIntervalMs: number;
   private readonly pollAttempts: number;
+  /** Keys this process has POSTed. A replay re-runs CashXChain's checks and can 4xx after a settle. */
+  private readonly sent = new Set<string>();
 
   constructor(
     private readonly client: CashXChainClient,
@@ -58,15 +63,19 @@ export class CashXChainPayoutRoute implements FiatPayoutClient {
       beneficiary_id: beneficiaryId,
       amount: toDecimal(invoice.amountMinor, invoice.currency),
       currency: invoice.currency,
-      reference: invoice.id.slice(0, REFERENCE_MAX),
+      // Normalized like the fingerprint the key comes from, so a re-extracted "inv-…" keeps the
+      // body identical (a different body under the same key is 409 idempotency_key_reuse).
+      reference: invoice.id.trim().toUpperCase().slice(0, REFERENCE_MAX),
     };
 
     let payout: CxcPayout;
+    const sentBefore = this.sent.has(idempotencyKey);
+    this.sent.add(idempotencyKey);
     try {
       // Same key and body replays the payout as it is now; it never sends a second one.
       payout = await this.client.createPayout(body, idempotencyKey);
     } catch (error) {
-      if (error instanceof CxcApiError && error.status >= 400 && error.status < 500) {
+      if (error instanceof CxcApiError && refusedBeforeSending(error, sentBefore)) {
         throw new PayoutRefusedError(error.code ?? `http_${error.status}`, error.message);
       }
       throw new PayoutUnknownError(error instanceof Error ? error.message : String(error));
@@ -123,6 +132,17 @@ export class CashXChainPayoutRoute implements FiatPayoutClient {
     const { id } = await this.client.createBeneficiary(beneficiary, key);
     return { sourceAccountId: source.id, beneficiaryId: id };
   }
+}
+
+/**
+ * A 4xx on the payout POST proves nothing was sent only if no payout can exist under the key.
+ * 409 means one does (or may); 429 from the money API is recorded as `created`. Any other 4xx is a
+ * refusal on a key this process never sent; on a key it sent before it may be a replay whose
+ * re-run checks failed after the first attempt settled.
+ */
+function refusedBeforeSending(error: CxcApiError, sentBefore: boolean): boolean {
+  if (error.status < 400 || error.status >= 500 || error.status === 409 || error.status === 429) return false;
+  return (error.code !== undefined && NOTHING_UNDER_KEY.has(error.code)) || !sentBefore;
 }
 
 async function refuseOnError<T>(step: () => Promise<T>): Promise<T> {
