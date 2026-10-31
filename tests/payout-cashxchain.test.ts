@@ -9,7 +9,7 @@ import { CashXChainClient } from "../src/cashxchain.js";
 import { loadConfig } from "../src/config.js";
 import { beneficiaryTarget, CashXChainPayoutRoute, PayoutRefusedError, PayoutUnknownError, toDecimal } from "../src/payout-cashxchain.js";
 import { invoiceFingerprint } from "../src/readiness.js";
-import { CRYPTO_PAYEE, decideRoute, findPayee, payeeDirectory, type VerifiedPayee } from "../src/routing.js";
+import { CRYPTO_PAYEE, decideRoute, findPayee, payeeDirectory, payoutKey, type VerifiedPayee } from "../src/routing.js";
 import { RunStore, type Run } from "../src/runs.js";
 import type { Invoice } from "../src/types.js";
 import { createFakeCxc, FAKE_KEY } from "./fake-cashxchain.js";
@@ -73,7 +73,7 @@ describe("CashXChainPayoutRoute: settled and replayed", () => {
       beneficiary_id: expect.stringMatching(/^mockben_fake_/),
       amount: "624.00",
       currency: "EUR",
-      reference: "INV-2026-1042",
+      reference: "INV20261042",
     });
     expect([...s.fake.state.payouts.values()][0]?.payout).toMatchObject({ id: reference, status: "settled" });
     const ben = s.fake.state.seen.find(r => r.path === "/v1/banking/beneficiaries");
@@ -199,12 +199,14 @@ describe("CashXChainPayoutRoute: a 4xx is a refusal only when no payout can exis
     expect(await rejection(s.pay())).toBeInstanceOf(PayoutRefusedError);
   });
 
-  it("a re-extracted invoice id in another case keeps the body identical under the same key", async () => {
+  it("invoice id variants that share the agent's payout key send an identical body", async () => {
     const s = await setup();
-    const first = await s.pay();
-    const again = await s.pay({ ...sepa, id: " inv-2026-1042 " });
-    expect(again.reference).toBe(first.reference);
-    expect(s.fake.payoutCreates().map(c => (c.body as { reference: string }).reference)).toEqual(["INV-2026-1042", "INV-2026-1042"]);
+    const variants = ["INV-2026-1042", " inv 2026/1042 ", "Inv.2026.1042"];
+    expect(new Set(variants.map(id => payoutKey(BRENNER, { ...sepa, id })))).toHaveProperty("size", 1);
+    const refs = [];
+    for (const id of variants) refs.push((await s.pay({ ...sepa, id })).reference);
+    expect(new Set(refs).size).toBe(1);
+    expect(new Set(s.fake.payoutCreates().map(c => (c.body as { reference: string }).reference))).toEqual(new Set(["INV20261042"]));
     expect(s.fake.payoutCount()).toBe(1);
   });
 });
@@ -311,7 +313,7 @@ describe("wired into the agent's approval flow", () => {
       reference: [...s.fake.state.payouts.values()][0]?.payout.id,
       label: "CashXChain sandbox payout (test ledger, no real money)",
     });
-    expect(s.fake.payoutCreates()[0]?.idempotencyKey).toBe(`payout-${run.fingerprint}`);
+    expect(s.fake.payoutCreates()[0]?.idempotencyKey).toBe(`payout-${payoutKey(BRENNER, sepa)}`);
   });
 
   it("a refusal hands the draft back, and approving again pays under the same key", async () => {
@@ -326,7 +328,7 @@ describe("wired into the agent's approval flow", () => {
 
     await approve(agent, run);
     expect(run.state).toBe("EXECUTED");
-    expect(new Set(s.fake.payoutCreates().map(c => c.idempotencyKey))).toEqual(new Set([`payout-${run.fingerprint}`]));
+    expect(new Set(s.fake.payoutCreates().map(c => c.idempotencyKey))).toEqual(new Set([`payout-${payoutKey(BRENNER, sepa)}`]));
     expect(s.fake.payoutCount()).toBe(1);
   });
 

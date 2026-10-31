@@ -6,7 +6,7 @@ import { extractInvoice } from "./extract.js";
 import { blockfrostChainView, blockfrostSubmitter, simulatedCxcPayouts, type ChainSubmitter, type ChainView, type FiatPayoutClient } from "./payout.js";
 import { filterOffers, precheck, SpendLedger, type SpendPolicy } from "./policy.js";
 import { invoiceFingerprint } from "./readiness.js";
-import { decideRoute, findPayee, payeeDirectory, type VerifiedPayee } from "./routing.js";
+import { decideRoute, findPayee, payeeDirectory, payoutKey, type VerifiedPayee } from "./routing.js";
 import type { Run, RunStore } from "./runs.js";
 import { READINESS_PATH } from "./seller.js";
 import { InvoiceSchema, type Invoice, type PaymentDraft, type PayoutResult, type ReadinessReport, type RouteDecision } from "./types.js";
@@ -46,6 +46,8 @@ export class BuyerAgent {
   // Last tx this wallet broadcast (or may have), and when we learned of it.
   private lastTx?: { hash: string; at: number };
   private walletQueue: Promise<void> = Promise.resolve();
+  // Fiat payout keys counted against FIAT_PAYOUTS_PER_SESSION (fiat holds no lovelace budget).
+  private readonly fiatKeys = new Set<string>();
 
   constructor(
     private readonly config: Config,
@@ -86,6 +88,11 @@ export class BuyerAgent {
 
   get spentLovelace(): bigint {
     return this.ledger.spentLovelace;
+  }
+
+  /** Fiat payouts this session that were sent or may have been (the session limit counts these). */
+  get fiatPayoutsUsed(): number {
+    return this.fiatKeys.size;
   }
 
   get paidOutLovelace(): bigint {
@@ -140,7 +147,7 @@ export class BuyerAgent {
   }
 
   private route(invoice: Invoice): RouteDecision {
-    return decideRoute(invoice, this.payees, { payoutMaxLovelace: this.config.PAYOUT_MAX_LOVELACE });
+    return decideRoute(invoice, this.payees, { payoutMaxLovelace: this.config.PAYOUT_MAX_LOVELACE, fiatMaxMinor: this.config.FIAT_PAYOUT_MAX_MINOR });
   }
 
   private async execute(run: Run): Promise<void> {
@@ -151,9 +158,11 @@ export class BuyerAgent {
       if (route.status !== "selected" || route.destination !== run.draft!.route.destination) {
         throw new Error("payout route changed since the draft; nothing executed");
       }
-      if (route.rail === "cardano_preprod") await this.withWallet(() => this.payOnCardano(run, invoice, route.destination!));
-      // decideRoute selected this payee, so the record exists; the client gets the record, not text.
-      else await this.payViaCxc(run, invoice, route.destination!, findPayee(this.payees, invoice.supplier)!);
+      // decideRoute selected this payee, so the record exists. Payouts key on it, not on extracted text.
+      const payee = findPayee(this.payees, invoice.supplier)!;
+      const key = payoutKey(payee, invoice);
+      if (route.rail === "cardano_preprod") await this.withWallet(() => this.payOnCardano(run, invoice, route.destination!, key));
+      else await this.payViaCxc(run, invoice, route.destination!, payee, key);
     } catch (error) {
       run.error = error instanceof Error ? error.message : String(error);
       if (run.state === "EXECUTING") this.runs.transition(run, "FAILED", run.error);
@@ -161,10 +170,9 @@ export class BuyerAgent {
   }
 
   /** tADA from the buyer wallet to the verified payee wallet. Signed locally, broadcast via Blockfrost. */
-  private async payOnCardano(run: Run, invoice: Invoice, destination: string): Promise<void> {
-    const fingerprint = run.fingerprint!;
+  private async payOnCardano(run: Run, invoice: Invoice, destination: string, key: string): Promise<void> {
     const amount = BigInt(invoice.amountMinor);
-    const hold = this.payoutLedger.reserve(fingerprint, amount);
+    const hold = this.payoutLedger.reserve(key, amount);
     if (!hold.ok) throw new Error(`payout refused before signing: ${hold.reason}`);
 
     let signed: ClientCardanoSignResult;
@@ -178,7 +186,7 @@ export class BuyerAgent {
         extra: { assetTransferMethod: "default" },
       });
     } catch (error) {
-      this.payoutLedger.release(fingerprint); // nothing left the wallet
+      this.payoutLedger.release(key); // nothing left the wallet
       throw error;
     }
 
@@ -192,18 +200,18 @@ export class BuyerAgent {
       run.error = error instanceof Error ? error.message : String(error);
       if (this.submitter?.isDefinitiveRejection?.(error)) {
         // Refused before the mempool (e.g. an input another tx already spent): nothing was broadcast.
-        this.payoutLedger.release(fingerprint);
+        this.payoutLedger.release(key);
         return this.runs.transition(run, "DRAFT_READY", `Payout refused before broadcast, nothing paid; approve again: ${run.error}`);
       }
       // The broadcast may have reached the chain: count it and lock the invoice.
       const tx = signedTxHash(signed.transaction);
       if (tx) this.noteTx(tx);
-      this.payoutLedger.markUnknown(fingerprint, amount);
+      this.payoutLedger.markUnknown(key, amount);
       run.payout = { ...base, status: "unknown", ...explorer(tx), label: "Payout outcome unknown: check the explorer before paying again", executedAt: new Date().toISOString() };
       return this.runs.transition(run, "PAYOUT_UNKNOWN", tx ? `tx ${tx}: ${run.error}` : run.error);
     }
     this.noteTx(sent.txHash);
-    this.payoutLedger.markPaid(fingerprint, amount);
+    this.payoutLedger.markPaid(key, amount);
     const confirmed = sent.status === "confirmed";
     run.payout = {
       ...base,
@@ -215,28 +223,31 @@ export class BuyerAgent {
     this.runs.transition(run, "EXECUTED", sent.txHash);
   }
 
-  private async payViaCxc(run: Run, invoice: Invoice, destination: string, payee: VerifiedPayee): Promise<void> {
-    const fingerprint = run.fingerprint!;
-    const hold = this.payoutLedger.reserve(fingerprint, 0n);
+  private async payViaCxc(run: Run, invoice: Invoice, destination: string, payee: VerifiedPayee, key: string): Promise<void> {
+    const limit = this.config.FIAT_PAYOUTS_PER_SESSION;
+    if (!this.fiatKeys.has(key) && this.fiatKeys.size >= limit) throw new Error(`payout refused: fiat payout limit of ${limit} per session reached`);
+    const hold = this.payoutLedger.reserve(key, 0n);
     if (!hold.ok) throw new Error(`payout refused: ${hold.reason}`);
+    this.fiatKeys.add(key);
     const base = { rail: "cxc_fiat" as const, simulated: this.fiat.simulated, amountMinor: invoice.amountMinor, currency: invoice.currency, destination };
     let reference: string;
     try {
       // Keyed per invoice, not per run: a new run for the same invoice replays instead of paying again.
-      ({ reference } = await this.fiat.payout({ idempotencyKey: `payout-${fingerprint}`, invoice, destination, payee }));
+      ({ reference } = await this.fiat.payout({ idempotencyKey: `payout-${key}`, invoice, destination, payee }));
     } catch (error) {
       if (this.fiat.isDefinitiveRejection?.(error)) {
         run.error = error instanceof Error ? error.message : String(error);
-        this.payoutLedger.release(fingerprint);
+        this.payoutLedger.release(key);
+        this.fiatKeys.delete(key); // nothing sent: does not count against the session limit
         return this.runs.transition(run, "DRAFT_READY", `Payout refused before it was sent, nothing paid; approve again: ${run.error}`);
       }
       // A real API may have accepted the payout before failing: lock, never retry blindly.
-      this.payoutLedger.markUnknown(fingerprint, 0n);
+      this.payoutLedger.markUnknown(key, 0n);
       run.error = error instanceof Error ? error.message : String(error);
       run.payout = { ...base, status: "unknown", label: "Payout outcome unknown: reconcile with CashXChain before paying again", executedAt: new Date().toISOString() };
       return this.runs.transition(run, "PAYOUT_UNKNOWN", run.error);
     }
-    this.payoutLedger.markPaid(fingerprint, 0n);
+    this.payoutLedger.markPaid(key, 0n);
     const payout: PayoutResult = {
       ...base,
       status: this.fiat.simulated ? "simulated" : "submitted",

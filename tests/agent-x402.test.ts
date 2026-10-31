@@ -10,7 +10,7 @@ import type { PaymentPayload, PaymentRequirements } from "@x402/core/types";
 import { decodePaymentResponseHeader, wrapFetchWithPayment, x402Client } from "@x402/fetch";
 import { BuyerAgent, type PayoutRails } from "../src/agent.js";
 import { isDefinitiveSubmitRejection, type ChainSubmitter, type ChainView, type FiatPayoutClient, type FiatPayoutRequest } from "../src/payout.js";
-import { CRYPTO_PAYEE } from "../src/routing.js";
+import { CRYPTO_PAYEE, payoutKey } from "../src/routing.js";
 import { CARDANO_NETWORK, loadConfig } from "../src/config.js";
 import { RunStore, type Run } from "../src/runs.js";
 import { mountSeller, READINESS_PATH } from "../src/seller.js";
@@ -227,6 +227,8 @@ const env = (facilitatorUrl: string, overrides: Env = {}): Env => ({
   MAX_PRICE_LOVELACE: "3000000",
   SESSION_BUDGET_LOVELACE: "20000000",
   FACILITATOR_URL: facilitatorUrl,
+  // The default test invoice (EUR 12,480.00) is above the demo fiat cap; cap tests set their own.
+  FIAT_PAYOUT_MAX_MINOR: "5000000",
   ...overrides,
 });
 
@@ -694,8 +696,58 @@ describe("invoice payout after human approval", () => {
     await approve(s.agent, run);
     expect(run.state).toBe("EXECUTED");
     expect(run.payout).toMatchObject({ rail: "cxc_fiat", status: "submitted", simulated: false, reference: "po_2" });
-    expect(fiat.calls.map(c => c.idempotencyKey)).toEqual([`payout-${run.fingerprint}`, `payout-${run.fingerprint}`]);
-    expect(fiat.calls[0]?.payee).toEqual({ name: "Brenner Maschinenbau GmbH", iban: "DE89370400440532013000", bic: "COBADEFFXXX" });
+    const brenner = { name: "Brenner Maschinenbau GmbH", iban: "DE89370400440532013000", bic: "COBADEFFXXX" };
+    const key = `payout-${payoutKey(brenner, invoice)}`;
+    expect(fiat.calls.map(c => c.idempotencyKey)).toEqual([key, key]);
+    expect(fiat.calls[0]?.payee).toEqual(brenner);
+  });
+
+  it("the same invoice extracted differently (supplier text, id case) pays out once", async () => {
+    const fiat = stubFiat();
+    const s = await startStack({ fiat });
+    const first = await s.run();
+    // What a second extraction of the same paper invoice could look like.
+    const second = await s.run({ ...invoice, supplier: "Brenner Maschinenbau GmbH, Augsburg", id: " inv 2026-1042 " });
+    expect([first.state, second.state]).toEqual(["DRAFT_READY", "DRAFT_READY"]);
+    expect(second.fingerprint).not.toBe(first.fingerprint);
+
+    await approve(s.agent, first);
+    await approve(s.agent, second);
+    expect(first.state).toBe("EXECUTED");
+    expect(second.state).toBe("FAILED");
+    expect(second.error).toContain("already paid");
+    expect(fiat.calls).toHaveLength(1);
+  });
+
+  it("fiat: at most FIAT_PAYOUTS_PER_SESSION payouts; a definitive refusal does not count", async () => {
+    const fiat = stubFiat();
+    const s = await startStack({ fiat, buyer: { FIAT_PAYOUTS_PER_SESSION: "2" } });
+    const a = await s.run();
+    const b = await s.run({ ...invoice, id: "INV-2026-1043" });
+    const c = await s.run({ ...invoice, id: "INV-2026-1044" });
+    const d = await s.run({ ...invoice, id: "INV-2026-1045" });
+
+    fiat.fail = new Error("refused: insufficient_balance");
+    await approve(s.agent, a); // nothing sent: its slot is freed, and it is left as a draft
+    fiat.fail = undefined;
+    await approve(s.agent, b);
+    await approve(s.agent, c);
+    await approve(s.agent, d);
+    expect([a.state, b.state, c.state, d.state]).toEqual(["DRAFT_READY", "EXECUTED", "EXECUTED", "FAILED"]);
+    expect(d.error).toBe("payout refused: fiat payout limit of 2 per session reached");
+    expect(fiat.calls).toHaveLength(3);
+    expect(s.agent.fiatPayoutsUsed).toBe(2);
+  });
+
+  it("fiat: an invoice above the per-payout cap is a draft for manual handling, not payable", async () => {
+    const fiat = stubFiat();
+    const s = await startStack({ fiat, buyer: { FIAT_PAYOUT_MAX_MINOR: "100000" } });
+    const run = await s.run();
+
+    expect(run.state).toBe("DRAFT_READY");
+    expect(run.draft).toMatchObject({ executable: false, route: { status: "unavailable", reason: "Amount above the fiat payout cap of 1000.00 EUR: pay by hand" } });
+    expect(s.agent.approve(run)).toMatchObject({ ok: false, reason: expect.stringContaining("fiat payout cap") });
+    expect(fiat.calls).toHaveLength(0);
   });
 
   it("fiat: any other error may have reached CashXChain -> PAYOUT_UNKNOWN, invoice locked", async () => {
