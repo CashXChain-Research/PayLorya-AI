@@ -661,6 +661,9 @@ a.today-item:hover { background: var(--surface-2); }
 .addr-row { display: flex; align-items: center; gap: 6px; background: var(--surface-2); border-radius: 10px; padding: 4px 4px 4px 10px; color: var(--ink-2); }
 :root[data-theme="dark"] .addr-row { background: var(--field); }
 .addr-row .mono { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.addr-row.owner { padding: 6px 10px; }
+.wallet-pick { display: flex; flex-wrap: wrap; gap: 8px; }
+.wallet-pick img { border-radius: 4px; flex: none; }
 .conn-bal { display: grid; gap: 2px; }
 .conn-total { font-size: 26px; font-weight: 700; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
 .conn-bal ul { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; }
@@ -800,7 +803,7 @@ body.full .main { max-width: none; padding: 0; height: 100vh; height: 100dvh; }
 .file-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .file-chip .i { color: var(--brand); }
 a.file-chip:hover { box-shadow: var(--shadow); }
-.bot-av { width: 30px; height: 30px; border-radius: 9px; background: var(--mark-bg); color: #fff; display: grid; place-items: center; font-weight: 700; font-size: 14px; flex: none; margin-top: 2px; }
+.bot-av { width: 30px; height: 30px; border-radius: 24%; background: var(--mark-bg); color: #fff; display: grid; place-items: center; font-weight: 700; font-size: 14px; flex: none; margin-top: 2px; }
 :root[data-theme="dark"] .bot-av { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .18); }
 .msg-body { flex: 1; min-width: 0; display: grid; gap: 8px; }
 .tools { display: flex; flex-wrap: wrap; gap: 6px; }

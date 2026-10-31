@@ -70,6 +70,8 @@ export class BuyerAgent {
   private walletQueue: Promise<void> = Promise.resolve();
   // Fiat payouts sent or possibly sent, by payout key: the session count and the per-currency budget.
   private readonly fiatCommitted = new Map<string, Money>();
+  // Runs that pay fiat over another route than the agent's default (an AI CFO workspace's own key).
+  private readonly runFiat = new WeakMap<Run, FiatPayoutClient>();
 
   constructor(
     private readonly config: Config,
@@ -102,6 +104,19 @@ export class BuyerAgent {
     this.chain = rails.chain;
     this.walletSync = { ...WALLET_SYNC, ...rails.walletSync };
     this.reconcileTiming = { ...RECONCILE, ...rails.reconcile };
+  }
+
+  /**
+   * Sends this run's fiat payout over `fiat` instead of the agent's default route: an AI CFO
+   * workspace that connected its own CashXChain account pays from that account. Set it before
+   * process(); preview and payout both read it. Session limits and budgets stay the agent's.
+   */
+  useFiatRoute(run: Run, fiat: FiatPayoutClient): void {
+    this.runFiat.set(run, fiat);
+  }
+
+  private fiatFor(run: Run): FiatPayoutClient {
+    return this.runFiat.get(run) ?? this.fiat;
   }
 
   get buyerAddress(): string {
@@ -267,7 +282,7 @@ export class BuyerAgent {
         perPaymentMaxMinor: Number(this.budgetState.cardanoPayoutMaxLovelace),
       };
     } else {
-      from = await this.fiatSource(invoice, warnings);
+      from = await this.fiatSource(this.fiatFor(run), invoice, warnings);
       if (payee?.iban) to = { kind: "iban", iban: payee.iban, ...(payee.bic ? { bic: payee.bic } : {}) };
       else if (payee?.routingNumber && payee.accountNumber) {
         to = { kind: "us_account", routingNumber: payee.routingNumber, accountNumber: payee.accountNumber, ...(payee.accountType ? { accountType: payee.accountType } : {}) };
@@ -299,7 +314,7 @@ export class BuyerAgent {
       },
       ...(payee ? { payee: payee.name } : {}),
       ...(rail ? { rail } : {}),
-      railLabel: rail === "cardano_preprod" ? "Cardano Preprod (testnet tADA)" : rail === "cxc_fiat" ? this.fiat.label : "No payout rail",
+      railLabel: rail === "cardano_preprod" ? "Cardano Preprod (testnet tADA)" : rail === "cxc_fiat" ? this.fiatFor(run).label : "No payout rail",
       amount,
       ...(from ? { from } : {}),
       ...(to ? { to } : {}),
@@ -351,11 +366,11 @@ export class BuyerAgent {
   }
 
   /** The CashXChain account a fiat payout would leave from, or the simulation label. */
-  private async fiatSource(invoice: Invoice, warnings: string[]): Promise<PaymentSource> {
-    if (this.fiat.simulated || !this.fiat.sourceAccount) return { kind: "simulated", label: this.fiat.label };
+  private async fiatSource(fiat: FiatPayoutClient, invoice: Invoice, warnings: string[]): Promise<PaymentSource> {
+    if (fiat.simulated || !fiat.sourceAccount) return { kind: "simulated", label: fiat.label };
     let account: FiatAccount | undefined;
     try {
-      account = await this.fiat.sourceAccount(invoice.currency);
+      account = await fiat.sourceAccount(invoice.currency);
     } catch (error) {
       warnings.push(`CashXChain accounts could not be read: ${errorText(error)}`);
       return { kind: "simulated", label: "CashXChain account not known yet" };
@@ -478,13 +493,14 @@ export class BuyerAgent {
     const hold = this.payoutLedger.reserve(key, 0n);
     if (!hold.ok) throw new Error(`payout refused: ${hold.reason}`);
     this.fiatCommitted.set(key, { minor: invoice.amountMinor, currency: invoice.currency });
-    const base = { rail: "cxc_fiat" as const, simulated: this.fiat.simulated, amountMinor: invoice.amountMinor, currency: invoice.currency, destination };
+    const fiat = this.fiatFor(run);
+    const base = { rail: "cxc_fiat" as const, simulated: fiat.simulated, amountMinor: invoice.amountMinor, currency: invoice.currency, destination };
     let reference: string;
     try {
       // Keyed per invoice, not per run: a new run for the same invoice replays instead of paying again.
-      ({ reference } = await this.fiat.payout({ idempotencyKey: `payout-${key}`, invoice, destination, payee }));
+      ({ reference } = await fiat.payout({ idempotencyKey: `payout-${key}`, invoice, destination, payee }));
     } catch (error) {
-      if (this.fiat.isDefinitiveRejection?.(error)) {
+      if (fiat.isDefinitiveRejection?.(error)) {
         run.error = error instanceof Error ? error.message : String(error);
         this.payoutLedger.release(key);
         this.fiatCommitted.delete(key); // nothing sent: counts against neither the session limit nor the budget
@@ -506,9 +522,9 @@ export class BuyerAgent {
     this.payoutLedger.markPaid(key, 0n);
     const payout: PayoutResult = {
       ...base,
-      status: this.fiat.simulated ? "simulated" : "submitted",
+      status: fiat.simulated ? "simulated" : "submitted",
       reference,
-      label: this.fiat.label,
+      label: fiat.label,
       executedAt: new Date().toISOString(),
     };
     run.payout = payout;

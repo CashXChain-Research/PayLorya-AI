@@ -51,6 +51,8 @@ export function createFakeCxc() {
     /** Answer every request with this (e.g. a 503 outage) until cleared. */
     down: undefined as Omit<Failure, "record"> | undefined,
     seen: [] as Seen[],
+    /** API keys the fake accepts (a workspace's own key is another sandbox key). */
+    keys: new Set<string>([FAKE_KEY]),
   };
 
   const app: Express = express();
@@ -63,7 +65,8 @@ export function createFakeCxc() {
       authorization: req.header("authorization"),
       body: req.body,
     });
-    if (req.header("authorization") !== `Bearer ${FAKE_KEY}`) return envelope(res, 401, "unauthorized", "unauthorized");
+    const key = /^Bearer (.+)$/.exec(req.header("authorization") ?? "")?.[1];
+    if (!key || !state.keys.has(key)) return envelope(res, 401, "unauthorized", "unauthorized");
     if (state.down) return envelope(res, state.down.status, state.down.error, state.down.message);
     next();
   });

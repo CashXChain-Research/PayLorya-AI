@@ -1,8 +1,11 @@
 import type { BuyerAgent } from "../agent.js";
+import { CashXChainPayoutRoute } from "../payout-cashxchain.js";
+import type { FiatPayoutClient } from "../payout.js";
 import { normalizeIban } from "../readiness.js";
 import type { VerifiedPayee } from "../routing.js";
 import type { Run, RunStore } from "../runs.js";
 import type { Invoice } from "../types.js";
+import type { CxcKeys } from "./cxc-keys.js";
 import { toUsdMinor } from "./fx.js";
 import { decidePayment, type PolicyDecision, type Rail } from "./policy.js";
 import type { Destination, Payee, Payment, Store } from "./store.js";
@@ -39,7 +42,21 @@ export class Payments {
   constructor(
     private readonly store: Store,
     private readonly engine: PaymentEngine,
+    private readonly keys?: CxcKeys,
   ) {}
+
+  /**
+   * The fiat route of a workspace that connected its own CashXChain account (by API key): its
+   * payouts leave from that account. Undefined: the engine's route (PayLorya AI's shared sandbox
+   * account). Throws when the stored key can no longer be opened; never falls back then.
+   */
+  private async ownFiatRoute(ws: string): Promise<FiatPayoutClient | undefined> {
+    const c = (await this.store.connections(ws)).find(x => x.kind === "cashxchain" && x.access === "read_write");
+    if (!c?.credentialHint) return undefined;
+    const client = await this.keys?.client(ws, c);
+    if (!client) throw new Error("This server cannot use the stored CashXChain API key");
+    return new CashXChainPayoutRoute(client);
+  }
 
   private async railWritable(ws: string, rail: Rail): Promise<boolean> {
     const kind = rail === "cardano_preprod" ? "cardano_agent_wallet" : rail === "cashxchain" ? "cashxchain" : undefined;
@@ -179,9 +196,18 @@ export class Payments {
     // The account paid to: the saved payee's, else the one shown in the approved draft.
     const payee = verifiedPayee({ name: saved?.name ?? p.payeeName, ...(saved ? clean(saved) : p.destination) });
     if (!hasAccount(payee, p.rail)) return fail("No account details to pay to");
+    let fiat: FiatPayoutClient | undefined;
+    if (p.rail === "cashxchain") {
+      try {
+        fiat = await this.ownFiatRoute(ws);
+      } catch (error) {
+        return fail(error instanceof Error ? error.message : String(error));
+      }
+    }
 
     const run = this.engine.runs.create(JSON.stringify(invoiceFor(p, payee, saved?.country ?? p.destination?.country)));
     run.payees = [payee];
+    if (fiat) agent.useFiatRoute(run, fiat);
     await this.store.updatePayment(ws, id, { runId: run.id });
     try {
       await agent.process(run);

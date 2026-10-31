@@ -159,6 +159,9 @@ const MIGRATIONS: string[][] = [
   [`ALTER TABLE workspaces ADD COLUMN cxc_link_json TEXT`],
   // Account details a draft carries when its payee is not saved (from the invoice or the agent).
   [`ALTER TABLE payments ADD COLUMN destination_json TEXT`],
+  // A connection's own credential (a workspace's CashXChain API key), sealed by src/cfo/vault.ts.
+  // The hint is the key's prefix and last four characters, for display.
+  [`ALTER TABLE connections ADD COLUMN secret_enc TEXT`, `ALTER TABLE connections ADD COLUMN secret_hint TEXT`],
 ];
 
 export async function migrate(sql: Sql): Promise<void> {
