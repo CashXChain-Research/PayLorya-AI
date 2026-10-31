@@ -2,7 +2,7 @@
 // Single named instance: run state is in memory, so all traffic must hit the same container.
 import { Container, ContainerProxy } from "@cloudflare/containers";
 import { CFO_DATA_HOST, handleCfoData } from "./cfo-proxy.js";
-import { containerEnv, type ForwardedKey } from "./env.js";
+import { authOptions, containerEnv, type ForwardedKey } from "./env.js";
 
 // Outbound interception of the container's traffic runs through this entrypoint.
 export { ContainerProxy };
@@ -32,6 +32,9 @@ AgentPayContainer.outboundByHost = {
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
+    if (request.method === "GET" && new URL(request.url).pathname === "/api/auth-options") {
+      return Response.json(authOptions(env), { headers: { "cache-control": "no-store" } });
+    }
     // A Durable Object stays where it was first created; the hint places it in Western Europe,
     // next to the container (constraints in wrangler.jsonc) and D1. New name: the old "main"
     // object may live elsewhere. It holds no data (accounts and records are in D1/R2).
