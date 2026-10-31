@@ -116,7 +116,7 @@ const TOOLS: Anthropic.Tool[] = [
     description: "Drafted and executed payments with status and policy checks.",
     input_schema: {
       type: "object",
-      properties: { status: { type: "string", enum: ["pending_approval", "approved", "executing", "executed", "rejected", "failed", "blocked"] } },
+      properties: { status: { type: "string", enum: ["pending_approval", "approved", "executing", "awaiting_signature", "executed", "rejected", "failed", "blocked"] } },
       additionalProperties: false,
     },
   },

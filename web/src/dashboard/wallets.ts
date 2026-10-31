@@ -6,6 +6,7 @@ interface Cip30Api {
   getNetworkId(): Promise<number>;
   getChangeAddress(): Promise<string>;
   getUsedAddresses(): Promise<string[]>;
+  getUtxos(): Promise<string[] | null | undefined>;
   signTx(txCbor: string, partialSign: boolean): Promise<string>;
 }
 interface Cip30Wallet {
@@ -71,22 +72,41 @@ export async function connectCardano(id: string): Promise<string> {
  * fee) before its owner confirms. Returns the witness set (CIP-30 signTx, partial). Refuses a wallet
  * that does not hold the address, so the owner is not asked to sign with the wrong one.
  */
-export async function signCardano(id: string, req: { txCbor: string; address: string }): Promise<string> {
+/** A wallet opened to pay: what it reports (CIP-30, hex) and its signature on the built transaction. */
+export interface CardanoPayer {
+  funds: { utxos: string[]; changeAddress: string; addresses: string[] };
+  sign(txCbor: string): Promise<string>;
+}
+
+/**
+ * Opens the wallet (its permission popup) and reads its funds, so the server builds the payout from
+ * exactly what the wallet can sign. Refuses a wallet that does not hold the connected address.
+ */
+export async function openCardanoPayer(id: string, connected: string): Promise<CardanoPayer> {
   const api = await enableCardano(id);
-  const hex = [...(await api.getUsedAddresses().catch(() => [] as string[])), await api.getChangeAddress().catch(() => "")];
-  const held = hex.map(h => {
+  const used = await api.getUsedAddresses().catch(() => [] as string[]);
+  const changeAddress = await api.getChangeAddress();
+  const held = [...used, changeAddress].map(h => {
     try {
       return cardanoAddressFromHex(h);
     } catch {
       return "";
     }
   });
-  if (!held.includes(req.address)) throw new Error(`This wallet does not hold ${req.address.slice(0, 18)}…. Open the wallet you connected.`);
-  try {
-    return await api.signTx(req.txCbor, true);
-  } catch {
-    throw new Error("Not signed in the wallet. Sign again before the request expires, or cancel the payment.");
-  }
+  if (!held.includes(connected)) throw new Error(`This wallet does not hold ${connected.slice(0, 20)}…, the wallet connected for payments. Open that wallet.`);
+  const utxos = (await api.getUtxos().catch(() => null)) ?? [];
+  if (!utxos.length) throw new Error("This wallet has no funds on Cardano Preprod. Top it up from the Preprod faucet.");
+  return {
+    funds: { utxos, changeAddress, addresses: used },
+    async sign(txCbor) {
+      try {
+        // partialSign: the wallet adds its witnesses; the server completes and sends the transaction.
+        return await api.signTx(txCbor, true);
+      } catch {
+        throw new Error("Not signed in the wallet: nothing was sent. Sign again, or cancel the payment.");
+      }
+    },
+  };
 }
 
 /** Opens the wallet's popup and returns the selected account (0x…). */

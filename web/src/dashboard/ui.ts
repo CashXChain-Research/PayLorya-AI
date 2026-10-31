@@ -187,6 +187,7 @@ const STATUS: Record<PaymentStatus, [string, string]> = {
   pending_approval: ["Needs approval", "t-warn"],
   approved: ["Approved", "t-run"],
   executing: ["Executing", "t-run"],
+  awaiting_signature: ["Sign in wallet", "t-warn"],
   executed: ["Paid", "t-ok"],
   rejected: ["Rejected", "t-neutral"],
   failed: ["Failed", "t-bad"],

@@ -11,7 +11,6 @@ import { CxcLinker } from "./cxc-link.js";
 import { claudeExtractor } from "./ingest.js";
 import { resendMailer, type Mailer } from "./mail.js";
 import { Payments, type PaymentEngine } from "./payments.js";
-import { SignatureDesk } from "./signatures.js";
 import { evolutionKit, type TxKit } from "./wallet-signer.js";
 import { localFiles, localSql, memoryFiles, remoteFiles, remoteSql, type Files, type Sql } from "./sql.js";
 import { Store } from "./store.js";
@@ -41,7 +40,8 @@ export async function createCfo(
     cashxchainFor?: (apiKey: string) => CashXChainClient;
     /** Tests: builds tADA payouts from a workspace wallet; production: Evolution SDK over Blockfrost. */
     walletKit?: TxKit;
-    signMs?: number;
+    /** Tests: no background sweep (they call payments.sweep() themselves). */
+    noSweep?: boolean;
   } = {},
 ): Promise<CfoDeps> {
   const { sql, files } = storage(config, opts);
@@ -62,14 +62,19 @@ export async function createCfo(
   });
   // A workspace's own CashXChain account, connected with its API key (sealed with BETTER_AUTH_SECRET).
   const keys = new CxcKeys(store, config.BETTER_AUTH_SECRET, opts.cashxchainFor ?? (apiKey => new CashXChainClient({ apiKey })));
+  const payments = new Payments(store, engine, keys, {
+    ...(opts.walletKit ? { kit: opts.walletKit } : config.BLOCKFROST_PROJECT_ID ? { kit: evolutionKit(blockfrostProvider(config).blockfrost) } : {}),
+    explorerTxUrl: config.EXPLORER_TX_URL,
+  });
+  if (!opts.noSweep) {
+    // Settles what a restart left behind, then follows sent tADA payouts to their block.
+    void payments.sweep();
+    setInterval(() => void payments.sweep(), 60_000).unref();
+  }
   return {
     store,
     auth,
-    payments: new Payments(store, engine, keys, {
-      ...(opts.walletKit ? { kit: opts.walletKit } : config.BLOCKFROST_PROJECT_ID ? { kit: evolutionKit(blockfrostProvider(config).blockfrost) } : {}),
-      desk: new SignatureDesk(),
-      ...(opts.signMs ? { signMs: opts.signMs } : {}),
-    }),
+    payments,
     keys,
     connections: {
       acceptsApiKey: keys.ready,

@@ -1,20 +1,23 @@
 import { once } from "node:events";
 import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
-import type { ClientCardanoSigner } from "@x402/cardano";
+import { Address } from "@evolution-sdk/evolution";
 import express, { type Express } from "express";
 import { afterEach, describe, expect, it } from "vitest";
 import type { BuyerAgent } from "../src/agent.js";
 import { createCfo, mountCfo, type PaymentEngine } from "../src/cfo/index.js";
-import { NEEDS_OWN_WALLET } from "../src/cfo/payments.js";
-import type { TxKit } from "../src/cfo/wallet-signer.js";
+import { INTERRUPTED, NEEDS_OWN_WALLET } from "../src/cfo/payments.js";
+import { InsufficientFunds, type TxKit } from "../src/cfo/wallet-signer.js";
 import { loadConfig } from "../src/config.js";
 import { RunStore, type Run } from "../src/runs.js";
 import type { Invoice } from "../src/types.js";
 
 const WALLET = "addr_test1qz2fxv2umyhttkxyxp8x0dlpdt3k6cwng5pxj3jhsydzer3n0d3vllmyqwsx5wktcd8cc3sq835lu7drv2xwl2wywfgs68faae";
-const PAYEE = "addr_test1vz2fxv2umyhttkxyxp8x0dlpdt3k6cwng5pxj3jhsydzerspjrlsz";
+const OTHER = "addr_test1vz2fxv2umyhttkxyxp8x0dlpdt3k6cwng5pxj3jhsydzerspjrlsz";
+const PAYEE = "addr_test1vpu5vlrf4xkxv2qpwngf6cjhtw542ayty80v8dyr49rf5eg0yu80w";
+const hexOf = (a: string) => Address.toHex(Address.fromBech32(a));
 const TX = "ab".repeat(32);
+const FEE_TX = "fe".repeat(32);
 
 const servers: Server[] = [];
 afterEach(async () => {
@@ -28,53 +31,62 @@ async function listen(app: Express): Promise<string> {
   return `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 }
 
-/** Payout engine stub that pays tADA with the run's own signer, as BuyerAgent.useCardanoSigner does. */
-function walletAgent() {
-  const signers = new WeakMap<Run, ClientCardanoSigner>();
+/** Payout engine stub: the paid x402 check on Cardano passes and routes to the verified payee. */
+function checkingAgent() {
+  const processed: string[] = [];
   const agent = {
     useFiatRoute() {},
-    useCardanoSigner(run: Run, signer: ClientCardanoSigner) {
-      signers.set(run, signer);
-    },
     async process(run: Run) {
-      run.state = "DRAFT_READY";
-      run.draft = { executable: true, route: { rail: "cardano_preprod" } } as unknown as Run["draft"];
-    },
-    approve(run: Run) {
       const invoice = JSON.parse(run.input) as Invoice;
-      const signer = signers.get(run);
-      const done = (async () => {
-        if (!signer) throw new Error("no own wallet");
-        try {
-          const signed = await signer.buildAndSignPaymentTransaction({ network: "cardano:preprod", payTo: invoice.cardanoAddress!, asset: "lovelace", amount: String(invoice.amountMinor), maxTimeoutSeconds: 600 });
-          run.state = "EXECUTED";
-          run.payout = { rail: "cardano_preprod", status: "submitted", simulated: false, amountMinor: invoice.amountMinor, currency: "ADA", destination: invoice.cardanoAddress!, reference: TX, label: `sent ${signed.transaction}`, executedAt: new Date().toISOString() };
-        } catch (error) {
-          run.state = "FAILED";
-          run.error = error instanceof Error ? error.message : String(error);
-        }
-      })();
-      return { ok: true, done };
+      processed.push(invoice.id);
+      run.state = "DRAFT_READY";
+      run.report = { verdict: "ready_for_review" } as Run["report"];
+      run.payment = { transactionHash: FEE_TX, explorerUrl: `https://preprod.cardanoscan.io/transaction/${FEE_TX}` } as Run["payment"];
+      run.draft = { executable: true, route: { rail: "cardano_preprod", status: "selected", destination: invoice.cardanoAddress } } as unknown as Run["draft"];
+    },
+    approve() {
+      throw new Error("tADA payouts from the owner's wallet never go through the agent's own wallet");
     },
   } as unknown as BuyerAgent;
-  return agent;
+  return { agent, processed };
 }
 
-async function start(signMs = 5_000) {
-  const blockfrost = express();
-  blockfrost.use((_req, res) => void res.status(404).json({ status_code: 404 }));
-  const bfUrl = await listen(blockfrost);
+function stubKit() {
+  const state = {
+    built: [] as Array<{ payTo: string; lovelace: bigint; utxos: string[]; changeAddress: string }>,
+    sent: [] as string[],
+    submitError: undefined as Error | undefined,
+    definitive: false,
+    inBlock: new Set<string>(),
+    nextHash: TX,
+    holds: 50_000_000n,
+  };
+  const kit: TxKit = {
+    async build({ payTo, lovelace, funds, validUntil }) {
+      if (state.holds < lovelace + 1_000_000n) throw new InsufficientFunds("Your wallet holds too little");
+      state.built.push({ payTo, lovelace, utxos: funds.utxos, changeAddress: funds.changeAddress });
+      return { cborHex: `84a0${state.built.length}`, txHash: state.nextHash, validUntil };
+    },
+    assemble: (_cbor, witnessSet) => Buffer.from(`signed:${witnessSet}`).toString("base64"),
+    async submit(signed) {
+      state.sent.push(signed);
+      if (state.submitError) throw state.submitError;
+      return state.nextHash;
+    },
+    isDefinitiveRejection: () => state.definitive,
+    confirmed: async hash => state.inBlock.has(hash),
+  };
+  return { kit, state };
+}
+
+async function start() {
   const app = express();
   const base = await listen(app);
-  const config = loadConfig({ PUBLIC_BASE_URL: base, BETTER_AUTH_SECRET: "w".repeat(40), BLOCKFROST_PROJECT_ID: "preprodTest", BLOCKFROST_PREPROD_URL: bfUrl });
-  const built: Array<{ from: string; payTo: string; lovelace: bigint }> = [];
-  const assembled: string[] = [];
-  const kit: TxKit = {
-    build: async (from, payTo, lovelace) => (built.push({ from, payTo, lovelace }), { cborHex: "84a0a0f5f6", txHash: TX, nonce: `${"c".repeat(64)}#0` }),
-    assemble: (_cbor, witnessSet) => (assembled.push(witnessSet), Buffer.from(`signed:${witnessSet}`).toString("base64")),
-  };
-  const engine: PaymentEngine = { runs: new RunStore(), agent: walletAgent() };
-  const deps = await createCfo(config, engine, { memory: true, walletKit: kit, signMs });
+  const config = loadConfig({ PUBLIC_BASE_URL: base, BETTER_AUTH_SECRET: "w".repeat(40), BLOCKFROST_PROJECT_ID: "preprodTest", BLOCKFROST_PREPROD_URL: "http://127.0.0.1:9" });
+  const { kit, state } = stubKit();
+  const { agent, processed } = checkingAgent();
+  const engine: PaymentEngine = { runs: new RunStore(), agent };
+  const deps = await createCfo(config, engine, { memory: true, walletKit: kit, noSweep: true });
   mountCfo(app, deps);
 
   async function user(email: string) {
@@ -95,8 +107,10 @@ async function start(signMs = 5_000) {
       return { status: r.status, json: (text ? JSON.parse(text) : undefined) as any };
     };
   }
-  return { deps, built, assembled, user };
+  return { deps, state, processed, user };
 }
+
+type Call = Awaited<ReturnType<Awaited<ReturnType<typeof start>>["user"]>>;
 
 const settle = async (check: () => Promise<boolean>) => {
   for (let i = 0; i < 150; i++) {
@@ -106,58 +120,118 @@ const settle = async (check: () => Promise<boolean>) => {
   throw new Error("condition not reached");
 };
 
-async function adaPayment(me: Awaited<ReturnType<Awaited<ReturnType<typeof start>>["user"]>>) {
+/** Own wallet connected for payments, a payee with a Preprod address, a 2 tADA payment approved. */
+async function approvedAdaPayment(me: Call) {
+  await me("POST", "/api/v1/connections", { kind: "cardano_wallet", address: WALLET, access: "read_write" });
   const payee = (await me("POST", "/api/v1/payees", { name: "Nordwind Node Services", cardanoAddress: PAYEE })).json;
   const draft = (await me("POST", "/api/v1/payments", { payeeId: payee.id, amountMinor: 2_000_000, currency: "ADA", reason: "Node hosting" })).json;
-  return draft;
+  if (draft.status === "pending_approval") expect((await me("POST", `/api/v1/payments/${draft.id}/approve`)).status).toBe(200);
+  await settle(async () => (await payment(me, draft.id)).status === "awaiting_signature");
+  return draft.id as string;
 }
+const payment = async (me: Call, id: string) => (await me("GET", "/api/v1/payments")).json.find((p: { id: string }) => p.id === id);
+const funds = (addr = WALLET) => ({ utxos: ["8282"], changeAddress: hexOf(addr), addresses: [hexOf(addr)] });
 
-describe("tADA payouts leave from the workspace's own wallet, signed by its owner", () => {
-  it("approve → the payment waits with the transaction → the wallet's signature sends it", async () => {
+describe("tADA payouts from the workspace's own wallet: stored at every step, signed by the owner", () => {
+  it("check on Cardano → waits for the wallet → built from the wallet's funds → signed → sent", async () => {
     const s = await start();
     const me = await s.user("owner@nordwind.example");
-    expect((await me("POST", "/api/v1/connections", { kind: "cardano_wallet", address: WALLET, access: "read_write" })).json.access).toBe("read_write");
-    const draft = await adaPayment(me);
-    expect(draft.policy.checks.find((c: { id: string }) => c.id === "access").status).toBe("pass");
-    if (draft.status === "pending_approval") expect((await me("POST", `/api/v1/payments/${draft.id}/approve`)).status).toBe(200);
+    const id = await approvedAdaPayment(me);
+    const waiting = await payment(me, id);
+    expect(waiting.cardano).toMatchObject({ from: WALLET, payTo: PAYEE, lovelace: "2000000", verification: { txHash: FEE_TX, verdict: "ready_for_review" } });
+    expect(s.processed).toHaveLength(1);
 
-    await settle(async () => Boolean((await me("GET", "/api/v1/payments")).json[0].signRequest));
-    const waiting = (await me("GET", "/api/v1/payments")).json[0];
-    expect(waiting).toMatchObject({ status: "executing", signRequest: { txCbor: "84a0a0f5f6", txHash: TX, address: WALLET } });
-    expect(s.built).toEqual([{ from: WALLET, payTo: PAYEE, lovelace: 2_000_000n }]);
+    const tx = await me("POST", `/api/v1/payments/${id}/transaction`, funds());
+    expect(tx.status).toBe(200);
+    expect(tx.json).toMatchObject({ txCbor: "84a01", txHash: TX });
+    expect(s.state.built).toEqual([{ payTo: PAYEE, lovelace: 2_000_000n, utxos: ["8282"], changeAddress: WALLET }]);
 
-    // A signature for another transaction is refused; the right one sends the payout.
-    expect((await me("POST", `/api/v1/payments/${draft.id}/signature`, { txHash: "cd".repeat(32), witnessSet: "a100" })).status).toBe(409);
-    expect((await me("POST", `/api/v1/payments/${draft.id}/signature`, { txHash: TX, witnessSet: "a10081825820" })).status).toBe(202);
-    await settle(async () => (await me("GET", "/api/v1/payments")).json[0].status === "executed");
-    const paid = (await me("GET", "/api/v1/payments")).json[0];
-    expect(paid.signRequest).toBeUndefined();
-    expect(paid.txHash).toBe(TX);
-    expect(s.assembled).toEqual(["a10081825820"]);
-    expect((await me("POST", `/api/v1/payments/${draft.id}/signature`, { txHash: TX, witnessSet: "a100" })).status).toBe(409);
+    expect((await me("POST", `/api/v1/payments/${id}/signature`, { txHash: "cd".repeat(32), witnessSet: "a100" })).status).toBe(409);
+    const sent = await me("POST", `/api/v1/payments/${id}/signature`, { txHash: TX, witnessSet: "a10081" });
+    expect(sent.status).toBe(200);
+    expect(sent.json).toMatchObject({ status: "executed", txHash: TX, explorerUrl: `https://preprod.cardanoscan.io/transaction/${TX}`, cardano: { submitted: { txHash: TX } } });
+    expect(s.state.sent).toEqual([Buffer.from("signed:a10081").toString("base64")]);
+    // A second signature finds it sent.
+    expect((await me("POST", `/api/v1/payments/${id}/signature`, { txHash: TX, witnessSet: "a10081" })).status).toBe(409);
+
+    // The sweep marks it confirmed once it is in a block.
+    s.state.inBlock.add(TX);
+    await s.deps.payments.sweep();
+    expect((await payment(me, id)).cardano.confirmedAt).toBeTruthy();
   });
 
-  it("declined in the wallet, or not signed in time: the payment fails and nothing is sent", async () => {
-    const s = await start(300);
+  it("refuses a wallet that does not hold the connected address, and one that holds too little", async () => {
+    const s = await start();
     const me = await s.user("owner@nordwind.example");
-    await me("POST", "/api/v1/connections", { kind: "cardano_wallet", address: WALLET, access: "read_write" });
-    const first = await adaPayment(me);
-    if (first.status === "pending_approval") await me("POST", `/api/v1/payments/${first.id}/approve`);
-    await settle(async () => (await me("GET", "/api/v1/payments")).json[0].status === "failed");
-    expect((await me("GET", "/api/v1/payments")).json[0].error).toMatch(/Not signed in time/);
-    expect(s.assembled).toEqual([]);
+    const id = await approvedAdaPayment(me);
+    const other = await me("POST", `/api/v1/payments/${id}/transaction`, funds(OTHER));
+    expect(other.status).toBe(409);
+    expect(other.json.error).toMatch(/does not hold/);
+    s.state.holds = 2_500_000n;
+    const poor = await me("POST", `/api/v1/payments/${id}/transaction`, funds());
+    expect(poor.status).toBe(400);
+    expect(poor.json.error).toMatch(/holds too little/);
+    expect((await payment(me, id)).status).toBe("awaiting_signature");
   });
 
-  it("an owner can decline the signature request", async () => {
+  it("refused by the network: nothing sent, sign again; outcome unknown: settled from the chain", async () => {
+    const s = await start();
+    const me = await s.user("owner@nordwind.example");
+    const id = await approvedAdaPayment(me);
+    await me("POST", `/api/v1/payments/${id}/transaction`, funds());
+    s.state.submitError = new Error("Blockfrost submitTx failed: 400 BadInputsUTxO");
+    s.state.definitive = true;
+    const refused = await me("POST", `/api/v1/payments/${id}/signature`, { txHash: TX, witnessSet: "a10081" });
+    expect(refused.status).toBe(422);
+    expect(await payment(me, id)).toMatchObject({ status: "awaiting_signature", error: expect.stringMatching(/nothing was sent/) });
+
+    // Built again (signing again), and this time the network does not answer.
+    await me("POST", `/api/v1/payments/${id}/transaction`, funds());
+    s.state.submitError = new Error("socket hang up");
+    s.state.definitive = false;
+    expect((await me("POST", `/api/v1/payments/${id}/signature`, { txHash: TX, witnessSet: "a10081" })).status).toBe(200);
+    expect(await payment(me, id)).toMatchObject({ status: "executing", cardano: { submitted: { txHash: TX } } });
+
+    await s.deps.payments.sweep(); // not in a block yet, not expired: left alone
+    expect((await payment(me, id)).status).toBe("executing");
+    s.state.inBlock.add(TX);
+    await s.deps.payments.sweep();
+    expect(await payment(me, id)).toMatchObject({ status: "executed", txHash: TX });
+  });
+
+  it("a sent transaction that expires unconfirmed goes back to signing: nothing was sent", async () => {
+    const s = await start();
+    const me = await s.user("owner@nordwind.example");
+    const id = await approvedAdaPayment(me);
+    await me("POST", `/api/v1/payments/${id}/transaction`, funds());
+    s.state.submitError = new Error("timeout");
+    await me("POST", `/api/v1/payments/${id}/signature`, { txHash: TX, witnessSet: "a10081" });
+    await s.deps.payments.sweep(Date.now() + 15 * 60_000);
+    expect(await payment(me, id)).toMatchObject({ status: "awaiting_signature", error: expect.stringMatching(/expired before it reached a block/) });
+  });
+
+  it("the owner can decline: rejected, nothing sent", async () => {
+    const s = await start();
+    const me = await s.user("owner@nordwind.example");
+    const id = await approvedAdaPayment(me);
+    const declined = await me("POST", `/api/v1/payments/${id}/signature`, { declined: true });
+    expect(declined.json).toMatchObject({ status: "rejected", error: expect.stringMatching(/Declined in the wallet/) });
+    expect(s.state.sent).toEqual([]);
+  });
+
+  it("a payment cut off by a restart goes back to approval, and approving it again continues it", async () => {
     const s = await start();
     const me = await s.user("owner@nordwind.example");
     await me("POST", "/api/v1/connections", { kind: "cardano_wallet", address: WALLET, access: "read_write" });
-    const draft = await adaPayment(me);
-    if (draft.status === "pending_approval") await me("POST", `/api/v1/payments/${draft.id}/approve`);
-    await settle(async () => Boolean((await me("GET", "/api/v1/payments")).json[0].signRequest));
-    expect((await me("POST", `/api/v1/payments/${draft.id}/signature`, { declined: true })).status).toBe(202);
-    await settle(async () => (await me("GET", "/api/v1/payments")).json[0].status === "failed");
-    expect((await me("GET", "/api/v1/payments")).json[0].error).toMatch(/Declined in the wallet/);
+    const payee = (await me("POST", "/api/v1/payees", { name: "Nordwind Node Services", cardanoAddress: PAYEE })).json;
+    const draft = (await me("POST", "/api/v1/payments", { payeeId: payee.id, amountMinor: 2_000_000, currency: "ADA", reason: "Node hosting" })).json;
+    // As if the container restarted right after the approval was stored.
+    const ws = (await me("GET", "/api/v1/me")).json.workspace.id;
+    expect(await s.deps.store.claimPayment(ws, draft.id, ["pending_approval"], "executing", new Date().toISOString())).toBe(true);
+    await s.deps.payments.sweep();
+    expect(await payment(me, draft.id)).toMatchObject({ status: "pending_approval", error: INTERRUPTED });
+    expect((await me("POST", `/api/v1/payments/${draft.id}/approve`)).status).toBe(200);
+    await settle(async () => (await payment(me, draft.id)).status === "awaiting_signature");
   });
 
   it("the agent wallet never pays a workspace's payout, not even an old read & write connection to it", async () => {
@@ -168,19 +242,10 @@ describe("tADA payouts leave from the workspace's own wallet, signed by its owne
     expect(catalog.find((c: { kind: string }) => c.kind === "cardano_wallet").supports.write).toBe(true);
     const ws = (await me("GET", "/api/v1/me")).json.workspace.id;
     await s.deps.store.addConnection(ws, { kind: "cardano_agent_wallet", label: "Agent wallet", network: "cardano:preprod", address: WALLET, access: "read_write" });
-    const draft = await adaPayment(me);
+    const payee = (await me("POST", "/api/v1/payees", { name: "Nordwind Node Services", cardanoAddress: PAYEE })).json;
+    const draft = (await me("POST", "/api/v1/payments", { payeeId: payee.id, amountMinor: 2_000_000, currency: "ADA", reason: "Node hosting" })).json;
     expect(draft.status).toBe("blocked");
     expect(draft.policy.checks.find((c: { id: string }) => c.id === "access").status).toBe("fail");
-
-    // A payment that got past the policy (connections changed since) still fails without the own wallet.
-    await me("POST", "/api/v1/connections", { kind: "cardano_wallet", address: WALLET, access: "read_write" });
-    const later = await adaPayment(me);
-    const own = (await me("GET", "/api/v1/connections")).json.find((c: { kind: string }) => c.kind === "cardano_wallet");
-    await me("PATCH", `/api/v1/connections/${own.id}`, { access: "read" });
-    if (later.status === "pending_approval") await me("POST", `/api/v1/payments/${later.id}/approve`);
-    await settle(async () => ["failed", "blocked"].includes((await me("GET", "/api/v1/payments")).json.find((p: { id: string }) => p.id === later.id).status));
-    const after = (await me("GET", "/api/v1/payments")).json.find((p: { id: string }) => p.id === later.id);
-    expect(after.status === "blocked" || after.error === NEEDS_OWN_WALLET).toBe(true);
-    expect(s.built).toEqual([]);
+    expect(NEEDS_OWN_WALLET).toMatch(/your own wallet/);
   });
 });

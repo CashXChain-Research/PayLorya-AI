@@ -160,20 +160,33 @@ A workspace uses its own accounts (Connections page). PayLorya AI's shared sandb
 - **tADA payouts from the workspace's own wallet (required).** They leave only from a Cardano
   wallet connected with read & write; the agent wallet never pays a workspace's payout, and an old
   read & write connection to it no longer counts (`NEEDS_OWN_WALLET`). Nothing holds the
-  customer's keys:
-  1. On approval the agent buys the verification report as before (agent wallet).
-  2. The server builds the payout from the wallet address's UTxOs, with change back to it
-     (Evolution SDK over Blockfrost, `src/cfo/wallet-signer.ts`). The transaction is valid
-     10 minutes.
-  3. The payment shows it (`signRequest`) under Approvals with "Sign with Lace". The wallet shows
-     payee, amount and fee, and signs (`signTx`, partial).
-  4. `POST /api/v1/payments/:id/signature` `{txHash, witnessSet}` hands the witnesses back; the
-     server splices them in without touching the body (`Transaction.addVKeyWitnessesHex`) and
-     the agent broadcasts as for any payout (`BuyerAgent.useCardanoSigner`).
-  5. `{declined: true}`, or no signature within 9 minutes: the payment fails and nothing is sent.
-     The wait is in memory: a restart while it waits fails the payment, also with nothing sent.
-  - Only plain lovelace transfers on Cardano Preprod; only UTxOs at the connected address are
-    spent (funds on other addresses of the same wallet are not used).
+  customer's keys, and every step is stored, so a restart (a deploy, the container waking up)
+  loses nothing:
+  1. **Check on Cardano.** On approval the agent buys the x402 verification report on Cardano
+     Preprod (agent wallet pays the fee) and routes to the verified payee. The payment then waits
+     in `awaiting_signature`, with `cardano: {from, payTo, lovelace, verification}`; the report's
+     transaction is linked on the payment.
+  2. **Built from the wallet's funds, on click.** "Sign with Lace / Eternl" opens the wallet
+     (CIP-30), which must hold the connected address, and sends its `getUtxos()` and change address
+     to `POST /api/v1/payments/:id/transaction`. The server builds a plain lovelace transfer to the
+     stored payee, change back to the wallet, valid 10 minutes (Evolution SDK, protocol parameters
+     from Blockfrost; `src/cfo/wallet-signer.ts`). Funds on any address of the wallet count. Too
+     little tADA is refused before anything is built.
+  3. **Signed in the wallet.** The wallet shows payee, amount and fee; `signTx(cbor, true)`.
+  4. **Sent.** `POST /api/v1/payments/:id/signature` `{txHash, witnessSet}`: the server splices the
+     witnesses in without touching the body (`Transaction.addVKeyWitnessesHex`), claims the payment
+     (one send per payment), records the transaction, then submits it to Blockfrost.
+     - Accepted: `executed`, with transaction and explorer link.
+     - Refused by the node (400): nothing was sent; back to `awaiting_signature`, sign again.
+     - No answer: stays `executing` with the transaction recorded; the sweep settles it.
+  5. **Followed to its block.** `Payments.sweep()` (at start and every minute) marks a sent payout
+     `confirmedAt` once Blockfrost has it in a block, and puts one that expired unconfirmed back to
+     signing (nothing was sent).
+  - `{declined: true}` (Cancel): `rejected`, nothing sent.
+- **Payments cut off by a restart** (any rail): one in `executing` that no execution in this
+  process owns goes back to `pending_approval` with a note (`INTERRUPTED`). Approving it again
+  continues it under the same idempotency key, fixed at the first attempt (`payments.payout_key`):
+  CashXChain replays the payout instead of paying twice, and a changed payee or amount is refused.
 - **Not possible today:** a "Sign in with CashXChain" popup (the CashXChain auth portal is an OAuth
   client for Google/Apple/Microsoft, not an OAuth provider), and a platform creating CashXChain
   accounts for customers (attach-only by design, see above).

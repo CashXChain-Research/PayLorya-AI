@@ -1,17 +1,15 @@
-import type { ClientCardanoSigner } from "@x402/cardano";
 import type { BuyerAgent } from "../agent.js";
 import { CashXChainPayoutRoute } from "../payout-cashxchain.js";
 import type { FiatPayoutClient } from "../payout.js";
 import { normalizeIban } from "../readiness.js";
-import type { VerifiedPayee } from "../routing.js";
+import { payoutKey, type VerifiedPayee } from "../routing.js";
 import type { Run, RunStore } from "../runs.js";
 import type { Invoice } from "../types.js";
 import type { CxcKeys } from "./cxc-keys.js";
-import { SignatureDesk } from "./signatures.js";
-import { walletSigner, type TxKit, type UnsignedTx } from "./wallet-signer.js";
+import { bech32FromHex, InsufficientFunds, TX_VALIDITY_MS, type TxKit } from "./wallet-signer.js";
 import { toUsdMinor } from "./fx.js";
 import { decidePayment, type PolicyDecision, type Rail } from "./policy.js";
-import type { Destination, Payee, Payment, Store } from "./store.js";
+import type { CardanoPayout, Destination, Payee, Payment, Store } from "./store.js";
 
 // CashXChain sandbox payout currencies (fiat rail). ADA goes over Cardano Preprod.
 const CXC_CURRENCIES = new Set(["EUR", "USD", "GBP", "CHF", "AED", "PLN", "SEK"]);
@@ -40,16 +38,27 @@ export interface PaymentEngine {
 
 export const NEEDS_OWN_WALLET = "tADA payouts leave from your own wallet: connect your Cardano wallet with read & write on the Connections page";
 
-/** How long a tADA payout waits for the owner's signature: inside the agent's 10-minute transaction validity. */
-export const SIGN_MINUTES = 9;
+export const INTERRUPTED =
+  "Interrupted by a server restart before it finished. Approve it again to continue: it pays under the same idempotency key, never twice.";
 
-/** tADA payouts from the workspace's own wallet: the transaction builder and the signatures waited for. */
+/** tADA payouts from the workspace's own wallet. */
 export interface WalletPayouts {
-  /** Absent without BLOCKFROST_PROJECT_ID: tADA payouts are then refused. */
+  /** Builds and broadcasts; absent without BLOCKFROST_PROJECT_ID, and tADA payouts are then refused. */
   kit?: TxKit;
-  desk: SignatureDesk;
-  signMs?: number;
+  /** Explorer prefix for a transaction hash (EXPLORER_TX_URL). */
+  explorerTxUrl?: string;
 }
+
+/** What the owner's wallet reports when asked to pay (CIP-30): hex, as the wallet gives it. */
+export interface WalletReport {
+  utxos: string[];
+  changeAddress: string;
+  /** getUsedAddresses(): must include the connected address. */
+  addresses: string[];
+}
+
+type Result<T> = { ok: true; value: T } | { ok: false; status: number; error: string };
+const refuse = (status: number, error: string): { ok: false; status: number; error: string } => ({ ok: false, status, error });
 
 export const NEEDS_OWN_KEY = "CashXChain payouts leave from your own account: connect CashXChain with your API key on the Connections page";
 
@@ -61,42 +70,171 @@ export class Payments {
     private readonly store: Store,
     private readonly engine: PaymentEngine,
     private readonly keys?: CxcKeys,
-    private readonly wallets: WalletPayouts = { desk: new SignatureDesk() },
+    private readonly wallets: WalletPayouts = {},
   ) {}
 
-  /**
-   * The signer for a tADA payout: the workspace's own Cardano wallet (read & write), whose owner
-   * signs the transaction in the browser. PayLorya AI's agent wallet never pays a workspace's
-   * payout; it pays the x402 verification fees only. Throws with the reason shown on the payment.
-   */
-  private async ownWalletSigner(ws: string, p: Payment): Promise<ClientCardanoSigner> {
+  // Payments executing in this process. One in "executing" that is not here was cut off by a restart.
+  private readonly running = new Set<string>();
+
+  /** The workspace's own Cardano wallet (read & write): tADA payouts leave from it and nowhere else. */
+  private async ownWallet(ws: string): Promise<string> {
     const c = (await this.store.connections(ws)).find(x => x.kind === "cardano_wallet" && x.access === "read_write" && x.address);
     if (!c?.address) throw new Error(NEEDS_OWN_WALLET);
     if (!this.wallets.kit) throw new Error("tADA payouts are not configured on this server (BLOCKFROST_PROJECT_ID)");
-    const address = c.address;
-    return walletSigner({ address, kit: this.wallets.kit, sign: tx => this.awaitSignature(ws, p, address, tx) });
+    return c.address;
   }
 
-  /** Shows the transaction on the payment and waits for the owner's wallet to sign it. */
-  private async awaitSignature(ws: string, p: Payment, address: string, tx: UnsignedTx): Promise<string> {
-    const ms = this.wallets.signMs ?? SIGN_MINUTES * 60_000;
-    await this.store.updatePayment(ws, p.id, { signRequest: { txCbor: tx.cborHex, txHash: tx.txHash, address, expiresAt: new Date(Date.now() + ms).toISOString() } });
-    await this.store.log(ws, "system", "payment awaiting signature", `${p.payeeName}: ${fmt(p.amountMinor, p.currency)}, sign it in your wallet`, { type: "payment", id: p.id });
+  /**
+   * Builds the payout for the owner's wallet to sign, from the funds the wallet reports (CIP-30):
+   * the verified payee and amount stored at approval, change back to the wallet, valid 10 minutes.
+   * Built fresh on every request, so it never spends stale UTxOs or runs out of time while waiting.
+   */
+  async prepareTransaction(ws: string, id: string, wallet: WalletReport): Promise<Result<{ txCbor: string; txHash: string; validUntil: string }>> {
+    const p = await this.store.payment(ws, id);
+    if (!p) return refuse(404, "payment not found");
+    const c = p.cardano;
+    if (p.status !== "awaiting_signature" || !c) return refuse(409, `This payment is not waiting for a signature (it is ${p.status})`);
+    const kit = this.wallets.kit;
+    if (!kit) return refuse(503, "tADA payouts are not configured on this server (BLOCKFROST_PROJECT_ID)");
+    let changeAddress: string;
+    let held: string[];
     try {
-      return await this.wallets.desk.wait(`${ws}:${p.id}`, tx.txHash, ms);
-    } finally {
-      await this.store.updatePayment(ws, p.id, { signRequest: null }).catch(() => undefined);
+      changeAddress = bech32FromHex(wallet.changeAddress);
+      held = [changeAddress, ...wallet.addresses.map(bech32FromHex)];
+    } catch {
+      return refuse(400, "The wallet reported an address this server cannot read");
     }
+    if (!held.includes(c.from)) return refuse(409, `This wallet does not hold ${c.from.slice(0, 20)}…, the wallet connected for payments. Open that wallet and sign again.`);
+    const validUntil = Date.now() + TX_VALIDITY_MS;
+    let tx;
+    try {
+      tx = await kit.build({ payTo: c.payTo, lovelace: BigInt(c.lovelace), funds: { utxos: wallet.utxos, changeAddress }, validUntil });
+    } catch (error) {
+      if (error instanceof InsufficientFunds) return refuse(400, error.message);
+      return refuse(502, `The transaction could not be built: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    const next: CardanoPayout = { ...c, tx: { cborHex: tx.cborHex, txHash: tx.txHash, validUntil: new Date(validUntil).toISOString() } };
+    await this.store.updatePayment(ws, id, { cardano: next, error: undefined });
+    return { ok: true, value: { txCbor: tx.cborHex, txHash: tx.txHash, validUntil: next.tx!.validUntil } };
   }
 
-  /** The owner's wallet signed (or declined) the payout transaction shown on the payment. */
-  async signature(ws: string, id: string, input: { txHash: string; witnessSet: string } | { declined: true }): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
-    if (!(await this.store.payment(ws, id))) return { ok: false, status: 404, error: "payment not found" };
-    const key = `${ws}:${id}`;
-    if ("declined" in input) return this.wallets.desk.decline(key) ? { ok: true } : { ok: false, status: 409, error: "This payment is not waiting for a signature" };
-    const result = this.wallets.desk.deliver(key, input.txHash, input.witnessSet);
-    if (result === "delivered") return { ok: true };
-    return { ok: false, status: 409, error: result === "other_tx" ? "That signature is for another transaction: reload the payment" : "This payment is not waiting for a signature" };
+  /**
+   * The owner's wallet signed the latest transaction: splice the witnesses in, record it, hand it to
+   * the network. Recorded before it is sent, so a restart mid-send is resolved from the chain.
+   */
+  async submitSignature(ws: string, id: string, input: { txHash: string; witnessSet: string }): Promise<Result<Payment>> {
+    const p = await this.store.payment(ws, id);
+    if (!p) return refuse(404, "payment not found");
+    const c = p.cardano;
+    const kit = this.wallets.kit;
+    if (p.status !== "awaiting_signature" || !c) return refuse(409, `This payment is not waiting for a signature (it is ${p.status})`);
+    if (!kit) return refuse(503, "tADA payouts are not configured on this server (BLOCKFROST_PROJECT_ID)");
+    if (!c.tx || c.tx.txHash !== input.txHash) return refuse(409, "That signature is for an older transaction. Sign again.");
+    if (Date.now() > Date.parse(c.tx.validUntil) - 30_000) return refuse(409, "That transaction has expired. Sign again: a fresh one is built.");
+    let signed: string;
+    try {
+      signed = kit.assemble(c.tx.cborHex, input.witnessSet);
+    } catch (error) {
+      return refuse(400, error instanceof Error ? error.message : "The wallet's signature could not be used");
+    }
+    // One send per payment: a second tab or a double click finds it already claimed.
+    if (!(await this.store.claimPayment(ws, id, ["awaiting_signature"], "executing"))) return refuse(409, "This payment is already being sent");
+    const submitted = { txHash: c.tx.txHash, at: new Date().toISOString(), validUntil: c.tx.validUntil };
+    await this.store.updatePayment(ws, id, { cardano: { ...c, submitted }, error: undefined });
+    await this.store.log(ws, "user", "signed payment", `${p.payeeName}: ${fmt(p.amountMinor, p.currency)} in their wallet`, { type: "payment", id });
+    try {
+      await kit.submit(signed);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (kit.isDefinitiveRejection(error)) {
+        // Refused before any mempool: nothing was sent, the owner can sign a fresh one.
+        await this.store.updatePayment(ws, id, { status: "awaiting_signature", cardano: { ...c, submitted: undefined }, error: `Cardano refused the transaction, nothing was sent: ${message}. Sign again.` });
+        return refuse(422, `Cardano refused the transaction, nothing was sent: ${message}`);
+      }
+      // It may have reached the network: the sweep settles it from the chain (in a block, or expired).
+      await this.store.updatePayment(ws, id, { error: "Sent; waiting for the Cardano network to confirm it." });
+      return { ok: true, value: (await this.store.payment(ws, id))! };
+    }
+    return { ok: true, value: await this.finishCardano(ws, id) };
+  }
+
+  /** The owner declined in the wallet (or on the page): nothing is sent, the payment is rejected. */
+  async declineSignature(ws: string, id: string): Promise<Result<Payment>> {
+    const p = await this.store.payment(ws, id);
+    if (!p) return refuse(404, "payment not found");
+    if (!(await this.store.claimPayment(ws, id, ["awaiting_signature"], "rejected"))) return refuse(409, `This payment is not waiting for a signature (it is ${p.status})`);
+    await this.store.updatePayment(ws, id, { error: "Declined in the wallet: nothing was sent." });
+    await this.store.log(ws, "user", "declined payment", `${p.payeeName}: ${fmt(p.amountMinor, p.currency)} in their wallet`, { type: "payment", id });
+    return { ok: true, value: (await this.store.payment(ws, id))! };
+  }
+
+  /** A sent tADA payout: executed, with its transaction and explorer link, booked as spend. */
+  private async finishCardano(ws: string, id: string, confirmedAt?: string): Promise<Payment> {
+    const p = (await this.store.payment(ws, id))!;
+    const tx = p.cardano!.submitted!.txHash;
+    const executedAt = new Date().toISOString();
+    await this.store.updatePayment(ws, id, {
+      status: "executed",
+      executedAt,
+      reference: tx,
+      txHash: tx,
+      ...(this.wallets.explorerTxUrl ? { explorerUrl: `${this.wallets.explorerTxUrl}${tx}` } : {}),
+      cardano: { ...p.cardano!, ...(confirmedAt ? { confirmedAt } : {}) },
+      error: undefined,
+    });
+    await this.booked(ws, p, executedAt);
+    await this.store.log(ws, "system", "payment executed", `${p.payeeName}: ${fmt(p.amountMinor, p.currency)} on Cardano Preprod (${tx})`, { type: "payment", id });
+    return (await this.store.payment(ws, id))!;
+  }
+
+  /** Invoices already count as spend from their issue date; only payments without one are new spend. */
+  private async booked(ws: string, p: Payment, executedAt: string): Promise<void> {
+    if (p.documentId) return;
+    await this.store.addTransaction(ws, {
+      date: executedAt.slice(0, 10),
+      description: `Payment to ${p.payeeName}: ${p.reason}`.slice(0, 200),
+      counterparty: p.payeeName,
+      category: "Transfers",
+      amountMinor: -p.amountMinor,
+      currency: p.currency,
+      usdMinor: -p.usdMinor,
+      source: "payment",
+      paymentId: p.id,
+    });
+  }
+
+  /**
+   * Settles what a restart (a deploy, the container waking up) left behind, and follows sent tADA
+   * payouts to their block. Run at start and every minute.
+   * - "executing" without a live execution here: a sent tADA payout is resolved from the chain; any
+   *   other goes back to approval (resuming pays under the same idempotency key, never twice).
+   * - executed tADA payouts not yet in a block: marked confirmed once they are.
+   */
+  async sweep(now = Date.now()): Promise<void> {
+    const kit = this.wallets.kit;
+    for (const { ws, payment: p } of await this.store.paymentsWithStatus(["executing", "executed"])) {
+      if (this.running.has(`${ws}:${p.id}`)) continue;
+      const sent = p.cardano?.submitted;
+      try {
+        if (p.status === "executing" && sent) {
+          if (!kit) continue;
+          if (await kit.confirmed(sent.txHash)) await this.finishCardano(ws, p.id, new Date(now).toISOString());
+          else if (now > Date.parse(sent.validUntil) + 120_000) {
+            await this.store.updatePayment(ws, p.id, { status: "awaiting_signature", cardano: { ...p.cardano!, submitted: undefined }, error: "The transaction expired before it reached a block: nothing was sent. Sign again." });
+            await this.store.log(ws, "system", "payment not sent", `${p.payeeName}: the transaction expired unconfirmed`, { type: "payment", id: p.id });
+          }
+        } else if (p.status === "executing") {
+          if (await this.store.claimPayment(ws, p.id, ["executing"], "pending_approval")) {
+            await this.store.updatePayment(ws, p.id, { error: INTERRUPTED });
+            await this.store.log(ws, "system", "payment interrupted", `${p.payeeName}: back to approval after a restart`, { type: "payment", id: p.id });
+          }
+        } else if (sent && !p.cardano?.confirmedAt && kit && now - Date.parse(p.executedAt ?? p.createdAt) < 24 * 3_600_000) {
+          if (await kit.confirmed(sent.txHash)) await this.store.updatePayment(ws, p.id, { cardano: { ...p.cardano!, confirmedAt: new Date(now).toISOString() } });
+        }
+      } catch (error) {
+        console.error(`payment sweep (${p.id}) failed`, error);
+      }
+    }
   }
 
   /**
@@ -224,6 +362,8 @@ export class Payments {
 
   /** Never throws: it runs detached, so every failure ends up on the payment. */
   private async execute(ws: string, id: string): Promise<void> {
+    const key = `${ws}:${id}`;
+    this.running.add(key); // synchronously, before the sweep could see the payment as cut off
     try {
       await this.executeOnce(ws, id);
     } catch (error) {
@@ -233,12 +373,15 @@ export class Payments {
       } catch {
         // database unreachable: the run store still holds the outcome
       }
+    } finally {
+      this.running.delete(key);
     }
   }
 
   /**
-   * Runs the payment through the payout engine: paid x402 verification report, route to the
-   * verified payee (this workspace's directory only), payout within the platform caps.
+   * Runs the payment through the payout engine: paid x402 verification report on Cardano, route to
+   * the verified payee (this workspace's directory only). Fiat pays out within the platform caps;
+   * tADA stops at "awaiting_signature" for the owner's wallet (prepareTransaction, submitSignature).
    */
   private async executeOnce(ws: string, id: string): Promise<void> {
     const p = (await this.store.payment(ws, id))!;
@@ -253,22 +396,40 @@ export class Payments {
     const payee = verifiedPayee({ name: saved?.name ?? p.payeeName, ...(saved ? clean(saved) : p.destination) });
     if (!hasAccount(payee, p.rail)) return fail("No account details to pay to");
     let fiat: FiatPayoutClient | undefined;
-    let wallet: ClientCardanoSigner | undefined;
+    let from: string | undefined;
     try {
       if (p.rail === "cashxchain") fiat = await this.ownFiatRoute(ws);
-      if (p.rail === "cardano_preprod") wallet = await this.ownWalletSigner(ws, p);
+      if (p.rail === "cardano_preprod") from = await this.ownWallet(ws);
     } catch (error) {
       return fail(error instanceof Error ? error.message : String(error));
     }
 
-    const run = this.engine.runs.create(JSON.stringify(invoiceFor(p, payee, saved?.country ?? p.destination?.country)));
+    const invoice = invoiceFor(p, payee, saved?.country ?? p.destination?.country);
+    // The idempotency key of the first attempt holds: a resumed payment must pay the very same.
+    const key = payoutKey(payee, invoice);
+    if (p.payoutKey && p.payoutKey !== key) {
+      return fail("The payee or amount changed since an earlier attempt of this payment. Check your account for that attempt before paying again.");
+    }
+    const run = this.engine.runs.create(JSON.stringify(invoice));
     run.payees = [payee];
     if (fiat) agent.useFiatRoute(run, fiat);
-    if (wallet) agent.useCardanoSigner(run, wallet);
-    await this.store.updatePayment(ws, id, { runId: run.id });
+    await this.store.updatePayment(ws, id, { runId: run.id, payoutKey: key });
     try {
       await agent.process(run);
       if (run.state !== "DRAFT_READY" || !run.draft?.executable) return fail(reasonOf(run));
+      if (from) {
+        const route = run.draft.route;
+        if (route.rail !== "cardano_preprod" || !route.destination) return fail("No Cardano route to the payee");
+        const cardano: CardanoPayout = {
+          from,
+          payTo: route.destination,
+          lovelace: String(p.amountMinor),
+          ...(run.payment ? { verification: { txHash: run.payment.transactionHash, explorerUrl: run.payment.explorerUrl, ...(run.report?.verdict ? { verdict: run.report.verdict } : {}) } } : {}),
+        };
+        await this.store.updatePayment(ws, id, { status: "awaiting_signature", cardano, error: undefined });
+        await this.store.log(ws, "system", "payment awaiting signature", `${p.payeeName}: ${fmt(p.amountMinor, p.currency)} verified on Cardano; sign it in your wallet`, { type: "payment", id });
+        return;
+      }
       const approved = agent.approve(run);
       if (!approved.ok) return fail(approved.reason);
       await approved.done;
@@ -290,20 +451,7 @@ export class Payments {
       ...(payout.explorerUrl ? { explorerUrl: payout.explorerUrl } : {}),
       ...(payout.simulated ? { error: payout.label } : {}),
     });
-    // Invoices already count as spend from their issue date; only payments without one are new spend.
-    if (!p.documentId) {
-      await this.store.addTransaction(ws, {
-        date: payout.executedAt.slice(0, 10),
-        description: `Payment to ${p.payeeName}: ${p.reason}`.slice(0, 200),
-        counterparty: p.payeeName,
-        category: "Transfers",
-        amountMinor: -p.amountMinor,
-        currency: p.currency,
-        usdMinor: -p.usdMinor,
-        source: "payment",
-        paymentId: id,
-      });
-    }
+    await this.booked(ws, p, payout.executedAt);
     await this.store.log(ws, "system", "payment executed", `${p.payeeName}: ${fmt(p.amountMinor, p.currency)}${payout.reference ? ` (${payout.reference})` : ""}`, {
       type: "payment",
       id,

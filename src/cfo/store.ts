@@ -8,7 +8,8 @@ import type { Files, Sql, SqlRow, SqlValue } from "./sql.js";
 export type ConnectionKind = "cardano_agent_wallet" | "cardano_wallet" | "evm_wallet" | "cashxchain" | "bank";
 export type Access = "read" | "read_write";
 export type DocumentKind = "invoice" | "receipt" | "bank_statement" | "contract" | "payroll" | "tax" | "other";
-export type PaymentStatus = "pending_approval" | "approved" | "executing" | "executed" | "rejected" | "failed" | "blocked";
+/** awaiting_signature: a tADA payout that passed its checks and waits for the owner's wallet. */
+export type PaymentStatus = "pending_approval" | "approved" | "executing" | "awaiting_signature" | "executed" | "rejected" | "failed" | "blocked";
 
 export interface Workspace {
   id: string;
@@ -123,17 +124,29 @@ export interface Payment {
   createdAt: string;
   decidedAt?: string;
   executedAt?: string;
-  /** Set while a tADA payout waits for the owner's wallet signature (CIP-30 signTx). */
-  signRequest?: SignRequest;
+  /** A tADA payout from the workspace's own wallet: its verification, transaction and confirmation. */
+  cardano?: CardanoPayout;
+  /** The payout's idempotency key, fixed at the first attempt: a resumed payment must pay the same. */
+  payoutKey?: string;
 }
 
-/** The unsigned payout transaction the owner's wallet signs, and until when. */
-export interface SignRequest {
-  txCbor: string;
-  txHash: string;
-  /** The wallet address it spends from: the workspace's connected wallet. */
-  address: string;
-  expiresAt: string;
+/**
+ * A tADA payout from the workspace's own wallet. Stored, never only in memory: a restart while the
+ * owner signs, or while the network takes the transaction, loses nothing.
+ */
+export interface CardanoPayout {
+  /** The wallet it leaves from: the workspace's read & write Cardano connection. */
+  from: string;
+  /** The verified payee address. */
+  payTo: string;
+  lovelace: string;
+  /** The x402 verification report the agent bought on Cardano before the payout. */
+  verification?: { txHash: string; explorerUrl: string; verdict?: string };
+  /** The latest transaction built for the owner's wallet to sign. */
+  tx?: { cborHex: string; txHash: string; validUntil: string };
+  /** Handed to the network; followed on chain until it is in a block or has expired. */
+  submitted?: { txHash: string; at: string; validUntil: string };
+  confirmedAt?: string;
 }
 
 export interface Activity {
@@ -524,6 +537,12 @@ export class Store {
     return (await this.payment(ws, id))!;
   }
 
+  /** Payments in these states across all workspaces: what the sweep after a restart looks at. */
+  async paymentsWithStatus(statuses: PaymentStatus[]): Promise<Array<{ ws: string; payment: Payment }>> {
+    const rows = await this.all(`SELECT * FROM payments WHERE status IN (${statuses.map(() => "?").join(", ")})`, ...statuses);
+    return rows.map(r => ({ ws: String(r.workspace_id), payment: toPayment(r) }));
+  }
+
   async payments(ws: string): Promise<Payment[]> {
     return (await this.all("SELECT * FROM payments WHERE workspace_id = ? ORDER BY created_at DESC", ws)).map(toPayment);
   }
@@ -537,13 +556,14 @@ export class Store {
     ws: string,
     id: string,
     patch: Partial<Pick<Payment, "status" | "policy" | "runId" | "txHash" | "explorerUrl" | "reference" | "error" | "decidedAt" | "executedAt">> & {
-      signRequest?: SignRequest | null;
+      cardano?: CardanoPayout | null;
+      payoutKey?: string;
     },
   ): Promise<Payment> {
     const p = (await this.payment(ws, id))!;
     const next = { ...p, ...patch };
     await this.run(
-      `UPDATE payments SET status = ?, policy_json = ?, run_id = ?, tx_hash = ?, explorer_url = ?, reference = ?, error = ?, decided_at = ?, executed_at = ?, sign_request_json = ?
+      `UPDATE payments SET status = ?, policy_json = ?, run_id = ?, tx_hash = ?, explorer_url = ?, reference = ?, error = ?, decided_at = ?, executed_at = ?, sign_request_json = ?, payout_key = ?
        WHERE workspace_id = ? AND id = ?`,
       next.status,
       JSON.stringify(next.policy),
@@ -554,7 +574,8 @@ export class Store {
       next.error ?? null,
       next.decidedAt ?? null,
       next.executedAt ?? null,
-      next.signRequest ? JSON.stringify(next.signRequest) : null,
+      next.cardano ? JSON.stringify(next.cardano) : null,
+      next.payoutKey ?? null,
       ws,
       id,
     );
@@ -581,7 +602,7 @@ export class Store {
   /** USD cents of payments the agent executed on its own (no human decision) since `since`. */
   async agentExecutedSince(ws: string, since: string): Promise<number> {
     const row = await this.get(
-      "SELECT COALESCE(SUM(usd_minor), 0) AS total FROM payments WHERE workspace_id = ? AND requested_by = 'agent' AND decided_at IS NULL AND status IN ('executing', 'executed') AND created_at >= ?",
+      "SELECT COALESCE(SUM(usd_minor), 0) AS total FROM payments WHERE workspace_id = ? AND requested_by = 'agent' AND decided_at IS NULL AND status IN ('executing', 'awaiting_signature', 'executed') AND created_at >= ?",
       ws,
       since,
     );
@@ -802,6 +823,7 @@ function toPayment(r: Row): Payment {
     createdAt: String(r.created_at),
     decidedAt: opt(r.decided_at as string | null),
     executedAt: opt(r.executed_at as string | null),
-    ...(r.sign_request_json ? { signRequest: json<SignRequest>(r.sign_request_json, { txCbor: "", txHash: "", address: "", expiresAt: "" }) } : {}),
+    ...(r.sign_request_json ? { cardano: json<CardanoPayout>(r.sign_request_json, { from: "", payTo: "", lovelace: "0" }) } : {}),
+    ...(r.payout_key ? { payoutKey: String(r.payout_key) } : {}),
   };
 }

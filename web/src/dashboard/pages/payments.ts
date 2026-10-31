@@ -3,7 +3,7 @@ import { esc, short, shortHash } from "../../shared/dom.js";
 import { ApiError, get, post } from "../api.js";
 import { type Ctx, refreshBadges } from "../state.js";
 import type { Payee, PayeeInput, Payment, PaymentCreate } from "../types.js";
-import { cardanoWallets, signCardano } from "../wallets.js";
+import { cardanoWallets, openCardanoPayer } from "../wallets.js";
 import {
   amount,
   avatar,
@@ -80,10 +80,9 @@ const signing = new Set<string>();
 
 /** "Sign with Lace" (one per wallet in this browser) and Cancel, while a tADA payout waits. */
 function signButtons(p: Payment): string {
-  const r = p.signRequest!;
   const busy = signing.has(p.id);
   const wallets = cardanoWallets();
-  const data = `data-pid="${esc(p.id)}" data-tx="${esc(r.txHash)}" data-cbor="${esc(r.txCbor)}" data-addr="${esc(r.address)}"`;
+  const data = `data-pid="${esc(p.id)}" data-from="${esc(p.cardano?.from ?? "")}"`;
   const sign = wallets.length
     ? wallets
         .map(w => `<button type="button" class="btn primary xs${busy ? " loading" : ""}" data-act="sign" data-wallet="${esc(w.id)}" ${data} ${busy ? "disabled" : ""}>${icon("wallet", 14)}Sign with ${esc(w.name)}</button>`)
@@ -93,14 +92,28 @@ function signButtons(p: Payment): string {
 }
 
 /** A payment that waits for its owner: an approval, or a wallet signature. */
-export const needsYou = (p: Payment): boolean => p.status === "pending_approval" || (p.status === "executing" && Boolean(p.signRequest));
+export const needsYou = (p: Payment): boolean => p.status === "pending_approval" || p.status === "awaiting_signature";
 
 export const decisionButtons = (p: Payment): string =>
   p.status === "pending_approval"
     ? `<span class="decide"><button type="button" class="btn ghost xs" data-act="reject" data-pid="${esc(p.id)}">Reject</button><button type="button" class="btn primary xs" data-act="approve" data-pid="${esc(p.id)}">${icon("check", 14, 2.6)}Approve</button></span>`
-    : p.status === "executing" && p.signRequest
+    : p.status === "awaiting_signature"
       ? signButtons(p)
       : "";
+
+const txLink = (hash: string, url?: string) =>
+  url ? `<a class="mono" href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(shortHash(hash))} ${icon("external", 12)}</a>` : `<span class="mono">${esc(shortHash(hash))}</span>`;
+
+/** Where a tADA payout stands on Cardano: verified, waiting for your wallet, sent, in a block. */
+function cardanoNote(p: Payment): string {
+  const c = p.cardano;
+  if (!c) return "";
+  if (p.status === "awaiting_signature") {
+    return `<div class="callout info">${icon("wallet", 15)}<span>Checked and ready. Sign it in your wallet: the transaction is built from your wallet's funds when you click, and your wallet shows payee, amount and fee before you confirm. Nothing is sent without your signature.</span></div>`;
+  }
+  if (p.status === "executing" && c.submitted) return `<div class="callout info">${icon("clock", 15)}<span>Sent to Cardano Preprod; waiting for it to reach a block.</span></div>`;
+  return "";
+}
 
 export function paymentRow(p: Payment, open = false): string {
   const isAda = p.currency === "ADA";
@@ -111,14 +124,14 @@ export function paymentRow(p: Payment, open = false): string {
       <div class="pay-rail">${railChip(p.rail)}</div>
       <div class="pay-by"><span class="by by-${p.requestedBy}">${icon(p.requestedBy === "agent" ? "bot" : "user", 13, 2)}${p.requestedBy === "agent" ? "Agent" : "You"}</span><em>${esc(date(p.createdAt))}</em></div>
       <div class="pay-amt"><b>${esc(amount(p.amountMinor, p.currency))}</b>${isAda || p.currency !== "USD" ? `<span>≈ ${esc(usd(p.usdMinor))}</span>` : ""}</div>
-      <div class="pay-status">${p.signRequest ? `<span class="pill t-warn">${icon("wallet", 12)}Sign in wallet</span>` : statusPill(p.status)}${checkSummary(p)}</div>
+      <div class="pay-status">${statusPill(p.status)}${checkSummary(p)}</div>
       <div class="pay-act">${decisionButtons(p)}<span class="chev">${icon("chevronDown", 16)}</span></div>
     </div>
     <div class="pay-detail"><div class="pay-detail-in">
       <div class="pd-col">
         <div class="pd-h">Policy checks <span class="pill ${DECISION[p.policy.decision][1]}">${DECISION[p.policy.decision][0]}</span></div>
         ${checksList(p)}
-        ${p.signRequest ? `<div class="callout info">${icon("wallet", 15)}<span>Waiting for your signature until ${esc(dateTime(p.signRequest.expiresAt))}. Your wallet shows payee, amount and fee before you confirm; nothing is sent without it.</span></div>` : ""}
+        ${cardanoNote(p)}
         ${p.error ? `<div class="callout bad">${icon("alert", 15)}<span>${esc(p.error)}</span></div>` : ""}
       </div>
       <dl class="pd-col kv">
@@ -126,8 +139,10 @@ export function paymentRow(p: Payment, open = false): string {
         <dt>Rail</dt><dd>${railChip(p.rail)}</dd>
         <dt>Pays to</dt><dd>${p.payeeId ? "Saved payee account" : destinationText(p)}</dd>
         <dt>Requested by</dt><dd>${p.requestedBy === "agent" ? "AI CFO agent" : "You"}${p.runId ? ` <span class="mono muted">${esc(p.runId)}</span>` : ""}</dd>
-        ${p.reference ? `<dt>Reference</dt><dd class="mono">${esc(p.reference)}</dd>` : ""}
-        ${p.txHash ? `<dt>Transaction</dt><dd>${p.explorerUrl ? `<a class="mono" href="${esc(p.explorerUrl)}" target="_blank" rel="noopener noreferrer">${esc(shortHash(p.txHash))} ${icon("external", 12)}</a>` : `<span class="mono">${esc(shortHash(p.txHash))}</span>`}</dd>` : ""}
+        ${p.cardano ? `<dt>From</dt><dd><span class="mono" title="${esc(p.cardano.from)}">${esc(short(p.cardano.from))}</span> <span class="muted small">your wallet</span></dd>` : ""}
+        ${p.cardano?.verification ? `<dt>Verified</dt><dd>x402 report paid on Cardano ${txLink(p.cardano.verification.txHash, p.cardano.verification.explorerUrl)}</dd>` : ""}
+        ${p.reference && !p.txHash ? `<dt>Reference</dt><dd class="mono">${esc(p.reference)}</dd>` : ""}
+        ${p.txHash ? `<dt>Transaction</dt><dd>${txLink(p.txHash, p.explorerUrl)}${p.cardano ? (p.cardano.confirmedAt ? ' <span class="pill t-ok">in a block</span>' : ' <span class="pill t-neutral">waiting for a block</span>') : ""}</dd>` : ""}
         ${p.documentId ? `<dt>Document</dt><dd><a href="/app/documents/${esc(p.documentId)}">Open source document</a></dd>` : ""}
         <dt>Created</dt><dd>${esc(dateTime(p.createdAt))}</dd>
         ${p.decidedAt ? `<dt>Decided</dt><dd>${esc(dateTime(p.decidedAt))}</dd>` : ""}
@@ -150,12 +165,18 @@ export function wirePaymentList(root: HTMLElement, onChange: (p: Payment) => voi
       act.classList.add("loading");
       signing.add(id);
       try {
-        const body =
-          act.dataset.act === "sign"
-            ? { txHash: act.dataset.tx!, witnessSet: await signCardano(act.dataset.wallet!, { txCbor: act.dataset.cbor!, address: act.dataset.addr! }) }
-            : { declined: true };
-        await post(`/api/v1/payments/${encodeURIComponent(id)}/signature`, body);
-        toast(act.dataset.act === "sign" ? "Signed. Sending the payment…" : "Payment cancelled: nothing was sent", "ok");
+        const path = `/api/v1/payments/${encodeURIComponent(id)}`;
+        if (act.dataset.act === "sign") {
+          // Funds from the wallet → transaction built by the server → signed in the wallet → sent.
+          const payer = await openCardanoPayer(act.dataset.wallet!, act.dataset.from!);
+          const tx = await post<{ txCbor: string; txHash: string }>(`${path}/transaction`, payer.funds);
+          const witnessSet = await payer.sign(tx.txCbor);
+          const sent = await post<Payment>(`${path}/signature`, { txHash: tx.txHash, witnessSet });
+          toast(sent.status === "executed" ? `Sent to ${sent.payeeName} on Cardano Preprod` : "Signed. Waiting for the network to confirm…", "ok");
+        } else {
+          await post(`${path}/signature`, { declined: true });
+          toast("Payment cancelled: nothing was sent", "ok");
+        }
       } catch (error) {
         // API errors are toasted by the API layer; wallet errors are not.
         if (error instanceof Error && !(error instanceof ApiError)) toast(error.message, "error");
@@ -330,7 +351,7 @@ export async function renderPayments(view: HTMLElement, ctx: Ctx): Promise<void>
     view.querySelector("#n-all")!.textContent = String(payments.length);
     const groups: Record<string, Payment["status"][]> = {
       done: ["executed"],
-      live: ["pending_approval", "approved", "executing"],
+      live: ["pending_approval", "approved", "executing", "awaiting_signature"],
       stopped: ["rejected", "failed", "blocked"],
     };
     const rows = tab === "approvals" ? pending : filter === "any" ? payments : payments.filter(p => groups[filter]!.includes(p.status));
@@ -357,7 +378,9 @@ export async function renderPayments(view: HTMLElement, ctx: Ctx): Promise<void>
     if (!ctx.alive()) return;
     payments.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     paint();
-    if (payments.some(p => p.status === "executing" || p.status === "approved")) {
+    // Running, or a tADA payout sent in the last 15 minutes that has not reached a block yet.
+    const settling = (p: Payment) => p.status === "executed" && p.cardano?.submitted && !p.cardano.confirmedAt && Date.now() - Date.parse(p.cardano.submitted.at) < 15 * 60_000;
+    if (payments.some(p => p.status === "executing" || p.status === "approved" || settling(p))) {
       const t = window.setTimeout(() => void load().catch(() => undefined), 2500);
       ctx.onCleanup(() => window.clearTimeout(t));
     }

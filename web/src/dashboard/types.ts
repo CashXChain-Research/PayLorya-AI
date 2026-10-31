@@ -164,16 +164,20 @@ export interface BudgetInput {
   limitUsdMinor: number;
 }
 
-/** A tADA payout waiting for the owner's wallet signature (CIP-30 signTx). */
-export interface SignRequest {
-  txCbor: string;
-  txHash: string;
-  /** The connected wallet address it spends from. */
-  address: string;
-  expiresAt: string;
+/** A tADA payout from your own wallet: its Cardano verification, transaction and confirmation. */
+export interface CardanoPayout {
+  /** Your connected wallet it leaves from. */
+  from: string;
+  payTo: string;
+  lovelace: string;
+  /** The x402 verification report the agent paid for on Cardano before the payout. */
+  verification?: { txHash: string; explorerUrl: string; verdict?: string };
+  tx?: { cborHex: string; txHash: string; validUntil: string };
+  submitted?: { txHash: string; at: string; validUntil: string };
+  confirmedAt?: string;
 }
 
-export type PaymentStatus = "pending_approval" | "approved" | "executing" | "executed" | "rejected" | "failed" | "blocked";
+export type PaymentStatus = "pending_approval" | "approved" | "executing" | "awaiting_signature" | "executed" | "rejected" | "failed" | "blocked";
 export type Rail = "cardano_preprod" | "cashxchain" | "manual";
 
 export interface PolicyCheck {
@@ -206,8 +210,8 @@ export interface Payment {
   createdAt: string;
   decidedAt?: string;
   executedAt?: string;
-  /** Set while a tADA payout waits for your wallet's signature. */
-  signRequest?: SignRequest;
+  /** tADA payouts from your own wallet. */
+  cardano?: CardanoPayout;
 }
 
 /** POST /api/v1/payments (user-drafted). Agent drafts arrive through the chat. */
