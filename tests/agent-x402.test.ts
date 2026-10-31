@@ -18,7 +18,8 @@ import {
   type FiatPayoutRequest,
   type TxOutput,
 } from "../src/payout.js";
-import { CRYPTO_PAYEE, payoutKey } from "../src/routing.js";
+import { CRYPTO_PAYEE, findPayee, payeeDirectory, payoutKey } from "../src/routing.js";
+import { PayoutUnknownError } from "../src/payout-cashxchain.js";
 import { CARDANO_NETWORK, loadConfig } from "../src/config.js";
 import { RunStore, type Run } from "../src/runs.js";
 import { mountSeller, READINESS_PATH } from "../src/seller.js";
@@ -57,7 +58,7 @@ const adaInvoice: Invoice = {
 };
 
 type Env = Record<string, string>;
-type Reply = (res: Response, call: number) => void;
+type Reply = (res: Response, call: number, body?: FacilitatorRequest) => void;
 interface FacilitatorRequest {
   x402Version: number;
   paymentPayload: PaymentPayload;
@@ -173,7 +174,15 @@ function decodableTx(ttlSlot?: number): string {
 }
 
 const verifyOk: Reply = res => void res.json({ isValid: true, payer: BUYER });
-const settleOk: Reply = res => void res.json({ success: true, transaction: TX, network: CARDANO_NETWORK, payer: BUYER });
+/** Like the real facilitator, settle reports the hash of the tx it was given; stub bytes that don't decode get TX. */
+function settledHash(body?: FacilitatorRequest): string {
+  try {
+    return decodeCardanoTransaction(String(body?.paymentPayload.payload.transaction)).txHash;
+  } catch {
+    return TX;
+  }
+}
+const settleOk: Reply = (res, _call, body) => void res.json({ success: true, transaction: settledHash(body), network: CARDANO_NETWORK, payer: BUYER });
 const settleFailed = (errorReason: string, status = 200): Reply => res =>
   void res.status(status).json({ success: false, errorReason, transaction: TX, network: CARDANO_NETWORK, payer: BUYER });
 // Shape from @x402/cardano README "Settlement and settlement_pending".
@@ -216,12 +225,12 @@ async function startFacilitator(events: string[]) {
   app.post("/verify", (req, res) => {
     events.push("verify");
     fac.verifyCalls.push(req.body);
-    fac.verify(res, fac.verifyCalls.length);
+    fac.verify(res, fac.verifyCalls.length, req.body);
   });
   app.post("/settle", (req, res) => {
     events.push("settle");
     fac.settleCalls.push(req.body);
-    fac.settle(res, fac.settleCalls.length);
+    fac.settle(res, fac.settleCalls.length, req.body);
   });
   const { server, url } = await listen(app);
   fac.url = url;
@@ -242,13 +251,15 @@ const env = (facilitatorUrl: string, overrides: Env = {}): Env => ({
 });
 
 /** Replaces the seller's report on its way out; `send` is the original res.json. */
-type Tamper = (res: Response, send: (body: unknown) => Response) => Response;
+type Tamper = (res: Response, send: (body: unknown) => Response, report: ReadinessReport) => Response;
 
 async function startStack(
   opts: {
     seller?: Env;
     buyer?: Env;
     tamperReport?: Tamper;
+    /** Settle succeeds, then the connection to the buyer drops: the paid response never arrives. */
+    loseSettledResponse?: boolean;
     chain?: ChainView;
     walletSync?: PayoutRails["walletSync"];
     reconcile?: PayoutRails["reconcile"];
@@ -263,12 +274,16 @@ async function startStack(
   app.use(express.json());
   // Probe: the readiness handler calls res.json itself; the x402 middleware buffers what it writes.
   app.use((_req, res, next) => {
+    if (opts.loseSettledResponse) {
+      const end = res.end.bind(res);
+      res.end = ((...args: Parameters<typeof end>) => (res.getHeader("payment-response") ? (res.socket?.destroy(), res) : end(...args))) as typeof res.end;
+    }
     const json = res.json.bind(res);
     res.json = (body?: unknown) => {
       if ((body as ReadinessReport | undefined)?.verdict) {
         events.push("handler");
         handled.push(body as ReadinessReport);
-        if (opts.tamperReport) return opts.tamperReport(res, json);
+        if (opts.tamperReport) return opts.tamperReport(res, json, body as ReadinessReport);
       }
       return json(body);
     };
@@ -564,6 +579,33 @@ describe("buyer agent over real x402 (stub signer + stub facilitator)", () => {
     expect(s.signer.calls).toHaveLength(1);
   });
 
+  it("paid but the report is for a different invoice -> FAILED, payment kept, invoice locked", async () => {
+    const s = await startStack({ tamperReport: (_res, send, report) => send({ ...report, invoiceFingerprint: "f".repeat(64) }) });
+    const run = await s.run();
+
+    expect(states(run)).toEqual(["CREATED", "EXTRACTED", "PRECHECKED", "PAYING", "PAID", "FAILED"]);
+    expect(run.error).toBe(`paid (tx ${TX}), but the report is for a different invoice; the invoice stays locked as paid`);
+    expect(run.report).toBeUndefined();
+    expect(run.draft).toBeUndefined();
+    expect(s.agent.spentLovelace).toBe(PRICE);
+    expect((await s.run()).error).toContain("already paid");
+  });
+
+  it("settle success for a tx other than the one we signed -> SETTLEMENT_UNKNOWN on our tx, no proof", async () => {
+    const s = await startStack();
+    s.signer.transaction = decodableTx();
+    s.fac.settle = res => void res.json({ success: true, transaction: TX, network: CARDANO_NETWORK, payer: BUYER });
+    const run = await s.run();
+
+    const signed = decodeCardanoTransaction(s.signer.transaction).txHash;
+    expect(run.state).toBe("SETTLEMENT_UNKNOWN");
+    expect(run.error).toBe(`settle reported tx ${TX}, but the signed tx is ${signed}`);
+    expect(run.settlement?.transactionHash).toBe(signed);
+    expect(run.payment).toBeUndefined();
+    expect(run.report).toBeUndefined();
+    expect(s.agent.spentLovelace).toBe(PRICE);
+  });
+
   it("two concurrent runs for the same invoice sign only once", async () => {
     const s = await startStack();
     const [a, b] = await Promise.all([s.run(), s.run()]);
@@ -782,8 +824,22 @@ describe("invoice payout after human approval", () => {
 
     expect(run.state).toBe("PAYOUT_UNKNOWN");
     expect(run.payout).toMatchObject({ rail: "cxc_fiat", status: "unknown" });
+    expect(run.payout?.reference).toBeUndefined();
+    expect(run.payout?.label).toBe(`Payout outcome unknown: reconcile with CashXChain (Idempotency-Key ${fiat.calls[0]?.idempotencyKey}) before paying again`);
     expect(s.agent.approve(run)).toMatchObject({ ok: false });
     expect(fiat.calls).toHaveLength(1);
+  });
+
+  it("fiat: an unknown outcome on a payout CashXChain already created keeps its id for reconciliation", async () => {
+    const fiat = stubFiat();
+    const s = await startStack({ fiat });
+    const run = await s.run();
+    fiat.fail = new PayoutUnknownError("network error while polling", "po_8Kq2");
+    await approve(s.agent, run);
+
+    expect(run.state).toBe("PAYOUT_UNKNOWN");
+    expect(run.payout).toMatchObject({ status: "unknown", reference: "po_8Kq2" });
+    expect(run.payout?.label).toContain(`Idempotency-Key payout-${payoutKey(findPayee(payeeDirectory(SUPPLIER_WALLET), invoice.supplier)!, invoice)}`);
   });
 
   it("crypto: node refuses the payout before broadcast -> back to DRAFT_READY, nothing counted, approve again pays", async () => {
@@ -918,6 +974,40 @@ describe("wallet sync between transactions from the buyer wallet", () => {
     expect(s.signer.calls).toHaveLength(2);
   });
 
+  const maybeBroadcast: Array<{ name: string; settle: Reply }> = [
+    { name: "settle times out at the gateway (A7: 504, empty tx hash)", settle: res => void res.status(504).send("<html>504 Gateway Time-out</html>") },
+    { name: "the settle response is lost", settle: res => void res.socket?.destroy() },
+    { name: "settle reports success without a tx hash", settle: res => void res.json({ success: true, transaction: "", network: CARDANO_NETWORK, payer: BUYER }) },
+  ];
+
+  it.each(maybeBroadcast)("$name: the tx may have landed, so the next payment waits for the one we signed", async ({ settle }) => {
+    const seen: string[] = [];
+    const s = await startStack({ chain: { hasTransaction: async hash => (seen.push(hash), true) } });
+    s.signer.transaction = decodableTx();
+    const signed = decodeCardanoTransaction(s.signer.transaction).txHash;
+    s.fac.settle = settle;
+    expect((await s.run()).state).toBe("SETTLEMENT_UNKNOWN");
+    expect(seen).toEqual([]);
+
+    s.fac.settle = settleOk;
+    expect((await s.run(second)).state).toBe("DRAFT_READY");
+    expect(seen[0]).toBe(signed);
+  });
+
+  it("settled, but the response to the buyer is lost: the next payment waits for the tx we signed", async () => {
+    const seen: string[] = [];
+    const s = await startStack({ loseSettledResponse: true, chain: { hasTransaction: async hash => (seen.push(hash), true) } });
+    s.signer.transaction = decodableTx();
+    const signed = decodeCardanoTransaction(s.signer.transaction).txHash;
+    const run = await s.run();
+    expect(run.state).toBe("SETTLEMENT_UNKNOWN");
+    expect(s.fac.settleCalls).toHaveLength(1);
+    expect(seen).toEqual([]);
+
+    expect((await s.run(second)).state).toBe("SETTLEMENT_UNKNOWN"); // still losing responses; it waited first
+    expect(seen[0]).toBe(signed);
+  });
+
   it("a verify rejection was never broadcast, so it is not waited for", async () => {
     let lookups = 0;
     const s = await startStack({ chain: { hasTransaction: async () => (lookups++, true) }, walletSync: { graceMs: 10_000 } });
@@ -961,11 +1051,11 @@ describe("seller x402 contract (direct x402 client)", () => {
     const client = new x402Client().setSpendControls({ allowedAssets: [{ network: CARDANO_NETWORK, asset: "lovelace" }] });
     client.register("cardano:*", new ExactCardanoScheme(signer));
     const fetchWithPayment = wrapFetchWithPayment(fetch, client);
-    return (idempotencyKey: string) =>
+    return (idempotencyKey: string, body: Invoice = invoice) =>
       fetchWithPayment(`${url}${READINESS_PATH}`, {
         method: "POST",
         headers: { "content-type": "application/json", "idempotency-key": idempotencyKey },
-        body: JSON.stringify({ invoice }),
+        body: JSON.stringify({ invoice: body }),
       });
   };
 
@@ -996,6 +1086,17 @@ describe("seller x402 contract (direct x402 client)", () => {
     expect(other.verdict).toBe("blocked");
     expect(duplicateCheck(other)).toBe("fail");
     expect(s.signer.calls).toHaveLength(3);
+  });
+
+  it("a key already used for another invoice gets 409 and is never settled", async () => {
+    const s = await startStack();
+    const pay = payDirect(s.sellerUrl, s.signer);
+    expect((await pay("key-1")).status).toBe(200);
+
+    const clash = await pay("key-1", { ...invoice, id: "INV-2026-9999", amountMinor: 1_000 });
+    expect(clash.status).toBe(409);
+    expect(await clash.json()).toEqual({ error: "Idempotency-Key already used for a different invoice" });
+    expect(s.fac.settleCalls).toHaveLength(1);
   });
 });
 

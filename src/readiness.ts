@@ -82,6 +82,12 @@ export class ReadinessLedger {
   }
 }
 
+export class IdempotencyConflictError extends Error {
+  constructor() {
+    super("Idempotency-Key already used for a different invoice");
+  }
+}
+
 export interface ReadinessOptions {
   amountCeilingMinor: number;
 }
@@ -92,10 +98,14 @@ export function buildReadinessReport(
   ledger: ReadinessLedger,
   opts: ReadinessOptions,
 ): ReadinessReport {
-  const cached = ledger.cached(idempotencyKey);
-  if (cached) return cached;
-
   const fingerprint = invoiceFingerprint(invoice);
+  const cached = ledger.cached(idempotencyKey);
+  if (cached) {
+    // A key reused for another invoice must not hand out that invoice's report (no settle on 409).
+    if (cached.invoiceFingerprint !== fingerprint) throw new IdempotencyConflictError();
+    return cached;
+  }
+
   const checks: ReadinessCheck[] = [];
   const corridor = findCorridor(invoice.destinationCountry, invoice.currency);
 

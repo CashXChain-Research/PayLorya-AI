@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parseAmountMinor, toInvoice } from "../src/extract.js";
-import { buildReadinessReport, ReadinessLedger, validateAbaRouting, validateBic, validateIban } from "../src/readiness.js";
+import { buildReadinessReport, IdempotencyConflictError, ReadinessLedger, validateAbaRouting, validateBic, validateIban } from "../src/readiness.js";
 import type { Invoice } from "../src/types.js";
 
 const opts = { amountCeilingMinor: 5_000_000 };
@@ -43,6 +43,12 @@ describe("readiness report", () => {
     const a = buildReadinessReport(sepa, "k1", ledger, opts);
     const b = buildReadinessReport(sepa, "k1", ledger, opts);
     expect(b).toBe(a);
+  });
+
+  it("refuses a key already used for a different invoice instead of returning its report", () => {
+    const ledger = new ReadinessLedger();
+    buildReadinessReport(sepa, "k1", ledger, opts);
+    expect(() => buildReadinessReport({ ...sepa, amountMinor: sepa.amountMinor + 1 }, "k1", ledger, opts)).toThrow(IdempotencyConflictError);
   });
 
   it("blocks a duplicate under a different key", () => {

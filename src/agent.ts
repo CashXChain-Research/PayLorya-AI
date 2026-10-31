@@ -3,6 +3,7 @@ import { ExactCardanoScheme } from "@x402/cardano/exact/client";
 import { wrapFetchWithPayment, x402Client, x402HTTPClient } from "@x402/fetch";
 import { blockfrostProvider, CARDANO_NETWORK, type Config } from "./config.js";
 import { extractInvoice } from "./extract.js";
+import { PayoutUnknownError } from "./payout-cashxchain.js";
 import { blockfrostChainView, blockfrostSubmitter, simulatedCxcPayouts, type ChainSubmitter, type ChainView, type FiatPayoutClient, type TxOutput } from "./payout.js";
 import { filterOffers, precheck, SpendLedger, type SpendPolicy } from "./policy.js";
 import { invoiceFingerprint } from "./readiness.js";
@@ -262,7 +263,14 @@ export class BuyerAgent {
       // A real API may have accepted the payout before failing: lock, never retry blindly.
       this.payoutLedger.markUnknown(key, 0n);
       run.error = error instanceof Error ? error.message : String(error);
-      run.payout = { ...base, status: "unknown", label: "Payout outcome unknown: reconcile with CashXChain before paying again", executedAt: new Date().toISOString() };
+      const payoutId = error instanceof PayoutUnknownError ? error.payoutId : undefined;
+      run.payout = {
+        ...base,
+        status: "unknown",
+        ...(payoutId ? { reference: payoutId } : {}),
+        label: `Payout outcome unknown: reconcile with CashXChain (Idempotency-Key payout-${key}) before paying again`,
+        executedAt: new Date().toISOString(),
+      };
       return this.runs.transition(run, "PAYOUT_UNKNOWN", run.error);
     }
     this.payoutLedger.markPaid(key, 0n);
@@ -369,6 +377,8 @@ export class BuyerAgent {
         body: JSON.stringify({ invoice }),
       });
     } catch (error) {
+      // The request died after signing: the facilitator may have broadcast it.
+      if (signed) this.noteTx(signed.txHash);
       return this.failPayment(run, fingerprint, signedAmount, error, signed);
     }
 
@@ -384,13 +394,23 @@ export class BuyerAgent {
       // Verify rejections carry no PAYMENT-RESPONSE; core puts the facilitator's reason in PAYMENT-REQUIRED `error`.
       const reason = settle?.errorReason ?? paymentRequiredError(http, response);
       const detail = `HTTP ${response.status}${reason ? `, ${reason}` : ""}`;
-      // A settle response with a tx means the facilitator broadcast it; a verify rejection did not.
-      if (settle?.transaction) this.noteTx(settle.transaction);
+      // Only a verify rejection (402 without PAYMENT-RESPONSE) proves nothing was broadcast. A failed
+      // settle can still land (A7: nginx 504, empty tx hash, tx on chain), so the next tx waits for it.
+      const verifyRejected = response.status === 402 && settle === undefined;
+      const maybeSent = settle?.transaction || signed?.txHash;
+      if (!verifyRejected && maybeSent) this.noteTx(maybeSent);
       return this.failPayment(run, fingerprint, signedAmount, new Error(detail), signed, settle?.transaction);
     }
     // A proof needs an on-chain tx hash for a payment we actually signed.
     if (!settle.transaction || signedAmount === undefined) {
+      if (signed) this.noteTx(signed.txHash);
       return this.failPayment(run, fingerprint, signedAmount, new Error("settle reported success without a transaction hash"), signed);
+    }
+    // A proof for some other tx proves nothing about ours: look up the one we signed instead.
+    if (signed && settle.transaction !== signed.txHash) {
+      this.noteTx(signed.txHash);
+      const detail = `settle reported tx ${settle.transaction}, but the signed tx is ${signed.txHash}`;
+      return this.failPayment(run, fingerprint, signedAmount, new Error(detail), signed);
     }
 
     this.ledger.markPaid(fingerprint, signedAmount!);
@@ -402,6 +422,10 @@ export class BuyerAgent {
     const report: unknown = await response.json().catch(() => undefined);
     if (!isReadinessReport(report)) {
       throw new Error(`paid (tx ${settle.transaction}), but the seller returned no readable report; the invoice stays locked as paid`);
+    }
+    // Run ids (our Idempotency-Key) are public: a report cached for another invoice must not decide this one.
+    if (report.invoiceFingerprint !== fingerprint) {
+      throw new Error(`paid (tx ${settle.transaction}), but the report is for a different invoice; the invoice stays locked as paid`);
     }
     return report;
   }
