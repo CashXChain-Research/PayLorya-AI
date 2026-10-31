@@ -16,6 +16,12 @@ const KIND_ICON: Record<ConnectionKind, string> = {
   cashxchain: "zap",
   bank: "bank",
 };
+/** Tile content for a connection kind: the CashXChain logo, otherwise an icon. */
+const CXC_LOGO = "/brand/cashxchain-mark.svg";
+function connMark(kind: ConnectionKind, size = 20): string {
+  if (kind === "cashxchain") return `<img class="cxc-logo" src="${CXC_LOGO}" alt="" width="${Math.round(size * 0.82)}" height="${Math.round(size * 0.94)}">`;
+  return icon(KIND_ICON[kind] ?? "link", size);
+}
 const NETWORK: Record<string, [string, string]> = {
   "cardano:preprod": ["Cardano Preprod", "testnet"],
   "cardano:mainnet": ["Cardano", ""],
@@ -65,7 +71,7 @@ function connCard(c: Connection, i: number): string {
   const hasUsd = c.balances.some(b => b.usdMinor != null);
   return `<article class="card conn reveal ${c.status}" data-id="${esc(c.id)}" style="--d:${i * 40}ms">
     <div class="conn-head">
-      <span class="conn-ic k-${c.kind}">${icon(KIND_ICON[c.kind] ?? "link", 20)}</span>
+      <span class="conn-ic k-${c.kind}">${connMark(c.kind)}</span>
       <div class="conn-t"><h3>${esc(c.label)}</h3>${networkPill(c.network)}</div>
       <span class="pill ${c.status === "active" ? "t-ok" : c.status === "error" ? "t-bad" : "t-neutral"}">${c.status === "active" ? '<i class="live"></i>Active' : c.status === "error" ? "Error" : "Coming soon"}</span>
     </div>
@@ -106,7 +112,7 @@ function cxcPanel(s: CxcState): string {
       : s.accountsError
         ? `<span class="muted small">${esc(s.accountsError)}</span>`
         : `<span class="muted small">No currency accounts yet.</span>`;
-    return `<div class="callout info">${icon("zap", 18)}<div><b>CashXChain sub-account linked</b> <span class="pill t-neutral">sandbox</span><br>
+    return `<div class="callout info"><span class="cxc-chip"><img src="${CXC_LOGO}" alt="" width="12" height="14"></span><div><b>CashXChain sub-account linked</b> <span class="pill t-neutral">sandbox</span><br>
       <span class="mono small">${esc(l.accountId ?? "")}</span> · KYB ${esc(l.kybStatus ?? "unknown")} · ${esc(l.email)}<br>
       ${accounts}
       <span class="fine">Your CashXChain connection reads this account. Payouts from it need CashXChain's money permission for this platform${l.canMoveMoney ? " (granted)" : " (not granted yet)"}.</span></div></div>`;
@@ -255,7 +261,7 @@ export async function renderConnections(view: HTMLElement, ctx: Ctx): Promise<vo
     catEl.innerHTML = catalog
       .map(
         c => `<button type="button" class="cat-item${c.available ? "" : " soon"}" data-kind="${esc(c.kind)}" ${c.available ? "" : "disabled"}>
-        <span class="conn-ic k-${c.kind}">${icon(KIND_ICON[c.kind] ?? "link", 20)}</span>
+        <span class="conn-ic k-${c.kind}">${connMark(c.kind)}</span>
         <span class="cat-t"><b>${esc(c.name)}</b><span>${esc(c.description)}</span></span>
         <span class="cat-f">${c.available ? `<span class="caps">${c.supports.write ? "Read &amp; write" : "Read-only"}</span><span class="cat-go">${icon("plus", 16, 2.4)}</span>` : `<span class="pill t-neutral">Coming soon</span>`}</span>
       </button>`,

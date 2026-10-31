@@ -427,7 +427,7 @@ export async function renderPayments(view: HTMLElement, ctx: Ctx): Promise<void>
         <button data-f="any" class="on">All</button><button data-f="done">Paid</button><button data-f="live">In progress</button><button data-f="stopped">Rejected &amp; failed</button>
       </div>
     </div>
-    <div class="pay-filters" role="search">
+    <div class="filters" role="search">
       <label class="search">${icon("search", 15)}<input id="pf-q" type="search" autocomplete="off" placeholder="Search payee, reason or amount" aria-label="Search payments"></label>
       <select class="fsel" id="pf-rail" aria-label="Rail"><option value="">All rails</option>${(Object.keys(RAIL) as Rail[]).map(r => `<option value="${r}">${esc(RAIL[r].name)}</option>`).join("")}</select>
       <select class="fsel" id="pf-by" aria-label="Requested by"><option value="">Anyone</option><option value="agent">Agent</option><option value="user">You</option></select>
@@ -455,7 +455,7 @@ export async function renderPayments(view: HTMLElement, ctx: Ctx): Promise<void>
     }
     return true;
   };
-  const filterBar = view.querySelector<HTMLElement>(".pay-filters")!;
+  const filterBar = view.querySelector<HTMLElement>(".filters")!;
   const fields = {
     q: view.querySelector<HTMLInputElement>("#pf-q")!,
     rail: view.querySelector<HTMLSelectElement>("#pf-rail")!,

@@ -51,6 +51,10 @@ const P: Record<string, string> = {
   calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
   trend: '<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>',
   image: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/>',
+  invoice: '<path d="M7 3h7l5 5v12a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M14 3v5h5"/><path d="M12.5 10.5v8M14.5 12h-2.75a1.6 1.6 0 0 0 0 3.2h1.5a1.6 1.6 0 0 1 0 3.2H10"/>',
+  receipt: '<path d="M6 3h12v18l-2.4-1.6L13.2 21l-2.4-1.6L8.4 21 6 19.4z"/><path d="M9 8h6M9 11.5h6M9 15h3.5"/>',
+  contract: '<path d="M7 3h7l5 5v12a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M14 3v5h5"/><path d="M8.5 17.5c1.2-2.2 2.2-2.2 2.7-.2.4 1.6 1.4 1 2.3-.4.6-.9 1.3-.6 1.8.6"/>',
+  percent: '<path d="M19 5 5 19"/><circle cx="7.5" cy="7.5" r="2.5"/><circle cx="16.5" cy="16.5" r="2.5"/>',
   file: '<path d="M7 3h7l5 5v12a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M14 3v5h5"/>',
   arrowRight: '<path d="M5 12h14M13 6l6 6-6 6"/>',
   arrowUp: '<path d="M7 17L17 7M9 7h8v8"/>',
@@ -364,6 +368,19 @@ export const MAX_FILE = 15 * 1024 * 1024;
 export const ACCEPT = "image/*,application/pdf,text/csv,text/plain,.csv,.txt,.pdf";
 export function fileIcon(mime: string): string {
   return mime.startsWith("image/") ? "image" : mime === "application/pdf" ? "doc" : "file";
+}
+/** Icon for a document row: its kind once read, a warning when reading failed, else the file type. */
+export const KIND_ICON: Record<string, string> = {
+  invoice: "invoice",
+  receipt: "receipt",
+  bank_statement: "bank",
+  contract: "contract",
+  payroll: "payees",
+  tax: "percent",
+};
+export function docIcon(d: { kind?: string; status: string; mimeType: string }): string {
+  if (d.status === "failed") return "alert";
+  return (d.kind && KIND_ICON[d.kind]) || fileIcon(d.mimeType);
 }
 /** Mime fallback for files the browser reports without a type. */
 export function mimeOf(file: File): string {
