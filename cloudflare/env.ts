@@ -65,3 +65,14 @@ export function authOptions(env: Partial<Record<ForwardedKey, string>>): { codes
   const google = env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET && env.PUBLIC_BASE_URL ? { origin: new URL(env.PUBLIC_BASE_URL).origin } : undefined;
   return { codes: Boolean(env.RESEND_API_KEY), ...(google ? { google } : {}) };
 }
+
+/** A short, stable fingerprint of the container env (FNV-1a), to notice changed vars or secrets. */
+export function envFingerprint(vars: Record<string, string>): string {
+  const text = JSON.stringify(Object.keys(vars).sort().map(k => [k, vars[k]]));
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(16);
+}
