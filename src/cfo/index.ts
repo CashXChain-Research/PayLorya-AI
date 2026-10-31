@@ -4,10 +4,11 @@ import { DatabaseSync } from "node:sqlite";
 import { CashXChainClient } from "../cashxchain.js";
 import { blockfrostProvider, type Config } from "../config.js";
 import type { CfoDeps } from "./api.js";
-import { createAuth } from "./auth.js";
+import { CODE_MINUTES, createAuth } from "./auth.js";
 import { migrate } from "./db.js";
 import { CxcLinker } from "./cxc-link.js";
 import { claudeExtractor } from "./ingest.js";
+import { resendMailer, type Mailer } from "./mail.js";
 import { Payments, type PaymentEngine } from "./payments.js";
 import { localFiles, localSql, memoryFiles, remoteFiles, remoteSql, type Files, type Sql } from "./sql.js";
 import { Store } from "./store.js";
@@ -27,11 +28,18 @@ function storage(config: Config, opts: { memory?: boolean }): { sql: Sql; files:
 }
 
 /** Builds the AI CFO product on top of the payment engine (BuyerAgent), set into `engine` once ready. */
-export async function createCfo(config: Config, engine: PaymentEngine, opts: { memory?: boolean } = {}): Promise<CfoDeps> {
+export async function createCfo(
+  config: Config,
+  engine: PaymentEngine,
+  opts: { memory?: boolean; mailer?: Mailer } = {},
+): Promise<CfoDeps> {
   const { sql, files } = storage(config, opts);
   await migrate(sql);
   const store = new Store(sql, files);
-  const auth = createAuth(sql, { baseUrl: config.baseUrl, secret: config.BETTER_AUTH_SECRET });
+  const mailer =
+    opts.mailer ??
+    (config.RESEND_API_KEY ? resendMailer({ apiKey: config.RESEND_API_KEY, from: config.RESEND_FROM, expiresMinutes: CODE_MINUTES }) : undefined);
+  const auth = createAuth(sql, { baseUrl: config.baseUrl, secret: config.BETTER_AUTH_SECRET, mailer });
   return {
     store,
     auth,

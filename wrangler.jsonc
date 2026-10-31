@@ -26,7 +26,8 @@
   // below are still set from this file on every deploy; change those here.
   "keep_vars": true,
   // Non-secret config, applied on every deploy.
-  // Secrets (never here): ANTHROPIC_API_KEY, BLOCKFROST_PROJECT_ID, BUYER_MNEMONIC, SELLER_ADDRESS, CASHXCHAIN_API_KEY
+  // Secrets (never here): ANTHROPIC_API_KEY, BLOCKFROST_PROJECT_ID, BUYER_MNEMONIC, SELLER_ADDRESS, CASHXCHAIN_API_KEY,
+  // RESEND_API_KEY
   // via `npx wrangler secret put <NAME>`. See docs/DEPLOY.md.
   "vars": {
     "PUBLIC_BASE_URL": "https://cxc-agentpay.cashxchain.workers.dev",
