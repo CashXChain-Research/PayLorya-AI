@@ -1,0 +1,428 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>CashXChain AI CFO · Your finance team, with an AI CFO</title>
+<meta name="description" content="CashXChain AI CFO reads every financial document, tracks budgets, forecasts cash and drafts payments. Claude reads. Code decides. You approve.">
+<script src="/assets/theme-init.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles/base.css">
+<link rel="stylesheet" href="/styles/marketing.css">
+<script type="module" src="/assets/marketing.js"></script>
+</head>
+<body>
+<nav class="nav">
+  <div class="wrap nav-in">
+    <a class="logo" href="/"><span class="mark">X</span>CashXChain<span class="tag">AI CFO</span></a>
+    <div class="nav-links">
+      <a href="#product">Product</a>
+      <a href="#security">Security</a>
+      <a href="/about.html">How it works</a>
+      <a href="/demo" class="demo-link"><i aria-hidden="true"></i>Live demo</a>
+    </div>
+    <div class="nav-right">
+      <button class="theme-toggle" type="button" data-theme-toggle aria-label="Toggle dark mode" aria-pressed="false">
+        <svg class="sun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        <svg class="moon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>
+      </button>
+      <a class="nav-login" href="/login" data-auth-hide>Log in</a>
+      <a class="btn primary sm" href="/signup" data-auth-cta>Get started</a>
+    </div>
+  </div>
+</nav>
+
+<main>
+<!-- Hero -->
+<header class="hero">
+  <div class="wrap hero-in">
+    <a class="badge reveal" href="/demo"><span class="pill t-ok"><i class="live"></i>Live</span><span>Try the invoice agent on Cardano Preprod</span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></a>
+    <h1 class="reveal" style="--d:60ms">Your AI CFO. <span>It reads, plans and pays, within your rules.</span></h1>
+    <p class="lead reveal" style="--d:130ms">Upload any invoice, receipt or statement. The AI CFO extracts and categorises it, tracks spend against budget, forecasts cash and drafts payments. Code enforces your limits. You approve.</p>
+    <div class="cta reveal" style="--d:200ms">
+      <a class="btn primary" href="/signup" data-auth-cta><span>Get started free</span><svg class="arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+      <a class="btn ghost" href="/demo">See the live demo</a>
+    </div>
+    <ul class="mantra reveal" style="--d:260ms" aria-label="Trust model">
+      <li><b>Claude reads.</b></li>
+      <li><b>Code decides.</b></li>
+      <li><b>You approve.</b></li>
+    </ul>
+  </div>
+
+  <!-- Product visual: a stylised app window, HTML/CSS only -->
+  <div class="wrap">
+    <figure class="stage reveal" style="--d:320ms" aria-label="Product preview: the AI CFO dashboard and chat">
+      <div class="win">
+        <div class="win-bar">
+          <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+          <span class="win-title">AI CFO</span>
+          <span class="win-tag">Sample data</span>
+        </div>
+        <div class="win-body">
+          <aside class="side" aria-hidden="true">
+            <span class="side-mark">X</span>
+            <span class="si on"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="2"/><rect x="14" y="3" width="7" height="5" rx="2"/><rect x="14" y="12" width="7" height="9" rx="2"/><rect x="3" y="16" width="7" height="5" rx="2"/></svg></span>
+            <span class="si"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg></span>
+            <span class="si"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h7l5 5v12a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M14 3v5h5"/></svg></span>
+            <span class="si"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 3L10 14"/><path d="M21 3l-7 18-4-7-7-4 18-7z"/></svg></span>
+            <span class="si"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4v5c0 5-3.4 8.4-8 9-4.6-.6-8-4-8-9V7l8-4z"/></svg></span>
+          </aside>
+
+          <section class="dash" aria-hidden="true">
+            <div class="dash-head"><b>Overview</b><span class="pill t-run">Guarded</span></div>
+            <div class="kpis">
+              <div class="kpi"><span>Cash on hand</span><b>$184,920</b><em class="up">+4.2% vs last month</em></div>
+              <div class="kpi"><span>Spend this month</span><b>$42,310</b><em>71% of budget</em></div>
+              <div class="kpi hide-s"><span>Awaiting approval</span><b>3</b><em>$9,840 total</em></div>
+            </div>
+            <div class="panel chart">
+              <div class="panel-head"><b>Cash forecast</b><span>Next 90 days</span></div>
+              <svg viewBox="0 0 400 120" preserveAspectRatio="none" class="fc">
+                <defs><linearGradient id="fcg" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity=".22"/><stop offset="1" stop-color="currentColor" stop-opacity="0"/></linearGradient></defs>
+                <path class="grid" d="M0 30H400M0 60H400M0 90H400"/>
+                <path class="area" d="M0 78 C40 70 70 74 100 62 S160 50 200 54 S260 40 280 36 L280 120 L0 120Z" fill="url(#fcg)"/>
+                <path class="line" d="M0 78 C40 70 70 74 100 62 S160 50 200 54 S260 40 280 36"/>
+                <path class="proj" d="M280 36 C310 32 340 40 370 28 S395 22 400 20"/>
+                <circle class="now" cx="280" cy="36" r="4.5"/>
+              </svg>
+            </div>
+            <div class="panel budgets">
+              <div class="panel-head"><b>Budgets</b><span>November</span></div>
+              <div class="bar"><span>Software</span><i style="--w:64%"></i><em>64%</em></div>
+              <div class="bar"><span>Travel</span><i style="--w:38%"></i><em>38%</em></div>
+              <div class="bar warn"><span>Contractors</span><i style="--w:92%"></i><em>92%</em></div>
+            </div>
+          </section>
+
+          <section class="chat" aria-hidden="true">
+            <div class="chat-head"><span class="bot">X</span><div><b>AI CFO</b><small>Reads, plans, proposes</small></div></div>
+            <div class="msgs">
+              <div class="m me"><span class="file"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h7l5 5v12a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M14 3v5h5"/></svg>invoice-1047.pdf</span>Can we pay this one?</div>
+              <div class="m ai">Read it: <b>Acme Studio</b>, $2,400.00, due Nov 14, category <b>Design</b>. Known payee, within budget.</div>
+              <div class="prop">
+                <div class="prop-top"><span>Proposed payment</span><span class="pill t-warn">Needs approval</span></div>
+                <b class="amt">$2,400.00 <small>to Acme Studio</small></b>
+                <ul class="checks">
+                  <li><i></i>Payee on verified record</li>
+                  <li><i></i>Within monthly budget</li>
+                  <li class="no"><i></i>Above $1,000 auto-pay limit</li>
+                </ul>
+                <div class="prop-btns"><span class="b-ghost">Decline</span><span class="b-pri">Approve</span></div>
+              </div>
+            </div>
+            <div class="composer"><span class="clip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5l-8.6 8.6a5.5 5.5 0 0 1-7.8-7.8l8.6-8.6a3.7 3.7 0 0 1 5.2 5.2l-8.6 8.6a1.8 1.8 0 0 1-2.6-2.6l7.9-7.9"/></svg></span><span class="ph">Ask your CFO anything</span><span class="send"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg></span></div>
+          </section>
+        </div>
+      </div>
+    </figure>
+  </div>
+</header>
+
+<!-- Product -->
+<section class="sec" id="product" aria-labelledby="product-h">
+  <div class="wrap">
+    <div class="head" data-reveal>
+      <p class="eyebrow">Product</p>
+      <h2 id="product-h">Everything a CFO does. <span>Nothing you did not allow.</span></h2>
+      <p>One place for every document, account and payment. The AI CFO does the reading and the arithmetic. You keep the decisions.</p>
+    </div>
+
+    <div class="bento">
+      <!-- Chat -->
+      <article class="feat span-7" data-reveal>
+        <div class="feat-txt">
+          <span class="ic" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg></span>
+          <h3>Chat with your CFO</h3>
+          <p>Ask in plain English. Drop in a PDF, a CSV or a photo of a receipt. It answers with numbers from your own books.</p>
+        </div>
+        <div class="viz chatviz" aria-hidden="true">
+          <div class="m me"><span class="photo"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="3"/><circle cx="9" cy="11" r="2"/><path d="M21 16l-5-5-8 8"/></svg></span>receipt.jpg · What did we spend on travel this quarter?</div>
+          <div class="m ai"><b>$6,180</b> on travel this quarter, 38% of budget. Flights are 72% of it. I filed the receipt under <b>Travel · Taxi</b>.</div>
+          <div class="m me">Will we stay above $150k cash through January?</div>
+          <div class="m ai">Yes, on current run-rate the low point is <b>$161,400</b> on Jan 6, after payroll. Two invoices due that week are worth chasing early.</div>
+        </div>
+      </article>
+
+      <!-- Inbox -->
+      <article class="feat span-5" data-reveal style="--d:80ms">
+        <div class="feat-txt">
+          <span class="ic" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.5 5.1L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.9A2 2 0 0 0 16.8 4H7.2a2 2 0 0 0-1.7 1.1z"/></svg></span>
+          <h3>A document inbox that reads anything</h3>
+          <p>Invoices, receipts, bank statements, contracts. Extracted, categorised and linked to the right payee.</p>
+        </div>
+        <ul class="viz docs" aria-hidden="true">
+          <li><span class="dt inv">PDF</span><b>Invoice · Acme Studio</b><span class="pill t-ok">Extracted</span></li>
+          <li><span class="dt img">JPG</span><b>Receipt · Taxi</b><span class="pill t-ok">Filed</span></li>
+          <li><span class="dt csv">CSV</span><b>Bank statement · Oct</b><span class="pill t-run"><i class="live"></i>Reading</span></li>
+          <li><span class="dt inv">PDF</span><b>Contract · Hosting</b><span class="pill t-ok">Renews Mar 1</span></li>
+        </ul>
+      </article>
+
+      <!-- Budgets and forecasts -->
+      <article class="feat span-5" data-reveal>
+        <div class="feat-txt">
+          <span class="ic" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 6-6"/></svg></span>
+          <h3>Budgets, forecasts, analysis</h3>
+          <p>Spend against budget per category, a rolling cash forecast and a clear answer when something drifts.</p>
+        </div>
+        <div class="viz bars" aria-hidden="true">
+          <div class="col" style="--h:46%"><i></i><span>Jul</span></div>
+          <div class="col" style="--h:58%"><i></i><span>Aug</span></div>
+          <div class="col" style="--h:52%"><i></i><span>Sep</span></div>
+          <div class="col" style="--h:70%"><i></i><span>Oct</span></div>
+          <div class="col now" style="--h:64%"><i></i><span>Nov</span></div>
+          <div class="col fc" style="--h:76%"><i></i><span>Dec</span></div>
+          <span class="budget-line"><em>Budget</em></span>
+        </div>
+      </article>
+
+      <!-- Payments with approvals -->
+      <article class="feat span-7" data-reveal style="--d:80ms">
+        <div class="feat-txt">
+          <span class="ic" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 3L10 14"/><path d="M21 3l-7 18-4-7-7-4 18-7z"/></svg></span>
+          <h3>Payments with approvals</h3>
+          <p>It drafts the transfer. A deterministic policy checks payee, limit and budget. Anything outside your rules waits for you.</p>
+        </div>
+        <ol class="viz pipe" aria-hidden="true">
+          <li><span class="n">1</span><div><b>Draft</b><small>AI CFO</small></div></li>
+          <li><span class="n">2</span><div><b>Policy check</b><small>Code</small></div></li>
+          <li class="you"><span class="n">3</span><div><b>Approve</b><small>You</small></div></li>
+          <li><span class="n">4</span><div><b>Pay</b><small>Cardano or CashXChain</small></div></li>
+        </ol>
+      </article>
+
+      <!-- Connections -->
+      <article class="feat span-6" data-reveal>
+        <div class="feat-txt">
+          <span class="ic" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg></span>
+          <h3>Connections, with access you set</h3>
+          <p>Connect wallets and your CashXChain account. Each one is read-only or read &amp; write, and you can change it any time.</p>
+        </div>
+        <ul class="viz conns" aria-hidden="true">
+          <li><span class="cl ada">₳</span><div><b>Cardano wallet</b><small>Preprod testnet</small></div><span class="acc rw">Read &amp; write</span></li>
+          <li><span class="cl cxc">X</span><div><b>CashXChain account</b><small>Sandbox</small></div><span class="acc rw">Read &amp; write</span></li>
+          <li><span class="cl eth"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/><path d="M21 7h-6a3 3 0 0 0 0 6h6z"/></svg></span><div><b>Other chain wallets</b><small>Watch-only</small></div><span class="acc">Read-only</span></li>
+          <li class="soon"><span class="cl bank"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10l9-6 9 6M5 10v8M19 10v8M9.5 10v8M14.5 10v8M3 21h18"/></svg></span><div><b>Bank accounts</b><small>Coming soon</small></div><span class="acc">Soon</span></li>
+        </ul>
+      </article>
+
+      <!-- x402 -->
+      <article class="feat span-6" data-reveal style="--d:80ms">
+        <div class="feat-txt">
+          <span class="ic" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4v5c0 5-3.4 8.4-8 9-4.6-.6-8-4-8-9V7l8-4z"/><path d="M8.5 12l2.5 2.5 4.5-4.5"/></svg></span>
+          <h3>Verification, paid per request</h3>
+          <p>Before paying a new payee, the AI CFO buys a third-party check with x402 on Cardano. No subscription, no checkout, capped price.</p>
+        </div>
+        <ol class="viz x402" aria-hidden="true">
+          <li><code>POST /v1/payment-readiness</code><span class="arr r"></span></li>
+          <li class="back"><span class="arr l"></span><code><b class="c402">402</b> Payment Required</code></li>
+          <li><code>X-PAYMENT · signed, within cap</code><span class="arr r"></span></li>
+          <li class="back ok"><span class="arr l"></span><code><b class="c200">200</b> Report</code></li>
+        </ol>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- Autonomy -->
+<section class="sec" id="autonomy" aria-labelledby="autonomy-h">
+  <div class="wrap">
+    <div class="head" data-reveal>
+      <p class="eyebrow">Agent autonomy</p>
+      <h2 id="autonomy-h">You choose how much it does. <span>Code holds the line.</span></h2>
+      <p>Three levels. Start read-only, move to Guarded when you trust the numbers. Limits and payees always come from your settings, never from the model.</p>
+    </div>
+
+    <div class="levels" data-reveal>
+      <div class="track" aria-hidden="true"><i></i></div>
+      <article class="level">
+        <div class="lv-top"><span class="lv-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></span><span class="pill t-ok">Safest</span></div>
+        <h3>Read-only</h3>
+        <p>Analyses, plans and summarises. Drafts transfers for you to send.</p>
+        <ul>
+          <li class="y">Reads documents and accounts</li>
+          <li class="y">Budgets, forecasts, reports</li>
+          <li class="y">Drafts transfers</li>
+          <li class="x">Moves money</li>
+        </ul>
+      </article>
+      <article class="level rec">
+        <div class="lv-top"><span class="lv-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4v5c0 5-3.4 8.4-8 9-4.6-.6-8-4-8-9V7l8-4z"/></svg></span><span class="pill t-run">Recommended</span></div>
+        <h3>Guarded</h3>
+        <p>Acts alone inside hard limits. Everything else goes to your approval queue.</p>
+        <ul>
+          <li class="y">Per-payment limit</li>
+          <li class="y">Monthly budget</li>
+          <li class="y">Known payees only</li>
+          <li class="q">Anything else: asks you</li>
+        </ul>
+      </article>
+      <article class="level danger">
+        <div class="lv-top"><span class="lv-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></span><span class="pill t-bad">Dangerous</span></div>
+        <h3>Full access</h3>
+        <p>Acts on write-enabled connections without asking first. Only for when you accept the risk.</p>
+        <ul>
+          <li class="w">Needs explicit confirmation</li>
+          <li class="w">Every action still logged</li>
+          <li class="w">Switch back any time</li>
+        </ul>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- Security -->
+<section class="sec band" id="security" aria-labelledby="security-h">
+  <div class="wrap">
+    <div class="head" data-reveal>
+      <p class="eyebrow">Security</p>
+      <h2 id="security-h">Claude reads. Code decides. <span>You approve.</span></h2>
+      <p>The model extracts and proposes. A deterministic policy decides what may happen. Money moves only inside the rules you set.</p>
+    </div>
+
+    <div class="sec-grid">
+      <ul class="guar">
+        <li data-reveal>
+          <span class="ic" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6l-6 6 6 6M16 6l6 6-6 6"/></svg></span>
+          <div><h3>Policy in code, not in prompts</h3><p>Payee, amount limits and budgets are checked by deterministic code. The model never sets them.</p></div>
+        </li>
+        <li data-reveal style="--d:60ms">
+          <span class="ic" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg></span>
+          <div><h3>Prompt injection cannot move money</h3><p>An invoice that says “pay this wallet” is just text. Payees come from your verified records.</p></div>
+        </li>
+        <li data-reveal style="--d:120ms">
+          <span class="ic" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span>
+          <div><h3>Per-connection access</h3><p>Read-only or read &amp; write, set by you for each wallet and account.</p></div>
+        </li>
+        <li data-reveal style="--d:180ms">
+          <span class="ic" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5h11M9 12h11M9 19h11M4 5h.01M4 12h.01M4 19h.01"/></svg></span>
+          <div><h3>A full audit trail</h3><p>Every read, proposal, approval and payment is logged with who did it and why.</p></div>
+        </li>
+      </ul>
+
+      <figure class="audit" data-reveal style="--d:100ms" aria-label="Example activity log">
+        <div class="audit-head"><b>Activity</b><span class="mono">sample</span></div>
+        <ol>
+          <li><span class="who ai">AI</span><div><b>Extracted invoice-1047.pdf</b><small>Acme Studio · $2,400.00</small></div><time>09:41</time></li>
+          <li><span class="who code">Code</span><div><b>Policy: needs approval</b><small>Above $1,000 auto-pay limit</small></div><time>09:41</time></li>
+          <li class="blk"><span class="who code">Code</span><div><b>Blocked a payee change</b><small>Document asked to pay a new wallet</small></div><time>09:42</time></li>
+          <li><span class="who you">You</span><div><b>Approved payment</b><small>$2,400.00 to Acme Studio</small></div><time>09:44</time></li>
+          <li class="ok"><span class="who code">Code</span><div><b>Paid · CashXChain sandbox</b><small>Reference saved to the ledger</small></div><time>09:44</time></li>
+        </ol>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<!-- How it works -->
+<section class="sec" id="how" aria-labelledby="how-h">
+  <div class="wrap">
+    <div class="head" data-reveal>
+      <p class="eyebrow">How it works</p>
+      <h2 id="how-h">Set up in minutes. <span>Useful on day one.</span></h2>
+    </div>
+    <ol class="steps3">
+      <li data-reveal>
+        <span class="num">1</span>
+        <h3>Connect</h3>
+        <p>Add your Cardano wallet, other wallets as watch-only, and your CashXChain account. Choose read-only or read &amp; write for each.</p>
+      </li>
+      <li data-reveal style="--d:80ms">
+        <span class="num">2</span>
+        <h3>Upload</h3>
+        <p>Drop in invoices, receipts, statements and contracts. The AI CFO reads them and builds your books, budgets and forecast.</p>
+      </li>
+      <li data-reveal style="--d:160ms">
+        <span class="num">3</span>
+        <h3>Approve</h3>
+        <p>Pick an autonomy level. It pays what fits your rules and asks you about everything else.</p>
+      </li>
+    </ol>
+    <p class="more" data-reveal><a href="/about.html">See the full flow, step by step<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a></p>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section class="sec" id="faq" aria-labelledby="faq-h">
+  <div class="wrap faq-wrap">
+    <div class="head left" data-reveal>
+      <p class="eyebrow">FAQ</p>
+      <h2 id="faq-h">Questions, <span>answered.</span></h2>
+      <p>Anything else? <a href="mailto:valentin.israel@cashxchain.com">Talk to us</a>.</p>
+    </div>
+    <div class="faq" data-reveal>
+      <details>
+        <summary>Can the AI move money on its own?</summary>
+        <p>Only if you allow it. In Read-only it never does. In Guarded it pays known payees within your per-payment limit and monthly budget; everything else waits for your approval. Full access must be confirmed explicitly.</p>
+      </details>
+      <details>
+        <summary>What stops a malicious document from redirecting a payment?</summary>
+        <p>The model only extracts fields and proposes. Payees, limits and budgets come from your settings and are checked by deterministic code, so instructions hidden in a document have nothing to act on.</p>
+      </details>
+      <details>
+        <summary>Which documents can it read?</summary>
+        <p>Invoices, receipts, bank statements and contracts as PDF, photo or CSV. It extracts the fields, categorises the entry and links it to the right payee.</p>
+      </details>
+      <details>
+        <summary>Which accounts can I connect?</summary>
+        <p>Cardano wallets, other chain wallets as watch-only, and your CashXChain account. Bank accounts are coming soon.</p>
+      </details>
+      <details>
+        <summary>What is x402?</summary>
+        <p>An open protocol that puts the price into the HTTP response. When the AI CFO needs a third-party verification, it pays for that one request on Cardano, within a capped price, with no subscription or checkout.</p>
+      </details>
+      <details>
+        <summary>Is this real money?</summary>
+        <p>Not yet. Cardano payments run on the Preprod testnet and CashXChain fiat payments run in the sandbox while we are in early access.</p>
+      </details>
+      <details>
+        <summary>What does it cost?</summary>
+        <p>Early access is free. <a href="mailto:valentin.israel@cashxchain.com">Talk to us</a> about your volumes and use case.</p>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- Final CTA -->
+<section class="sec" aria-labelledby="final-h">
+  <div class="wrap">
+    <div class="final" data-reveal>
+      <span class="mark xl" aria-hidden="true">X</span>
+      <p class="eyebrow">Early access</p>
+      <h2 id="final-h">Give your business a CFO <span>that never stops reading.</span></h2>
+      <div class="cta">
+        <a class="btn primary" href="/signup" data-auth-cta><span>Get started free</span><svg class="arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+        <a class="btn ghost" href="mailto:valentin.israel@cashxchain.com">Talk to us</a>
+      </div>
+      <p class="fine">Payments run on Cardano Preprod (testnet) and the CashXChain sandbox during early access. No real funds move.</p>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer class="foot">
+  <div class="wrap">
+    <div class="foot-top">
+      <div class="foot-brand">
+        <a class="logo" href="/"><span class="mark">X</span>CashXChain<span class="tag">AI CFO</span></a>
+        <p>The Infrastructure for the money of tomorrow.</p>
+      </div>
+      <nav class="foot-cols" aria-label="Footer">
+        <div><b>Product</b><a href="#product">Features</a><a href="#autonomy">Autonomy levels</a><a href="#security">Security</a><a href="/demo">Live demo</a></div>
+        <div><b>Learn</b><a href="/about.html">How it works</a><a href="#faq">FAQ</a></div>
+        <div><b>Company</b><a href="https://cashxchain.com" rel="noopener">cashxchain.com</a><a href="mailto:valentin.israel@cashxchain.com">Contact</a></div>
+        <div><b>Account</b><a href="/login">Log in</a><a href="/signup">Sign up</a></div>
+      </nav>
+    </div>
+    <div class="foot-bot">
+      <span>© 2026 CashXChain Inc.</span>
+      <span>Early access. Cardano payments on Preprod testnet, fiat payments in the CashXChain sandbox. Sample data shown on this page is illustrative.</span>
+    </div>
+  </div>
+</footer>
+</body>
+</html>
