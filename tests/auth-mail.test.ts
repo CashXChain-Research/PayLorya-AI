@@ -257,6 +257,11 @@ describe("Resend mailer", () => {
     expect(body.html).toContain('<img src="https://app.example/apple-touch-icon.png?v=3"');
     expect(body.html).toContain("Sign in to PayLorya AI");
     expect(body.html).toContain("123456");
+    // Footer: our website and the company behind the product.
+    expect(body.html).toContain('<a href="https://app.example/"');
+    expect(body.html).toContain('<a href="https://cashxchain.com"');
+    expect(body.html).toContain("is a product of");
+    expect(body.text).toContain("PayLorya AI · https://app.example\nA product of CashXChain Inc. · https://cashxchain.com");
   });
 
   it("links only sign-in and email confirmation; reset and email change keep the plain code", () => {
@@ -265,7 +270,7 @@ describe("Resend mailer", () => {
     const reset = codeEmail("654321", "forget-password", 10, { baseUrl: "https://a.example", to: "a@b.co" });
     expect(reset.html).not.toContain("/verify#");
     expect(reset.html).toContain("https://a.example/apple-touch-icon.png");
-    expect(reset.text).not.toContain("http");
+    expect(reset.text).not.toContain("/verify");
     // Markup in the address cannot break out of the link.
     const odd = codeEmail("123456", "sign-in", 10, { baseUrl: "https://a.example", to: '"><script>@x.co' });
     expect(odd.html).not.toContain("<script>");

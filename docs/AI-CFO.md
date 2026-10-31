@@ -38,6 +38,8 @@ password by default. Codes are mailed through Resend (`POST https://api.resend.c
   confirmation, a button to `/verify#email=…&code=…&type=…`. The page reads the fragment (never sent
   to the server), drops it from the address bar and submits the code: one click signs in. The code is
   still in the mail for typing. Password reset and email change have no link.
+- Footer of every code mail: "PayLorya AI is a product of CashXChain Inc.", linking `PUBLIC_BASE_URL`
+  and https://cashxchain.com (same wording as `/legal`).
 
 ## What a customer can do
 

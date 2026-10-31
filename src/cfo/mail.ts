@@ -8,6 +8,8 @@ export interface Mailer {
 }
 
 export const PRODUCT = "PayLorya AI";
+/** Footer of every mail, worded as on /legal: "PayLorya AI is a product of CashXChain Inc." */
+export const COMPANY = { name: "CashXChain Inc.", url: "https://cashxchain.com" };
 
 /**
  * Mail colors and font, mirroring the base.css tokens (--primary, --accent, --font). Mail clients
@@ -63,9 +65,10 @@ export function codeEmail(code: string, purpose: CodePurpose, minutes: number, o
   const link = base && opts.to ? codeLink(base, opts.to, code, purpose) : undefined;
   const lead = link && copy.linkLead ? copy.linkLead : copy.lead;
   const ignore = `If you did not ask for this, ignore this email; nothing happens without the ${link ? "link or code" : "code"}.`;
+  const footerText = `${PRODUCT}${base ? ` · ${base}` : ""}\nA product of ${COMPANY.name} · ${COMPANY.url}`;
   const text = link
-    ? `${lead}\n\n${link}\n\nOr enter this code: ${code}\n\nThe link and code expire in ${minutes} minutes. ${ignore}\n\n${PRODUCT}`
-    : `${lead}\n\n${code}\n\nThe code expires in ${minutes} minutes. ${ignore}\n\n${PRODUCT}`;
+    ? `${lead}\n\n${link}\n\nOr enter this code: ${code}\n\nThe link and code expire in ${minutes} minutes. ${ignore}\n\n${footerText}`
+    : `${lead}\n\n${code}\n\nThe code expires in ${minutes} minutes. ${ignore}\n\n${footerText}`;
   // Inline styles only: mail clients drop <style>. The code is digits; the only user input is the
   // recipient address, percent-encoded inside the link and attribute-escaped.
   const t = MAIL_THEME;
@@ -87,6 +90,11 @@ export function codeEmail(code: string, purpose: CodePurpose, minutes: number, o
 <tr><td style="font-size:18px;font-weight:700;color:${t.primary};padding-bottom:16px;border-bottom:3px solid ${t.accent}">${logo}<span style="vertical-align:middle">PayLorya <span style="color:${t.accent}">AI</span></span></td></tr>
 <tr><td style="height:16px"></td></tr>
 ${body}
+</table>
+<table role="presentation" width="100%" style="max-width:480px;margin:16px auto 0">
+<tr><td style="font-size:12px;line-height:1.6;color:${t.muted};text-align:center">${
+    base ? `<a href="${attr(base)}/" style="color:${t.primary};font-weight:600;text-decoration:none">${PRODUCT}</a>` : PRODUCT
+  } is a product of <a href="${COMPANY.url}" style="color:${t.muted};text-decoration:underline">${COMPANY.name}</a></td></tr>
 </table></body></html>`;
   return { subject: `${code} is your ${PRODUCT} code: ${copy.subject}`, text, html };
 }
