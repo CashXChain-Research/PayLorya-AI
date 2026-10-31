@@ -9,6 +9,12 @@ ends with a draft awaiting human approval; no supplier payout is executed.
 
 Built by [CashXChain](https://cashxchain.com) — **The Infrastructure for the money of tomorrow**.
 
+**AI CFO product:** the same app now also serves a marketing site at `/`, accounts at `/signup`, and a
+dashboard at `/app`. In the dashboard, users connect wallets and accounts with read or read & write
+access, upload any financial document, chat with the AI CFO, plan budgets and cash, and approve
+payments, all under a deterministic agent permission policy. The hackathon demo moved to `/demo`.
+See [docs/AI-CFO.md](docs/AI-CFO.md).
+
 ## Demo and proof
 
 | Resource | Status |
