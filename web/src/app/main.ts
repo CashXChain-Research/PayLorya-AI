@@ -1,4 +1,5 @@
 import { initChrome } from "../shared/nav.js";
+import { onPaymentChange } from "./approval.js";
 import { initAssistant } from "./assistant/index.js";
 import { initCompose, loadSamples } from "./compose.js";
 import { initDetail, select, selectedId } from "./detail.js";
@@ -26,3 +27,8 @@ void loadSamples();
 void loadList();
 setInterval(() => void loadList(), 4000);
 startAutopilot();
+// Spend and payout counters move with every decision and settled payout.
+onPaymentChange(() => {
+  void loadHealth();
+  void loadList();
+});

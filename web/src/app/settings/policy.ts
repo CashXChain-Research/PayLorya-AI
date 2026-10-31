@@ -1,3 +1,4 @@
+import type { PayoutRail } from "../../../../src/types.js";
 import { majorUnits } from "../../shared/dom.js";
 import type { Run } from "../api.js";
 import type { AgentSettings } from "./store.js";
@@ -7,13 +8,15 @@ export function sendBlock(settings: AgentSettings): string | undefined {
   return settings.buyChecks ? undefined : "Verification checks are switched off in Agent settings";
 }
 
-/** Why these settings stop the approval of this draft, if they do. The server's own checks still apply. */
-export function approvalBlock(run: Run, settings: AgentSettings): string | undefined {
-  const rail = run.draft?.route.rail;
+/** Why these settings stop a payout on this rail, if they do. */
+export function railBlock(rail: PayoutRail | undefined, settings: AgentSettings): string | undefined {
   if (rail === "cardano_preprod" && !settings.payCardano) return "Cardano payouts are switched off in Agent settings";
   if (rail === "cxc_fiat" && !settings.payCashxchain) return "CashXChain payouts are switched off in Agent settings";
   return undefined;
 }
+
+/** Why these settings stop the approval of this draft, if they do. The server's own checks still apply. */
+export const approvalBlock = (run: Run, settings: AgentSettings): string | undefined => railBlock(run.draft?.route.rail, settings);
 
 /**
  * True when this browser should approve the draft without asking: auto mode, payable, rail allowed,
