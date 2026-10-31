@@ -170,15 +170,15 @@ export interface Attachment {
 export async function runChatTurn(deps: ChatDeps, ws: string, chatId: string, text: string, files: Attachment[], emit: (e: ChatEvent) => void): Promise<void> {
   const { store } = deps;
   const client = deps.client ?? new Anthropic();
-  const history = store.messages(chatId);
+  const history = await store.messages(chatId);
 
   // Attachments become documents (read in the background) and are shown to the model in this turn.
   const attachments: Array<{ documentId: string; filename: string }> = [];
   const liveBlocks: Anthropic.ContentBlockParam[] = [];
   for (const f of files) {
-    const doc = store.addDocument(ws, { filename: f.filename, mimeType: f.mimeType, data: f.data, source: "chat" });
+    const doc = await store.addDocument(ws, { filename: f.filename, mimeType: f.mimeType, data: f.data, source: "chat" });
     attachments.push({ documentId: doc.id, filename: f.filename });
-    store.log(ws, "user", "attached document", f.filename, { type: "document", id: doc.id });
+    await store.log(ws, "user", "attached document", f.filename, { type: "document", id: doc.id });
     try {
       liveBlocks.push(documentBlock(f.mimeType, f.data, f.filename));
     } catch (error) {
@@ -189,14 +189,14 @@ export async function runChatTurn(deps: ChatDeps, ws: string, chatId: string, te
   const note = attachments.map(a => `[Attached: ${a.filename} (document id ${a.documentId})]`).join("\n");
   const userText = [text.trim(), note].filter(Boolean).join("\n\n");
   // Replayed history keeps only a reference to the file; the model can fetch it with get_document.
-  const stored = store.addMessage(chatId, { role: "user", text: text.trim(), content: [{ type: "text", text: userText }], ...(attachments.length ? { attachments } : {}) });
+  const stored = await store.addMessage(chatId, { role: "user", text: text.trim(), content: [{ type: "text", text: userText }], ...(attachments.length ? { attachments } : {}) });
   emit({ type: "user", message: toPublic(stored) });
-  if (history.length === 0) store.renameChat(ws, chatId, titleFrom(text, attachments));
+  if (history.length === 0) await store.renameChat(ws, chatId, titleFrom(text, attachments));
 
   const messages: Anthropic.MessageParam[] = history.map(m => ({ role: m.role, content: m.content as Anthropic.ContentBlockParam[] }));
   messages.push({ role: "user", content: [...liveBlocks, { type: "text", text: userText || "Please look at the attached document." }] });
 
-  const workspace = store.workspace(ws)!;
+  const workspace = (await store.workspace(ws))!;
   const system = `${SYSTEM}\n\nToday is ${new Date().toISOString().slice(0, 10)}. Workspace: ${workspace.name}. Reporting currency: USD.`;
   const tools: Array<{ name: string; summary: string }> = [];
   let reply = "";
@@ -223,7 +223,7 @@ export async function runChatTurn(deps: ChatDeps, ws: string, chatId: string, te
       let isError = false;
       let summary: string;
       try {
-        const out = runTool(deps, ws, block.name, block.input);
+        const out = await runTool(deps, ws, block.name, block.input);
         content = JSON.stringify(out.data);
         summary = out.summary;
       } catch (error) {
@@ -242,7 +242,7 @@ export async function runChatTurn(deps: ChatDeps, ws: string, chatId: string, te
     }
   }
 
-  const assistant = store.addMessage(chatId, { role: "assistant", text: reply.trim(), content: [{ type: "text", text: reply.trim() || "(no answer)" }], ...(tools.length ? { tools } : {}) });
+  const assistant = await store.addMessage(chatId, { role: "assistant", text: reply.trim(), content: [{ type: "text", text: reply.trim() || "(no answer)" }], ...(tools.length ? { tools } : {}) });
   emit({ type: "done", message: toPublic(assistant) });
 }
 
@@ -271,12 +271,12 @@ function startLabel(name: string): string {
 }
 
 /** Tool implementations. Synchronous reads and writes on the workspace; throws on bad input. */
-function runTool(deps: ChatDeps, ws: string, name: string, input: unknown): { data: unknown; summary: string } {
+async function runTool(deps: ChatDeps, ws: string, name: string, input: unknown): Promise<{ data: unknown; summary: string }> {
   const { store } = deps;
   const args = (input ?? {}) as Record<string, unknown>;
   switch (name) {
     case "get_overview": {
-      const o = overview(store, ws);
+      const o = await overview(store, ws);
       return {
         summary: "Checked the overview",
         data: {
@@ -293,25 +293,22 @@ function runTool(deps: ChatDeps, ws: string, name: string, input: unknown): { da
     case "list_documents": {
       const q = typeof args.search === "string" ? args.search.toLowerCase() : "";
       const limit = typeof args.limit === "number" ? args.limit : 50;
-      const docs = store
-        .documents(ws)
+      const docs = (await store.documents(ws))
         .filter(d => !args.kind || d.kind === args.kind)
         .filter(d => !q || [d.title, d.counterparty, d.filename].some(v => v?.toLowerCase().includes(q)))
         .slice(0, limit);
       return { summary: `Found ${docs.length} document${docs.length === 1 ? "" : "s"}`, data: docs.map(docBrief) };
     }
     case "get_document": {
-      const d = store.document(ws, String(args.id ?? ""));
+      const d = await store.document(ws, String(args.id ?? ""));
       if (!d) throw new Error("document not found");
       return {
         summary: `Read ${d.title ?? d.filename}`,
-        data: { ...docBrief(d), summary: d.summary, error: d.error, extracted: d.extracted, ledger: store.transactionsForDocument(ws, d.id) },
+        data: { ...docBrief(d), summary: d.summary, error: d.error, extracted: d.extracted, ledger: await store.transactionsForDocument(ws, d.id) },
       };
     }
     case "query_transactions": {
-      const txs = store
-        .transactions(ws, { from: typeof args.from === "string" ? args.from : undefined, to: typeof args.to === "string" ? args.to : undefined })
-        .filter(t => !args.category || t.category === args.category);
+      const txs = (await store.transactions(ws, { from: typeof args.from === "string" ? args.from : undefined, to: typeof args.to === "string" ? args.to : undefined })).filter(t => !args.category || t.category === args.category);
       const byCategory: Record<string, number> = {};
       const byMonth: Record<string, { inUsd: number; outUsd: number }> = {};
       for (const t of txs) {
@@ -327,12 +324,12 @@ function runTool(deps: ChatDeps, ws: string, name: string, input: unknown): { da
     }
     case "list_open_invoices": {
       const direction = args.direction === "money_in" ? "money_in" : "money_out";
-      const docs = openInvoices(store, ws, direction);
+      const docs = await openInvoices(store, ws, direction);
       return { summary: `Found ${docs.length} open ${direction === "money_in" ? "receivable" : "payable"}${docs.length === 1 ? "" : "s"}`, data: docs.map(docBrief) };
     }
     case "cash_forecast": {
       const days = Math.min(365, Math.max(7, Number(args.days) || 90));
-      const f = forecast(store, ws, days);
+      const f = await forecast(store, ws, days);
       const low = f.points.reduce((min, p) => (p.balanceUsdMinor < min.balanceUsdMinor ? p : min), f.points[0]!);
       return {
         summary: `Forecast ${days} days`,
@@ -345,43 +342,43 @@ function runTool(deps: ChatDeps, ws: string, name: string, input: unknown): { da
       };
     }
     case "list_budgets": {
-      const budgets = budgetsWithSpend(store, ws);
+      const budgets = await budgetsWithSpend(store, ws);
       return { summary: `Checked ${budgets.length} budget${budgets.length === 1 ? "" : "s"}`, data: budgets.map(b => ({ id: b.id, name: b.name, category: b.category, limitUsd: usd(b.limitUsdMinor), spentUsd: usd(b.spentUsdMinor) })) };
     }
     case "set_budget": {
       const b = BudgetInput.parse(args);
-      if (b.id && !store.budget(ws, b.id)) throw new Error("budget not found");
-      const saved = store.saveBudget(ws, { name: b.name.slice(0, 80), category: b.category, limitUsdMinor: Math.round(b.monthlyLimitUsd * 100) }, b.id);
-      store.log(ws, "agent", b.id ? "updated budget" : "created budget", `${saved.name}: $${b.monthlyLimitUsd.toLocaleString("en-US")}/month`, { type: "budget", id: saved.id });
+      if (b.id && !(await store.budget(ws, b.id))) throw new Error("budget not found");
+      const saved = await store.saveBudget(ws, { name: b.name.slice(0, 80), category: b.category, limitUsdMinor: Math.round(b.monthlyLimitUsd * 100) }, b.id);
+      await store.log(ws, "agent", b.id ? "updated budget" : "created budget", `${saved.name}: $${b.monthlyLimitUsd.toLocaleString("en-US")}/month`, { type: "budget", id: saved.id });
       return { summary: `${b.id ? "Updated" : "Created"} budget ${saved.name}`, data: saved };
     }
     case "list_payees": {
-      const payees = store.payees(ws);
+      const payees = await store.payees(ws);
       return {
         summary: `Checked ${payees.length} payee${payees.length === 1 ? "" : "s"}`,
         data: payees.map(p => ({ id: p.id, name: p.name, country: p.country, rails: [p.iban || p.routingNumber ? "bank" : null, p.cardanoAddress ? "cardano" : null].filter(Boolean) })),
       };
     }
     case "list_payments": {
-      const payments = store.payments(ws).filter(p => !args.status || p.status === args.status);
+      const payments = (await store.payments(ws)).filter(p => !args.status || p.status === args.status);
       return { summary: `Checked ${payments.length} payment${payments.length === 1 ? "" : "s"}`, data: payments.slice(0, 50) };
     }
     case "get_permissions": {
-      const w = store.workspace(ws)!;
+      const w = (await store.workspace(ws))!;
       return {
         summary: "Checked permissions",
         data: {
           autonomy: w.autonomy,
           limits: { perPaymentUsd: usd(w.limits.perPaymentUsdMinor), monthlyUsd: usd(w.limits.monthlyUsdMinor), knownPayeesOnly: w.limits.knownPayeesOnly },
-          connections: store.connections(ws).map(c => ({ label: c.label, kind: c.kind, access: c.access })),
+          connections: (await store.connections(ws)).map(c => ({ label: c.label, kind: c.kind, access: c.access })),
         },
       };
     }
     case "draft_payment": {
       const p = DraftInput.parse(args);
-      if (p.documentId && !store.document(ws, p.documentId)) throw new Error("document not found");
+      if (p.documentId && !(await store.document(ws, p.documentId))) throw new Error("document not found");
       const amountMinor = majorToMinor(p.amount, p.currency);
-      const payment = deps.payments.draft(ws, { payeeName: p.payeeName, amountMinor, currency: p.currency, reason: p.reason, documentId: p.documentId, requestedBy: "agent" });
+      const payment = await deps.payments.draft(ws, { payeeName: p.payeeName, amountMinor, currency: p.currency, reason: p.reason, documentId: p.documentId, requestedBy: "agent" });
       const outcome = payment.status === "executing" ? "executing within your rules" : payment.status === "blocked" ? "blocked" : "waiting for approval";
       return {
         summary: `Drafted payment to ${payment.payeeName}: ${outcome}`,

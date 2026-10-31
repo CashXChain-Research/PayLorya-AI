@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import type { CxcLink } from "./cxc-link.js";
 import type { AgentLimits, Autonomy, PolicyDecision, Rail } from "./policy.js";
+import type { Files, Sql, SqlRow, SqlValue } from "./sql.js";
 
 // Row shapes follow web/src/dashboard/types.ts (the dashboard's API contract).
 
@@ -145,7 +145,7 @@ export interface StoredMessage {
   createdAt: string;
 }
 
-type Row = Record<string, SQLInputValue>;
+type Row = SqlRow;
 const now = () => new Date().toISOString();
 const opt = <T>(v: T | null | undefined): T | undefined => (v === null || v === undefined ? undefined : v);
 const json = <T>(v: unknown, fallback: T): T => {
@@ -159,51 +159,54 @@ const json = <T>(v: unknown, fallback: T): T => {
 
 export const DEFAULT_LIMITS: AgentLimits = { perPaymentUsdMinor: 50_000, monthlyUsdMinor: 500_000, knownPayeesOnly: true };
 
-/** Data access for one SQLite database. Every query is scoped by workspace id. */
+/** Data access for the AI CFO. Every query is scoped by workspace id; files live in `files`. */
 export class Store {
-  constructor(readonly db: DatabaseSync) {}
+  constructor(
+    readonly sql: Sql,
+    readonly files: Files,
+  ) {}
 
-  private all(sql: string, ...params: SQLInputValue[]): Row[] {
-    return this.db.prepare(sql).all(...params) as Row[];
+  private async all(sql: string, ...params: SqlValue[]): Promise<Row[]> {
+    return (await this.sql.query(sql, params)).rows;
   }
-  private get(sql: string, ...params: SQLInputValue[]): Row | undefined {
-    return this.db.prepare(sql).get(...params) as Row | undefined;
+  private async get(sql: string, ...params: SqlValue[]): Promise<Row | undefined> {
+    return (await this.sql.query(sql, params)).rows[0];
   }
-  private run(sql: string, ...params: SQLInputValue[]): void {
-    this.db.prepare(sql).run(...params);
+  private async run(sql: string, ...params: SqlValue[]): Promise<number> {
+    return (await this.sql.query(sql, params)).changes;
   }
 
   // Workspaces -----------------------------------------------------------------------------
 
-  workspaceForUser(userId: string, defaultName: string): Workspace {
-    const row = this.get("SELECT * FROM workspaces WHERE owner_user_id = ?", userId);
+  async workspaceForUser(userId: string, defaultName: string): Promise<Workspace> {
+    const row = await this.get("SELECT * FROM workspaces WHERE owner_user_id = ?", userId);
     if (row) return toWorkspace(row);
-    const id = randomUUID();
-    this.run(
-      "INSERT INTO workspaces (id, owner_user_id, name, autonomy, per_payment_usd_minor, monthly_usd_minor, known_payees_only, created_at) VALUES (?, ?, ?, 'guarded', ?, ?, 1, ?)",
-      id,
+    // Two first requests at once: the unique owner column keeps one, both read it back.
+    await this.run(
+      "INSERT INTO workspaces (id, owner_user_id, name, autonomy, per_payment_usd_minor, monthly_usd_minor, known_payees_only, created_at) VALUES (?, ?, ?, 'guarded', ?, ?, 1, ?) ON CONFLICT (owner_user_id) DO NOTHING",
+      randomUUID(),
       userId,
       defaultName,
       DEFAULT_LIMITS.perPaymentUsdMinor,
       DEFAULT_LIMITS.monthlyUsdMinor,
       now(),
     );
-    return toWorkspace(this.get("SELECT * FROM workspaces WHERE id = ?", id)!);
+    return toWorkspace((await this.get("SELECT * FROM workspaces WHERE owner_user_id = ?", userId))!);
   }
 
-  setCxcLink(id: string, link: CxcLink): void {
-    this.run("UPDATE workspaces SET cxc_link_json = ? WHERE id = ?", JSON.stringify(link), id);
+  async setCxcLink(id: string, link: CxcLink): Promise<void> {
+    await this.run("UPDATE workspaces SET cxc_link_json = ? WHERE id = ?", JSON.stringify(link), id);
   }
 
-  workspace(id: string): Workspace | undefined {
-    const row = this.get("SELECT * FROM workspaces WHERE id = ?", id);
+  async workspace(id: string): Promise<Workspace | undefined> {
+    const row = await this.get("SELECT * FROM workspaces WHERE id = ?", id);
     return row ? toWorkspace(row) : undefined;
   }
 
-  updateWorkspace(id: string, patch: { name?: string; autonomy?: Autonomy; limits?: Partial<AgentLimits> }): Workspace {
-    const ws = this.workspace(id)!;
+  async updateWorkspace(id: string, patch: { name?: string; autonomy?: Autonomy; limits?: Partial<AgentLimits> }): Promise<Workspace> {
+    const ws = (await this.workspace(id))!;
     const limits = { ...ws.limits, ...patch.limits };
-    this.run(
+    await this.run(
       "UPDATE workspaces SET name = ?, autonomy = ?, per_payment_usd_minor = ?, monthly_usd_minor = ?, known_payees_only = ? WHERE id = ?",
       patch.name ?? ws.name,
       patch.autonomy ?? ws.autonomy,
@@ -212,23 +215,23 @@ export class Store {
       limits.knownPayeesOnly ? 1 : 0,
       id,
     );
-    return this.workspace(id)!;
+    return (await this.workspace(id))!;
   }
 
   // Connections ----------------------------------------------------------------------------
 
-  connections(ws: string): ConnectionRow[] {
-    return this.all("SELECT * FROM connections WHERE workspace_id = ? ORDER BY created_at", ws).map(toConnection);
+  async connections(ws: string): Promise<ConnectionRow[]> {
+    return (await this.all("SELECT * FROM connections WHERE workspace_id = ? ORDER BY created_at", ws)).map(toConnection);
   }
 
-  connection(ws: string, id: string): ConnectionRow | undefined {
-    const row = this.get("SELECT * FROM connections WHERE workspace_id = ? AND id = ?", ws, id);
+  async connection(ws: string, id: string): Promise<ConnectionRow | undefined> {
+    const row = await this.get("SELECT * FROM connections WHERE workspace_id = ? AND id = ?", ws, id);
     return row ? toConnection(row) : undefined;
   }
 
-  addConnection(ws: string, c: { kind: ConnectionKind; label: string; network: string; address?: string; access: Access }): ConnectionRow {
+  async addConnection(ws: string, c: { kind: ConnectionKind; label: string; network: string; address?: string; access: Access }): Promise<ConnectionRow> {
     const id = randomUUID();
-    this.run(
+    await this.run(
       "INSERT INTO connections (id, workspace_id, kind, label, network, address, access, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
       id,
       ws,
@@ -239,14 +242,14 @@ export class Store {
       c.access,
       now(),
     );
-    return this.connection(ws, id)!;
+    return (await this.connection(ws, id))!;
   }
 
-  updateConnection(ws: string, id: string, patch: { label?: string; access?: Access; balances?: Balance[]; error?: string | null }): void {
-    const c = this.connection(ws, id);
+  async updateConnection(ws: string, id: string, patch: { label?: string; access?: Access; balances?: Balance[]; error?: string | null }): Promise<void> {
+    const c = await this.connection(ws, id);
     if (!c) return;
     const refreshed = patch.balances !== undefined || patch.error !== undefined;
-    this.run(
+    await this.run(
       "UPDATE connections SET label = ?, access = ?, balances_json = ?, error = ?, refreshed_at = ? WHERE workspace_id = ? AND id = ?",
       patch.label ?? c.label,
       patch.access ?? c.access,
@@ -258,48 +261,51 @@ export class Store {
     );
   }
 
-  deleteConnection(ws: string, id: string): boolean {
-    return Number(this.db.prepare("DELETE FROM connections WHERE workspace_id = ? AND id = ?").run(ws, id).changes) > 0;
+  async deleteConnection(ws: string, id: string): Promise<boolean> {
+    return (await this.run("DELETE FROM connections WHERE workspace_id = ? AND id = ?", ws, id)) > 0;
   }
 
   // Documents ------------------------------------------------------------------------------
 
-  addDocument(ws: string, d: { filename: string; mimeType: string; data: Uint8Array; source: "upload" | "chat" }): DocumentRow {
+  /** Stores the file first: a document row always has its file. */
+  async addDocument(ws: string, d: { filename: string; mimeType: string; data: Uint8Array; source: "upload" | "chat" }): Promise<DocumentRow> {
     const id = randomUUID();
-    this.run(
-      "INSERT INTO documents (id, workspace_id, filename, mime_type, size, source, status, data, created_at) VALUES (?, ?, ?, ?, ?, ?, 'processing', ?, ?)",
+    await this.files.put(fileKey(ws, id), d.data, d.mimeType);
+    await this.run(
+      "INSERT INTO documents (id, workspace_id, filename, mime_type, size, source, status, created_at) VALUES (?, ?, ?, ?, ?, ?, 'processing', ?)",
       id,
       ws,
       d.filename,
       d.mimeType,
       d.data.byteLength,
       d.source,
-      d.data,
       now(),
     );
-    return this.document(ws, id)!;
+    return (await this.document(ws, id))!;
   }
 
-  documents(ws: string): DocumentRow[] {
-    return this.all("SELECT * FROM documents WHERE workspace_id = ? ORDER BY created_at DESC", ws).map(toDocument);
+  async documents(ws: string): Promise<DocumentRow[]> {
+    return (await this.all("SELECT * FROM documents WHERE workspace_id = ? ORDER BY created_at DESC", ws)).map(toDocument);
   }
 
-  document(ws: string, id: string): DocumentRow | undefined {
-    const row = this.get("SELECT * FROM documents WHERE workspace_id = ? AND id = ?", ws, id);
+  async document(ws: string, id: string): Promise<DocumentRow | undefined> {
+    const row = await this.get("SELECT * FROM documents WHERE workspace_id = ? AND id = ?", ws, id);
     return row ? toDocument(row) : undefined;
   }
 
-  documentFile(ws: string, id: string): { mimeType: string; filename: string; data: Uint8Array } | undefined {
-    const row = this.get("SELECT mime_type, filename, data FROM documents WHERE workspace_id = ? AND id = ?", ws, id);
-    return row ? { mimeType: String(row.mime_type), filename: String(row.filename), data: row.data as Uint8Array } : undefined;
+  async documentFile(ws: string, id: string): Promise<{ mimeType: string; filename: string; data: Uint8Array } | undefined> {
+    const doc = await this.document(ws, id);
+    if (!doc) return undefined;
+    const data = await this.files.get(fileKey(ws, id));
+    return data ? { mimeType: doc.mimeType, filename: doc.filename, data } : undefined;
   }
 
-  completeDocument(
+  async completeDocument(
     ws: string,
     id: string,
     d: Pick<DocumentRow, "kind" | "title" | "summary" | "counterparty" | "amountMinor" | "currency" | "issueDate" | "dueDate" | "category" | "extracted">,
-  ): void {
-    this.run(
+  ): Promise<void> {
+    await this.run(
       `UPDATE documents SET status = 'processed', kind = ?, title = ?, summary = ?, counterparty = ?, amount_minor = ?, currency = ?,
          issue_date = ?, due_date = ?, category = ?, extracted_json = ?, error = NULL WHERE workspace_id = ? AND id = ?`,
       d.kind ?? null,
@@ -317,19 +323,33 @@ export class Store {
     );
   }
 
-  failDocument(ws: string, id: string, error: string): void {
-    this.run("UPDATE documents SET status = 'failed', error = ? WHERE workspace_id = ? AND id = ?", error, ws, id);
+  async failDocument(ws: string, id: string, error: string): Promise<void> {
+    await this.run("UPDATE documents SET status = 'failed', error = ? WHERE workspace_id = ? AND id = ?", error, ws, id);
   }
 
-  deleteDocument(ws: string, id: string): boolean {
-    return Number(this.db.prepare("DELETE FROM documents WHERE workspace_id = ? AND id = ?").run(ws, id).changes) > 0;
+  async deleteDocument(ws: string, id: string): Promise<boolean> {
+    const deleted = (await this.run("DELETE FROM documents WHERE workspace_id = ? AND id = ?", ws, id)) > 0;
+    if (deleted) await this.files.delete(fileKey(ws, id));
+    return deleted;
   }
 
   // Transactions ---------------------------------------------------------------------------
 
-  addTransaction(ws: string, t: Omit<Transaction, "id"> & { paymentId?: string }): Transaction {
+  /** Replaces a document's ledger entries in one atomic batch. */
+  async replaceDocumentTransactions(ws: string, documentId: string, entries: Array<Omit<Transaction, "id" | "documentId" | "source">>): Promise<void> {
+    await this.sql.batch([
+      { sql: "DELETE FROM transactions WHERE workspace_id = ? AND document_id = ?", params: [ws, documentId] },
+      ...entries.map(t => ({
+        sql: `INSERT INTO transactions (id, workspace_id, date, description, counterparty, category, amount_minor, currency, usd_minor, source, document_id)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'document', ?)`,
+        params: [randomUUID(), ws, t.date, t.description, t.counterparty ?? null, t.category, t.amountMinor, t.currency, t.usdMinor, documentId],
+      })),
+    ]);
+  }
+
+  async addTransaction(ws: string, t: Omit<Transaction, "id"> & { paymentId?: string }): Promise<Transaction> {
     const id = randomUUID();
-    this.run(
+    await this.run(
       `INSERT INTO transactions (id, workspace_id, date, description, counterparty, category, amount_minor, currency, usd_minor, source, document_id, payment_id)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       id,
@@ -345,94 +365,93 @@ export class Store {
       t.documentId ?? null,
       t.paymentId ?? null,
     );
-    return { id, ...t };
+    const { paymentId: _p, ...rest } = t;
+    return { id, ...rest };
   }
 
   /** `from`/`to` are inclusive YYYY-MM-DD bounds. */
-  transactions(ws: string, range: { from?: string; to?: string } = {}): Transaction[] {
-    return this.all(
-      "SELECT * FROM transactions WHERE workspace_id = ? AND date >= ? AND date <= ? ORDER BY date DESC",
-      ws,
-      range.from ?? "0000-00-00",
-      range.to ?? "9999-99-99",
+  async transactions(ws: string, range: { from?: string; to?: string } = {}): Promise<Transaction[]> {
+    return (
+      await this.all(
+        "SELECT * FROM transactions WHERE workspace_id = ? AND date >= ? AND date <= ? ORDER BY date DESC",
+        ws,
+        range.from ?? "0000-00-00",
+        range.to ?? "9999-99-99",
+      )
     ).map(toTransaction);
   }
 
-  transactionsForDocument(ws: string, documentId: string): Transaction[] {
-    return this.all("SELECT * FROM transactions WHERE workspace_id = ? AND document_id = ? ORDER BY date", ws, documentId).map(toTransaction);
-  }
-
-  deleteTransactionsForDocument(ws: string, documentId: string): void {
-    this.run("DELETE FROM transactions WHERE workspace_id = ? AND document_id = ?", ws, documentId);
+  async transactionsForDocument(ws: string, documentId: string): Promise<Transaction[]> {
+    return (await this.all("SELECT * FROM transactions WHERE workspace_id = ? AND document_id = ? ORDER BY date", ws, documentId)).map(toTransaction);
   }
 
   // Payees ---------------------------------------------------------------------------------
 
-  payees(ws: string): Payee[] {
-    return this.all("SELECT * FROM payees WHERE workspace_id = ? ORDER BY name", ws).map(toPayee);
+  async payees(ws: string): Promise<Payee[]> {
+    return (await this.all("SELECT * FROM payees WHERE workspace_id = ? ORDER BY name", ws)).map(toPayee);
   }
 
-  payee(ws: string, id: string): Payee | undefined {
-    const row = this.get("SELECT * FROM payees WHERE workspace_id = ? AND id = ?", ws, id);
+  async payee(ws: string, id: string): Promise<Payee | undefined> {
+    const row = await this.get("SELECT * FROM payees WHERE workspace_id = ? AND id = ?", ws, id);
     return row ? toPayee(row) : undefined;
   }
 
-  savePayee(ws: string, p: PayeeInput, id?: string): Payee {
+  async savePayee(ws: string, p: PayeeInput, id?: string): Promise<Payee> {
     const values = [p.name, p.country ?? null, p.iban ?? null, p.bic ?? null, p.routingNumber ?? null, p.accountNumber ?? null, p.accountType ?? null, p.cardanoAddress ?? null];
     if (id) {
-      this.run(
+      await this.run(
         "UPDATE payees SET name = ?, country = ?, iban = ?, bic = ?, routing_number = ?, account_number = ?, account_type = ?, cardano_address = ? WHERE workspace_id = ? AND id = ?",
         ...values,
         ws,
         id,
       );
-      return this.payee(ws, id)!;
+      return (await this.payee(ws, id))!;
     }
     const newId = randomUUID();
-    this.run(
+    await this.run(
       "INSERT INTO payees (id, workspace_id, name, country, iban, bic, routing_number, account_number, account_type, cardano_address, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       newId,
       ws,
       ...values,
       now(),
     );
-    return this.payee(ws, newId)!;
+    return (await this.payee(ws, newId))!;
   }
 
-  deletePayee(ws: string, id: string): boolean {
-    return Number(this.db.prepare("DELETE FROM payees WHERE workspace_id = ? AND id = ?").run(ws, id).changes) > 0;
+  async deletePayee(ws: string, id: string): Promise<boolean> {
+    return (await this.run("DELETE FROM payees WHERE workspace_id = ? AND id = ?", ws, id)) > 0;
   }
 
   // Budgets --------------------------------------------------------------------------------
 
-  budgets(ws: string): BudgetRow[] {
-    return this.all("SELECT * FROM budgets WHERE workspace_id = ? ORDER BY created_at", ws).map(toBudget);
+  async budgets(ws: string): Promise<BudgetRow[]> {
+    return (await this.all("SELECT * FROM budgets WHERE workspace_id = ? ORDER BY created_at", ws)).map(toBudget);
   }
 
-  budget(ws: string, id: string): BudgetRow | undefined {
-    const row = this.get("SELECT * FROM budgets WHERE workspace_id = ? AND id = ?", ws, id);
+  async budget(ws: string, id: string): Promise<BudgetRow | undefined> {
+    const row = await this.get("SELECT * FROM budgets WHERE workspace_id = ? AND id = ?", ws, id);
     return row ? toBudget(row) : undefined;
   }
 
-  saveBudget(ws: string, b: { name: string; category: string; limitUsdMinor: number }, id?: string): BudgetRow {
+  async saveBudget(ws: string, b: { name: string; category: string; limitUsdMinor: number }, id?: string): Promise<BudgetRow> {
     if (id) {
-      this.run("UPDATE budgets SET name = ?, category = ?, limit_usd_minor = ? WHERE workspace_id = ? AND id = ?", b.name, b.category, b.limitUsdMinor, ws, id);
-      return this.budget(ws, id)!;
+      await this.run("UPDATE budgets SET name = ?, category = ?, limit_usd_minor = ? WHERE workspace_id = ? AND id = ?", b.name, b.category, b.limitUsdMinor, ws, id);
+      return (await this.budget(ws, id))!;
     }
     const newId = randomUUID();
-    this.run("INSERT INTO budgets (id, workspace_id, name, category, limit_usd_minor, created_at) VALUES (?, ?, ?, ?, ?, ?)", newId, ws, b.name, b.category, b.limitUsdMinor, now());
-    return this.budget(ws, newId)!;
+    await this.run("INSERT INTO budgets (id, workspace_id, name, category, limit_usd_minor, created_at) VALUES (?, ?, ?, ?, ?, ?)", newId, ws, b.name, b.category, b.limitUsdMinor, now());
+    return (await this.budget(ws, newId))!;
   }
 
-  deleteBudget(ws: string, id: string): boolean {
-    return Number(this.db.prepare("DELETE FROM budgets WHERE workspace_id = ? AND id = ?").run(ws, id).changes) > 0;
+  async deleteBudget(ws: string, id: string): Promise<boolean> {
+    return (await this.run("DELETE FROM budgets WHERE workspace_id = ? AND id = ?", ws, id)) > 0;
   }
 
   // Payments -------------------------------------------------------------------------------
 
-  addPayment(ws: string, p: Omit<Payment, "id" | "createdAt">): Payment {
+  async addPayment(ws: string, p: Omit<Payment, "id" | "createdAt">): Promise<Payment> {
     const id = randomUUID();
-    this.run(
+    await this.run(
       `INSERT INTO payments (id, workspace_id, payee_id, payee_name, amount_minor, currency, usd_minor, rail, reason, document_id, status, requested_by, policy_json, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       id,
@@ -450,22 +469,26 @@ export class Store {
       JSON.stringify(p.policy),
       now(),
     );
-    return this.payment(ws, id)!;
+    return (await this.payment(ws, id))!;
   }
 
-  payments(ws: string): Payment[] {
-    return this.all("SELECT * FROM payments WHERE workspace_id = ? ORDER BY created_at DESC", ws).map(toPayment);
+  async payments(ws: string): Promise<Payment[]> {
+    return (await this.all("SELECT * FROM payments WHERE workspace_id = ? ORDER BY created_at DESC", ws)).map(toPayment);
   }
 
-  payment(ws: string, id: string): Payment | undefined {
-    const row = this.get("SELECT * FROM payments WHERE workspace_id = ? AND id = ?", ws, id);
+  async payment(ws: string, id: string): Promise<Payment | undefined> {
+    const row = await this.get("SELECT * FROM payments WHERE workspace_id = ? AND id = ?", ws, id);
     return row ? toPayment(row) : undefined;
   }
 
-  updatePayment(ws: string, id: string, patch: Partial<Pick<Payment, "status" | "policy" | "runId" | "txHash" | "explorerUrl" | "reference" | "error" | "decidedAt" | "executedAt">>): Payment {
-    const p = this.payment(ws, id)!;
+  async updatePayment(
+    ws: string,
+    id: string,
+    patch: Partial<Pick<Payment, "status" | "policy" | "runId" | "txHash" | "explorerUrl" | "reference" | "error" | "decidedAt" | "executedAt">>,
+  ): Promise<Payment> {
+    const p = (await this.payment(ws, id))!;
     const next = { ...p, ...patch };
-    this.run(
+    await this.run(
       `UPDATE payments SET status = ?, policy_json = ?, run_id = ?, tx_hash = ?, explorer_url = ?, reference = ?, error = ?, decided_at = ?, executed_at = ?
        WHERE workspace_id = ? AND id = ?`,
       next.status,
@@ -480,13 +503,30 @@ export class Store {
       ws,
       id,
     );
-    return this.payment(ws, id)!;
+    return (await this.payment(ws, id))!;
+  }
+
+  /**
+   * Moves a payment from one status to another only if it is still in `from`: a double click or
+   * two tabs cannot both start the same payment. True when this call made the move.
+   */
+  async claimPayment(ws: string, id: string, from: PaymentStatus[], to: PaymentStatus, decidedAt?: string): Promise<boolean> {
+    const placeholders = from.map(() => "?").join(", ");
+    const changes = await this.run(
+      `UPDATE payments SET status = ?, decided_at = COALESCE(?, decided_at) WHERE workspace_id = ? AND id = ? AND status IN (${placeholders})`,
+      to,
+      decidedAt ?? null,
+      ws,
+      id,
+      ...from,
+    );
+    return changes > 0;
   }
 
   /** USD cents of payments the agent executed on its own (no human decision) since `since`. */
-  agentExecutedSince(ws: string, since: string): number {
-    const row = this.get(
-      "SELECT COALESCE(SUM(usd_minor), 0) AS total FROM payments WHERE workspace_id = ? AND requested_by = 'agent' AND decided_at IS NULL AND status IN ('executing', 'executed') AND executed_at >= ?",
+  async agentExecutedSince(ws: string, since: string): Promise<number> {
+    const row = await this.get(
+      "SELECT COALESCE(SUM(usd_minor), 0) AS total FROM payments WHERE workspace_id = ? AND requested_by = 'agent' AND decided_at IS NULL AND status IN ('executing', 'executed') AND created_at >= ?",
       ws,
       since,
     );
@@ -495,8 +535,8 @@ export class Store {
 
   // Activity -------------------------------------------------------------------------------
 
-  log(ws: string, actor: Activity["actor"], action: string, detail: string, ref?: { type: string; id: string }): void {
-    this.run(
+  async log(ws: string, actor: Activity["actor"], action: string, detail: string, ref?: { type: string; id: string }): Promise<void> {
+    await this.run(
       "INSERT INTO activity (id, workspace_id, at, actor, action, detail, ref_type, ref_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
       randomUUID(),
       ws,
@@ -509,8 +549,8 @@ export class Store {
     );
   }
 
-  activity(ws: string, limit = 100): Activity[] {
-    return this.all("SELECT * FROM activity WHERE workspace_id = ? ORDER BY at DESC LIMIT ?", ws, limit).map(r => ({
+  async activity(ws: string, limit = 100): Promise<Activity[]> {
+    return (await this.all("SELECT * FROM activity WHERE workspace_id = ? ORDER BY at DESC LIMIT ?", ws, limit)).map(r => ({
       id: String(r.id),
       at: String(r.at),
       actor: r.actor as Activity["actor"],
@@ -522,36 +562,36 @@ export class Store {
 
   // Chats ----------------------------------------------------------------------------------
 
-  chats(ws: string): ChatSummary[] {
-    return this.all("SELECT id, title, updated_at FROM chats WHERE workspace_id = ? ORDER BY updated_at DESC", ws).map(r => ({
+  async chats(ws: string): Promise<ChatSummary[]> {
+    return (await this.all("SELECT id, title, updated_at FROM chats WHERE workspace_id = ? ORDER BY updated_at DESC", ws)).map(r => ({
       id: String(r.id),
       title: String(r.title),
       updatedAt: String(r.updated_at),
     }));
   }
 
-  chat(ws: string, id: string): ChatSummary | undefined {
-    const r = this.get("SELECT id, title, updated_at FROM chats WHERE workspace_id = ? AND id = ?", ws, id);
+  async chat(ws: string, id: string): Promise<ChatSummary | undefined> {
+    const r = await this.get("SELECT id, title, updated_at FROM chats WHERE workspace_id = ? AND id = ?", ws, id);
     return r ? { id: String(r.id), title: String(r.title), updatedAt: String(r.updated_at) } : undefined;
   }
 
-  createChat(ws: string, title = "New chat"): ChatSummary {
+  async createChat(ws: string, title = "New chat"): Promise<ChatSummary> {
     const id = randomUUID();
     const at = now();
-    this.run("INSERT INTO chats (id, workspace_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)", id, ws, title, at, at);
+    await this.run("INSERT INTO chats (id, workspace_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)", id, ws, title, at, at);
     return { id, title, updatedAt: at };
   }
 
-  renameChat(ws: string, id: string, title: string): void {
-    this.run("UPDATE chats SET title = ? WHERE workspace_id = ? AND id = ?", title, ws, id);
+  async renameChat(ws: string, id: string, title: string): Promise<void> {
+    await this.run("UPDATE chats SET title = ? WHERE workspace_id = ? AND id = ?", title, ws, id);
   }
 
-  deleteChat(ws: string, id: string): boolean {
-    return Number(this.db.prepare("DELETE FROM chats WHERE workspace_id = ? AND id = ?").run(ws, id).changes) > 0;
+  async deleteChat(ws: string, id: string): Promise<boolean> {
+    return (await this.run("DELETE FROM chats WHERE workspace_id = ? AND id = ?", ws, id)) > 0;
   }
 
-  messages(chatId: string): StoredMessage[] {
-    return this.all("SELECT * FROM chat_messages WHERE chat_id = ? ORDER BY seq", chatId).map(r => ({
+  async messages(chatId: string): Promise<StoredMessage[]> {
+    return (await this.all("SELECT * FROM chat_messages WHERE chat_id = ? ORDER BY seq", chatId)).map(r => ({
       id: String(r.id),
       role: r.role as StoredMessage["role"],
       text: String(r.text),
@@ -562,41 +602,38 @@ export class Store {
     }));
   }
 
-  addMessage(chatId: string, m: Omit<StoredMessage, "id" | "createdAt">): StoredMessage {
+  async addMessage(chatId: string, m: Omit<StoredMessage, "id" | "createdAt">): Promise<StoredMessage> {
     const id = randomUUID();
     const at = now();
-    const seq = Number(this.get("SELECT COALESCE(MAX(seq), 0) + 1 AS n FROM chat_messages WHERE chat_id = ?", chatId)!.n);
-    this.run(
-      "INSERT INTO chat_messages (id, chat_id, seq, role, text, content_json, attachments_json, tools_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      id,
-      chatId,
-      seq,
-      m.role,
-      m.text,
-      JSON.stringify(m.content),
-      m.attachments ? JSON.stringify(m.attachments) : null,
-      m.tools ? JSON.stringify(m.tools) : null,
-      at,
-    );
-    this.run("UPDATE chats SET updated_at = ? WHERE id = ?", at, chatId);
+    await this.sql.batch([
+      {
+        sql: `INSERT INTO chat_messages (id, chat_id, seq, role, text, content_json, attachments_json, tools_json, created_at)
+              VALUES (?, ?, (SELECT COALESCE(MAX(seq), 0) + 1 FROM chat_messages WHERE chat_id = ?), ?, ?, ?, ?, ?, ?)`,
+        params: [id, chatId, chatId, m.role, m.text, JSON.stringify(m.content), m.attachments ? JSON.stringify(m.attachments) : null, m.tools ? JSON.stringify(m.tools) : null, at],
+      },
+      { sql: "UPDATE chats SET updated_at = ? WHERE id = ?", params: [at, chatId] },
+    ]);
     return { id, createdAt: at, ...m };
   }
 
   // AI usage (cost guard) ------------------------------------------------------------------
 
   /** Counts one model call for today; false once the daily limit is reached (nothing counted). */
-  takeAiCall(ws: string, dailyLimit: number): boolean {
+  async takeAiCall(ws: string, dailyLimit: number): Promise<boolean> {
     const day = now().slice(0, 10);
-    const used = Number(this.get("SELECT calls FROM ai_usage WHERE workspace_id = ? AND day = ?", ws, day)?.calls ?? 0);
-    if (used >= dailyLimit) return false;
-    this.run(
-      "INSERT INTO ai_usage (workspace_id, day, calls) VALUES (?, ?, 1) ON CONFLICT (workspace_id, day) DO UPDATE SET calls = calls + 1",
+    // One statement: increments only below the limit, so concurrent requests cannot overshoot.
+    const changes = await this.run(
+      `INSERT INTO ai_usage (workspace_id, day, calls) VALUES (?, ?, 1)
+       ON CONFLICT (workspace_id, day) DO UPDATE SET calls = calls + 1 WHERE calls < ?`,
       ws,
       day,
+      dailyLimit,
     );
-    return true;
+    return changes > 0;
   }
 }
+
+const fileKey = (ws: string, documentId: string) => `${ws}/${documentId}`;
 
 function toWorkspace(r: Row): Workspace {
   return {

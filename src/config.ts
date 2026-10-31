@@ -75,6 +75,8 @@ const EnvSchema = z.object({
   // AI CFO product (accounts, dashboard). SQLite file under DATA_DIR; the secret signs sessions.
   BETTER_AUTH_SECRET: optional.refine(v => v === undefined || v.length >= 32, "at least 32 characters"),
   DATA_DIR: z.string().default("data"),
+  // Cloudflare: the Worker's D1/R2 proxy (http://cfo-data.internal). Unset: SQLite and files under DATA_DIR.
+  CFO_DATA_URL: optional,
   // Model calls (document reads + chat messages) per workspace per day: a cost guard for open signups.
   CFO_AI_DAILY_LIMIT: z.coerce.number().int().positive().default(150),
 });

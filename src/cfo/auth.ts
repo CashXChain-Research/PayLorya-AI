@@ -1,9 +1,8 @@
 import { randomBytes } from "node:crypto";
-import type { DatabaseSync } from "node:sqlite";
-import { betterAuth, type BetterAuthOptions } from "better-auth";
-import { getMigrations } from "better-auth/db/migration";
-import { fromNodeHeaders } from "better-auth/node";
 import type { IncomingHttpHeaders } from "node:http";
+import { betterAuth } from "better-auth";
+import { fromNodeHeaders } from "better-auth/node";
+import { sqlDialect, type Sql } from "./sql.js";
 
 export interface SessionUser {
   id: string;
@@ -11,23 +10,20 @@ export interface SessionUser {
   email: string;
 }
 
-export type Auth = Awaited<ReturnType<typeof createAuth>>;
+export type Auth = ReturnType<typeof createAuth>;
 
-/** Email + password accounts on the shared SQLite database. Creates the auth tables on start. */
-export async function createAuth(db: DatabaseSync, opts: { baseUrl: string; secret?: string }) {
+/** Email + password accounts in the AI CFO database. Its tables come from db.ts migrations. */
+export function createAuth(sql: Sql, opts: { baseUrl: string; secret?: string }) {
   const secret = opts.secret ?? randomBytes(32).toString("hex");
   if (!opts.secret) console.warn("BETTER_AUTH_SECRET not set: using a random secret, sessions end on restart");
-  const options = {
-    database: db,
+  const auth = betterAuth({
+    database: { dialect: sqlDialect(sql), type: "sqlite" },
     secret,
     baseURL: opts.baseUrl,
     trustedOrigins: [opts.baseUrl],
     emailAndPassword: { enabled: true, minPasswordLength: 8, autoSignIn: true },
     session: { expiresIn: 60 * 60 * 24 * 14 },
-  } satisfies BetterAuthOptions;
-  const { runMigrations } = await getMigrations(options);
-  await runMigrations();
-  const auth = betterAuth(options);
+  });
   return {
     auth,
     async userFrom(headers: IncomingHttpHeaders): Promise<SessionUser | undefined> {

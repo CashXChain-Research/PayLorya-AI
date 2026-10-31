@@ -25,27 +25,26 @@ export interface Budget extends BudgetRow {
 }
 
 /** Budgets with this month's spend (money out in the budget's category). */
-export function budgetsWithSpend(store: Store, ws: string): Budget[] {
+export async function budgetsWithSpend(store: Store, ws: string): Promise<Budget[]> {
   const month = monthOf(today());
   const spend = new Map<string, number>();
-  for (const t of store.transactions(ws, { from: `${month}-01`, to: `${month}-31` })) {
+  for (const t of await store.transactions(ws, { from: `${month}-01`, to: `${month}-31` })) {
     if (t.usdMinor < 0) spend.set(t.category, (spend.get(t.category) ?? 0) - t.usdMinor);
   }
-  return store.budgets(ws).map(b => ({ ...b, spentUsdMinor: spend.get(b.category) ?? 0 }));
+  return (await store.budgets(ws)).map(b => ({ ...b, spentUsdMinor: spend.get(b.category) ?? 0 }));
 }
 
 /** Invoices with a direction, not yet paid through the CFO. */
-export function openInvoices(store: Store, ws: string, direction: "money_out" | "money_in"): DocumentRow[] {
-  const paid = new Set(store.payments(ws).filter(p => p.status === "executed" || p.status === "executing").map(p => p.documentId));
-  return store
-    .documents(ws)
+export async function openInvoices(store: Store, ws: string, direction: "money_out" | "money_in"): Promise<DocumentRow[]> {
+  const paid = new Set((await store.payments(ws)).filter(p => p.status === "executed" || p.status === "executing").map(p => p.documentId));
+  return (await store.documents(ws))
     .filter(d => d.status === "processed" && d.kind === "invoice" && d.amountMinor && d.currency && !paid.has(d.id))
     .filter(d => (d.extracted?.direction ?? "money_out") === direction)
     .sort((a, b) => (a.dueDate ?? "9999").localeCompare(b.dueDate ?? "9999"));
 }
 
-export function cashPosition(store: Store, ws: string) {
-  const connections = store.connections(ws).map(c => ({
+export async function cashPosition(store: Store, ws: string) {
+  const connections = (await store.connections(ws)).map(c => ({
     id: c.id,
     label: c.label,
     usdMinor: c.balances.reduce((sum, b) => sum + (b.usdMinor ?? 0), 0),
@@ -54,11 +53,11 @@ export function cashPosition(store: Store, ws: string) {
   return { totalUsdMinor: connections.reduce((sum, c) => sum + c.usdMinor, 0), connections };
 }
 
-export function overview(store: Store, ws: string) {
-  const workspace = store.workspace(ws)!;
+export async function overview(store: Store, ws: string) {
+  const workspace = (await store.workspace(ws))!;
   const month = monthOf(today());
   const months = monthsBack(6);
-  const txs = store.transactions(ws, { from: `${months[0]}-01` });
+  const txs = await store.transactions(ws, { from: `${months[0]}-01` });
 
   const byCategory = new Map<string, number>();
   const monthly = new Map(months.map(m => [m, { month: m, inUsdMinor: 0, outUsdMinor: 0 }]));
@@ -71,12 +70,12 @@ export function overview(store: Store, ws: string) {
     if (monthOf(t.date) === month && t.usdMinor < 0) byCategory.set(t.category, (byCategory.get(t.category) ?? 0) - t.usdMinor);
   }
 
-  const payables = openInvoices(store, ws, "money_out");
-  const pending = store.payments(ws).filter(p => p.status === "pending_approval");
-  const docs = store.documents(ws);
+  const payables = await openInvoices(store, ws, "money_out");
+  const pending = (await store.payments(ws)).filter(p => p.status === "pending_approval");
+  const docs = await store.documents(ws);
   return {
     workspace,
-    cash: cashPosition(store, ws),
+    cash: await cashPosition(store, ws),
     payables: {
       count: payables.length,
       totalUsdMinor: payables.reduce((sum, d) => sum + toUsdMinor(d.amountMinor!, d.currency!), 0),
@@ -85,10 +84,10 @@ export function overview(store: Store, ws: string) {
     approvals: { count: pending.length, payments: pending.slice(0, 8) },
     spendByCategory: [...byCategory].map(([category, usdMinor]) => ({ category, usdMinor })).sort((a, b) => b.usdMinor - a.usdMinor),
     monthly: [...monthly.values()],
-    budgets: budgetsWithSpend(store, ws),
+    budgets: await budgetsWithSpend(store, ws),
     agent: {
       autonomy: workspace.autonomy,
-      executedThisMonthUsdMinor: store.agentExecutedSince(ws, `${month}-01T00:00:00.000Z`),
+      executedThisMonthUsdMinor: await store.agentExecutedSince(ws, `${month}-01T00:00:00.000Z`),
       limits: workspace.limits,
     },
     documents: { total: docs.length, processing: docs.filter(d => d.status === "processing").length },
@@ -99,23 +98,23 @@ export function overview(store: Store, ws: string) {
  * Cash forecast: today's connected balances, minus open payables on their due dates, plus open
  * receivables. Overdue items land today. Deterministic; no model involved.
  */
-export function forecast(store: Store, ws: string, days: number) {
+export async function forecast(store: Store, ws: string, days: number) {
   const start = today();
   const end = addDays(start, days);
   const events: Array<{ date: string; label: string; usdMinor: number; documentId?: string }> = [];
   for (const [direction, sign] of [["money_out", -1], ["money_in", 1]] as const) {
-    for (const d of openInvoices(store, ws, direction)) {
+    for (const d of await openInvoices(store, ws, direction)) {
       const date = !d.dueDate || d.dueDate < start ? start : d.dueDate;
       if (date > end) continue;
       events.push({ date, label: `${sign < 0 ? "Pay" : "Receive"} ${d.counterparty ?? d.title ?? d.filename}`, usdMinor: sign * toUsdMinor(d.amountMinor!, d.currency!), documentId: d.id });
     }
   }
-  for (const p of store.payments(ws).filter(p => p.status === "pending_approval" && !p.documentId)) {
+  for (const p of (await store.payments(ws)).filter(p => p.status === "pending_approval" && !p.documentId)) {
     events.push({ date: start, label: `Pending payment to ${p.payeeName}`, usdMinor: -p.usdMinor });
   }
   events.sort((a, b) => a.date.localeCompare(b.date));
 
-  const startUsdMinor = cashPosition(store, ws).totalUsdMinor;
+  const startUsdMinor = (await cashPosition(store, ws)).totalUsdMinor;
   const points: Array<{ date: string; balanceUsdMinor: number }> = [];
   let balance = startUsdMinor;
   let i = 0;

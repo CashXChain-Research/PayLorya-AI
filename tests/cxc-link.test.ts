@@ -84,7 +84,7 @@ async function start() {
   const base = await listen(app);
   const config = loadConfig({ PUBLIC_BASE_URL: base, BETTER_AUTH_SECRET: "t".repeat(40) });
   const engine: PaymentEngine = { runs: new RunStore() };
-  const deps = await createCfo(config, engine, { dbPath: ":memory:" });
+  const deps = await createCfo(config, engine, { memory: true });
   deps.cxc = new CxcLinker(deps.store, new CashXChainClient({ apiKey: MASTER, baseUrl: platformUrl }));
   mountCfo(app, deps);
 

@@ -93,9 +93,9 @@ export class CxcLinker {
     } catch (error) {
       link = classify(error, base);
     }
-    this.store.setCxcLink(ws.id, link);
+    await this.store.setCxcLink(ws.id, link);
     const what = link.status === "linked" ? `linked CashXChain sub-account ${link.accountId}` : `CashXChain sub-account: ${link.status}`;
-    this.store.log(ws.id, "system", what, link.detail ?? "", { type: "workspace", id: ws.id });
+    await this.store.log(ws.id, "system", what, link.detail ?? "", { type: "workspace", id: ws.id });
     return link;
   }
 }

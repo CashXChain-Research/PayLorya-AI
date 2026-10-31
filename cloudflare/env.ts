@@ -32,6 +32,7 @@ export const FORWARDED = [
   "CLAUDE_MODEL",
   "BETTER_AUTH_SECRET",
   "DATA_DIR",
+  "CFO_DATA_URL",
   "CFO_AI_DAILY_LIMIT",
   // Not in the schema: the Anthropic SDK reads it from env (Cloudflare AI Gateway).
   "ANTHROPIC_BASE_URL",
