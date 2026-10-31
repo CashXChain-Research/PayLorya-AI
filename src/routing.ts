@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { normalizeIban } from "./readiness.js";
 import type { Invoice, RouteCheck, RouteDecision } from "./types.js";
 
@@ -38,6 +39,16 @@ function nameKey(name: string): string {
     .map(t => t.replace(/\p{M}/gu, ""))
     .filter(t => t && !LEGAL_FORMS.has(t))
     .join("");
+}
+
+/**
+ * Invoice identity for payouts, from verified inputs only. Extracted supplier text varies between
+ * runs ("Brenner Maschinenbau GmbH, Augsburg"); the directory name does not. The invoice id is
+ * compared without case, spaces or punctuation. Keys the payout ledger and the fiat idempotency key.
+ */
+export function payoutKey(payee: VerifiedPayee, invoice: Invoice): string {
+  const id = invoice.id.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
+  return createHash("sha256").update([payee.name, id, invoice.currency, invoice.amountMinor].join("|")).digest("hex").slice(0, 32);
 }
 
 /** Longest directory name contained in the extracted supplier name. */

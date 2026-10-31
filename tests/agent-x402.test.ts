@@ -10,7 +10,7 @@ import type { PaymentPayload, PaymentRequirements } from "@x402/core/types";
 import { decodePaymentResponseHeader, wrapFetchWithPayment, x402Client } from "@x402/fetch";
 import { BuyerAgent, type PayoutRails } from "../src/agent.js";
 import { isDefinitiveSubmitRejection, type ChainSubmitter, type ChainView, type FiatPayoutClient, type FiatPayoutRequest } from "../src/payout.js";
-import { CRYPTO_PAYEE } from "../src/routing.js";
+import { CRYPTO_PAYEE, payoutKey } from "../src/routing.js";
 import { CARDANO_NETWORK, loadConfig } from "../src/config.js";
 import { RunStore, type Run } from "../src/runs.js";
 import { mountSeller, READINESS_PATH } from "../src/seller.js";
@@ -694,8 +694,27 @@ describe("invoice payout after human approval", () => {
     await approve(s.agent, run);
     expect(run.state).toBe("EXECUTED");
     expect(run.payout).toMatchObject({ rail: "cxc_fiat", status: "submitted", simulated: false, reference: "po_2" });
-    expect(fiat.calls.map(c => c.idempotencyKey)).toEqual([`payout-${run.fingerprint}`, `payout-${run.fingerprint}`]);
-    expect(fiat.calls[0]?.payee).toEqual({ name: "Brenner Maschinenbau GmbH", iban: "DE89370400440532013000", bic: "COBADEFFXXX" });
+    const brenner = { name: "Brenner Maschinenbau GmbH", iban: "DE89370400440532013000", bic: "COBADEFFXXX" };
+    const key = `payout-${payoutKey(brenner, invoice)}`;
+    expect(fiat.calls.map(c => c.idempotencyKey)).toEqual([key, key]);
+    expect(fiat.calls[0]?.payee).toEqual(brenner);
+  });
+
+  it("the same invoice extracted differently (supplier text, id case) pays out once", async () => {
+    const fiat = stubFiat();
+    const s = await startStack({ fiat });
+    const first = await s.run();
+    // What a second extraction of the same paper invoice could look like.
+    const second = await s.run({ ...invoice, supplier: "Brenner Maschinenbau GmbH, Augsburg", id: " inv 2026-1042 " });
+    expect([first.state, second.state]).toEqual(["DRAFT_READY", "DRAFT_READY"]);
+    expect(second.fingerprint).not.toBe(first.fingerprint);
+
+    await approve(s.agent, first);
+    await approve(s.agent, second);
+    expect(first.state).toBe("EXECUTED");
+    expect(second.state).toBe("FAILED");
+    expect(second.error).toContain("already paid");
+    expect(fiat.calls).toHaveLength(1);
   });
 
   it("fiat: any other error may have reached CashXChain -> PAYOUT_UNKNOWN, invoice locked", async () => {

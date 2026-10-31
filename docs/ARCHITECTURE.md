@@ -131,8 +131,12 @@ Payout safety mirrors the report payment:
   carries the signed tx hash for the explorer. Same for an error from a fiat client, which may have
   accepted the payout before failing.
 - A Blockfrost wait timeout after broadcast is `EXECUTED` with `payout.status: "submitted"`.
-- Fiat payouts are keyed per invoice (`Idempotency-Key: payout-<fingerprint>`), so a retry or a
-  new run after a restart replays instead of paying again. The client gets the verified payee
+- Payouts are keyed per invoice from verified inputs only: `payoutKey` = directory payee name,
+  invoice id without case/spaces/punctuation, currency, amount. Extracted supplier text varies
+  between runs, so the run fingerprint is not used. The key drives the payout ledger (one payout
+  per invoice per process) and the fiat `Idempotency-Key: payout-<key>`, so a retry or a new run
+  after a restart replays at CashXChain instead of paying again. Cardano payouts are protected
+  only in memory: a restart forgets them (known limitation). The client gets the verified payee
   record (name, IBAN/BIC or routing/account/type), never text from the invoice. A client that
   proves nothing was sent (`isDefinitiveRejection`) returns the run to `DRAFT_READY`; any other
   error stays `PAYOUT_UNKNOWN`.
