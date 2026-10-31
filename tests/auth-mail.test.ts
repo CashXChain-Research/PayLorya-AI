@@ -48,12 +48,81 @@ async function start(mailer?: Mailer) {
     return { status: res.status, json, cookie: res.headers.get("set-cookie")?.split(";")[0] };
   };
   const me = async (cookie?: string) => (await fetch(`${base}/api/v1/me`, { headers: cookie ? { cookie } : {} })).status;
-  return { base, post, me };
+  const getJson = async (path: string, cookie?: string) => (await fetch(`${base}${path}`, { headers: cookie ? { cookie } : {} })).json() as Promise<Record<string, any>>;
+  return { base, post, me, getJson };
 }
 
 const account = { name: "Ada", email: "ada@example.com", password: "correct-horse-1" };
 
-describe("sign-up confirms the email with a code (Resend configured)", () => {
+describe("password-free sign-up and login by email code (the default with Resend)", () => {
+  it("the pages learn that codes are on", async () => {
+    expect(await (await start(fakeMailer())).getJson("/api/auth-options")).toEqual({ codes: true });
+    expect(await (await start()).getJson("/api/auth-options")).toEqual({ codes: false });
+  });
+
+  it("sign-up: a code creates the account with the name, no password involved", async () => {
+    const mail = fakeMailer();
+    const s = await start(mail);
+    expect((await s.post("/api/auth/email-otp/send-verification-otp", { email: "lin@example.com", type: "sign-in" })).status).toBe(200);
+    expect(mail.sent).toEqual([{ to: "lin@example.com", code: expect.stringMatching(/^\d{6}$/), purpose: "sign-in" }]);
+
+    const res = await s.post("/api/auth/sign-in/email-otp", { email: "lin@example.com", otp: mail.sent[0]!.code, name: "Lin Wu" });
+    expect(res.status).toBe(200);
+    expect(res.json.user).toMatchObject({ email: "lin@example.com", name: "Lin Wu", emailVerified: true });
+    const me = await s.getJson("/api/v1/me", res.cookie);
+    expect(me.signIn).toEqual({ password: false, codes: true });
+
+    // There is no password to log in with.
+    expect((await s.post("/api/auth/sign-in/email", { email: "lin@example.com", password: "anything-123" })).status).toBe(401);
+  });
+
+  it("login: a code signs in an existing account, a wrong code does not", async () => {
+    const mail = fakeMailer();
+    const s = await start(mail);
+    await s.post("/api/auth/email-otp/send-verification-otp", { email: "lin@example.com", type: "sign-in" });
+    await s.post("/api/auth/sign-in/email-otp", { email: "lin@example.com", otp: mail.sent[0]!.code, name: "Lin Wu" });
+
+    await s.post("/api/auth/email-otp/send-verification-otp", { email: "lin@example.com", type: "sign-in" });
+    const code = mail.sent[1]!.code;
+    const wrong = await s.post("/api/auth/sign-in/email-otp", { email: "lin@example.com", otp: code === "000000" ? "111111" : "000000" });
+    expect(wrong.status).toBe(400);
+    expect(await s.me(wrong.cookie)).toBe(401);
+    const ok = await s.post("/api/auth/sign-in/email-otp", { email: "lin@example.com", otp: code });
+    expect(ok.status).toBe(200);
+    expect(ok.json.user.name).toBe("Lin Wu"); // a login never renames
+    expect(await s.me(ok.cookie)).toBe(200);
+  });
+
+  it("a password is optional: added later in settings, changed with the current one", async () => {
+    const mail = fakeMailer();
+    const s = await start(mail);
+    await s.post("/api/auth/email-otp/send-verification-otp", { email: "lin@example.com", type: "sign-in" });
+    const { cookie } = await s.post("/api/auth/sign-in/email-otp", { email: "lin@example.com", otp: mail.sent[0]!.code, name: "Lin Wu" });
+
+    expect((await s.post("/api/v1/me/password", { password: "short" }, cookie)).status).toBe(400);
+    expect((await s.post("/api/v1/me/password", { password: "first-password-1" }, cookie)).status).toBe(204);
+    expect((await s.getJson("/api/v1/me", cookie)).signIn).toEqual({ password: true, codes: true });
+    expect((await s.post("/api/auth/sign-in/email", { email: "lin@example.com", password: "first-password-1" })).status).toBe(200);
+
+    const again = await s.post("/api/v1/me/password", { password: "second-password-2" }, cookie);
+    expect(again.status).toBe(409); // already set: needs the current password
+    expect(again.json.error).toMatch(/current password/);
+    const wrongCurrent = await s.post("/api/v1/me/password", { password: "second-password-2", currentPassword: "nope-nope-1" }, cookie);
+    expect(wrongCurrent.status).toBe(400);
+    expect((await s.post("/api/v1/me/password", { password: "second-password-2", currentPassword: "first-password-1" }, cookie)).status).toBe(204);
+    expect((await s.post("/api/auth/sign-in/email", { email: "lin@example.com", password: "second-password-2" })).status).toBe(200);
+    // Codes keep working next to the password.
+    await s.post("/api/auth/email-otp/send-verification-otp", { email: "lin@example.com", type: "sign-in" });
+    expect((await s.post("/api/auth/sign-in/email-otp", { email: "lin@example.com", otp: mail.sent.at(-1)!.code })).status).toBe(200);
+  });
+
+  it("setting a password needs a session", async () => {
+    const s = await start(fakeMailer());
+    expect((await s.post("/api/v1/me/password", { password: "first-password-1" })).status).toBe(401);
+  });
+});
+
+describe("sign-up with an optional password confirms the email with a code", () => {
   it("mails a code on sign-up, signs in only after the code is entered", async () => {
     const mail = fakeMailer();
     const s = await start(mail);
@@ -82,7 +151,7 @@ describe("sign-up confirms the email with a code (Resend configured)", () => {
 
     const later = await s.post("/api/auth/sign-in/email", { email: account.email, password: account.password });
     expect(later.status).toBe(200);
-    expect(mail.sent).toHaveLength(2); // a confirmed account gets no more codes on sign-in
+    expect(mail.sent).toHaveLength(2); // a confirmed account gets no more codes on a password sign-in
   });
 
   it("'send a new code' mails another one, and the old code stops working", async () => {
@@ -98,16 +167,6 @@ describe("sign-up confirms the email with a code (Resend configured)", () => {
 
     if (first !== second) expect((await s.post("/api/auth/email-otp/verify-email", { email: account.email, otp: first })).status).toBe(400);
     expect((await s.post("/api/auth/email-otp/verify-email", { email: account.email, otp: second })).status).toBe(200);
-  });
-
-  it("codes cannot create accounts: sign-in by code for an unknown email is refused", async () => {
-    const mail = fakeMailer();
-    const s = await start(mail);
-    await s.post("/api/auth/email-otp/send-verification-otp", { email: "nobody@example.com", type: "sign-in" });
-    const code = mail.sent.at(-1)?.code ?? "123456";
-    const res = await s.post("/api/auth/sign-in/email-otp", { email: "nobody@example.com", otp: code });
-    expect(res.status).not.toBe(200);
-    expect(await s.me(res.cookie)).toBe(401);
   });
 
   it("a failing mail send does not fail the sign-up; the user can ask for a new code", async () => {

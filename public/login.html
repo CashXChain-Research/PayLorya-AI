@@ -47,10 +47,10 @@
         </div>
         <p class="err" id="email-err" hidden></p>
       </div>
-      <div class="field">
+      <div class="field" id="password-field" hidden>
         <label for="f-password">Password</label>
         <div class="input has-btn">
-          <input id="f-password" name="password" type="password" autocomplete="current-password" aria-describedby="password-err" required>
+          <input id="f-password" name="password" type="password" autocomplete="current-password" aria-describedby="password-err">
           <button class="pw-toggle" type="button" data-reveal-pw aria-label="Show password" aria-pressed="false">
             <svg class="eye" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
             <svg class="eye-off" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l18 18M10.6 5.1A9.8 9.8 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-3.2 4.1M6.6 6.6A16.6 16.6 0 0 0 2 12s3.6 7 10 7a9.6 9.6 0 0 0 5.4-1.6M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>
@@ -58,7 +58,8 @@
         </div>
         <p class="err" id="password-err" hidden></p>
       </div>
-      <button class="btn primary block" type="submit"><span>Log in</span><svg class="arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+      <a href="#" class="pw-opt" data-password-toggle hidden>Log in with a password instead</a>
+      <button class="btn primary block" type="submit"><span>Email me a code</span><svg class="arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
     </form>
 
     <p class="switch">New to PayFlow AI? <a href="/signup" data-keep-next>Create an account</a></p>

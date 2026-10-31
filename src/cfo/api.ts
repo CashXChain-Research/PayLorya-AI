@@ -85,6 +85,27 @@ class HttpError extends Error {
   }
 }
 
+const PASSWORD_ERRORS: Record<string, [number, string]> = {
+  PASSWORD_ALREADY_SET: [409, "You already have a password. Enter your current password to change it."],
+  INVALID_PASSWORD: [400, "Your current password is not right."],
+  SESSION_NOT_FRESH: [403, "For your security, sign out and in again, then change your password."],
+  PASSWORD_TOO_SHORT: [400, "Use at least 8 characters."],
+  PASSWORD_TOO_LONG: [400, "That password is too long."],
+};
+
+/** Better Auth errors (statusCode + body.code) as dashboard errors; never 401, which would sign the user out. */
+function passwordError(error: unknown): unknown {
+  const e = error as { statusCode?: unknown; body?: { code?: unknown; message?: unknown } } | undefined;
+  const code = typeof e?.body?.code === "string" ? e.body.code : undefined;
+  const known = code ? PASSWORD_ERRORS[code] : undefined;
+  if (known) return new HttpError(known[0], known[1]);
+  if (typeof e?.statusCode === "number") {
+    const message = typeof e.body?.message === "string" ? e.body.message : "Could not update the password";
+    return new HttpError(e.statusCode === 401 ? 403 : e.statusCode, message);
+  }
+  return error;
+}
+
 /**
  * Mounts Better Auth (/api/auth/*), the dashboard pages and the AI CFO API (/api/v1/*). Must run
  * before any global express.json(): Better Auth reads the raw request body itself.
@@ -104,6 +125,10 @@ export function mountCfo(app: Express, deps: CfoDeps): void {
   app.get("/login", async (_req, res) => res.sendFile("login.html", { root: "public" }));
   app.get("/signup", async (_req, res) => res.sendFile("signup.html", { root: "public" }));
   app.get("/verify", async (_req, res) => res.sendFile("verify.html", { root: "public" }));
+  // Public: lets the sign-up and login pages offer email codes, or fall back to passwords.
+  app.get("/api/auth-options", (_req, res) => {
+    res.json({ codes: auth.codes });
+  });
   app.get("/demo", async (_req, res) => res.sendFile("demo.html", { root: "public" }));
 
   const api = express.Router();
@@ -130,9 +155,20 @@ export function mountCfo(app: Express, deps: CfoDeps): void {
   };
 
   // Workspace ------------------------------------------------------------------------------
-  api.get("/me", async (_req, res) => {
+  api.get("/me", async (req, res) => {
     const { user, ws } = ctx(res);
-    res.json({ user, workspace: ws });
+    res.json({ user, workspace: ws, signIn: { password: await auth.hasPassword(req.headers), codes: auth.codes } });
+  });
+
+  // Optional password: add one to a code-only account, or change it with the current one.
+  api.post("/me/password", json, async (req, res) => {
+    const body = z.object({ password: z.string().min(8).max(128), currentPassword: z.string().min(1).optional() }).parse(req.body);
+    try {
+      await auth.setPassword(req.headers, body.password, body.currentPassword);
+    } catch (error) {
+      throw passwordError(error);
+    }
+    res.status(204).end();
   });
 
   api.patch("/workspace", json, async (req, res) => {

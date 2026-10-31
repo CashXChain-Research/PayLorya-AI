@@ -5,31 +5,35 @@ The product built on top of the hackathon payment engine. One app, one domain:
 | Path | What |
 | --- | --- |
 | `/` | Marketing site |
-| `/signup`, `/login` | Accounts (Better Auth, email + password) |
-| `/verify` | Email confirmation: the 6-digit code mailed through Resend (only with `RESEND_API_KEY`) |
+| `/signup`, `/login` | Accounts (Better Auth): email code by default, password optional |
+| `/verify` | Enter the 6-digit email code (sign-up, login, email confirmation; only with `RESEND_API_KEY`) |
 | `/app/*` | Dashboard: overview, AI CFO chat, documents, payments, budgets, payees, connections, agent access, activity, settings |
 | `/demo`, `/about.html` | The hackathon demo of the invoice agent, unchanged |
 | `/api/auth/*` | Better Auth |
 | `/api/v1/*` | Dashboard API, session required. Contract: `web/src/dashboard/types.ts` |
 | `/api/runs`, `/v1/payment-readiness` | Demo API and the x402-paid readiness API, unchanged |
 
-## Email confirmation (Resend)
+## Sign-up and login: email code first, password optional (Resend)
 
-With `RESEND_API_KEY` set (`src/cfo/auth.ts`, `src/cfo/mail.ts`), sign-up creates the account but no
-session. Better Auth's `emailOTP` plugin mails a 6-digit code through Resend
-(`POST https://api.resend.com/emails`, sender `RESEND_FROM`, product name PayFlow AI). The sign-up
-page then opens `/verify` (the address travels in `sessionStorage`, not the URL; a direct visit asks
-for it). `POST /api/auth/email-otp/verify-email` confirms the address and signs the user in, then
-the page continues to `?next` or `/app`.
+With `RESEND_API_KEY` set (`src/cfo/auth.ts`, `src/cfo/mail.ts`), PayFlow AI accounts work without a
+password by default. Codes are mailed through Resend (`POST https://api.resend.com/emails`, sender
+`RESEND_FROM`).
 
-- Codes: 6 digits, valid 10 minutes, at most 5 wrong tries, stored hashed. "Send a new code" calls
-  `/api/auth/email-otp/send-verification-otp`; a new code voids the old one. Better Auth limits
-  these endpoints to 3 per minute.
-- Signing in while unconfirmed answers 403 `EMAIL_NOT_VERIFIED`, mails a fresh code, and the login
-  page opens `/verify`. Accounts created before the key was set confirm once this way.
-- Codes never create accounts (`disableSignUp`); new accounts come only from the sign-up form.
-- A Resend error is logged and does not fail the sign-up; the user asks for a new code.
-- Without `RESEND_API_KEY`, nothing changes: sign-up signs in straight away.
+| Flow | Pages | API |
+| --- | --- | --- |
+| Sign up (default) | `/signup` (name, email) → `/verify` | `email-otp/send-verification-otp` type `sign-in`, then `sign-in/email-otp` with `name`: creates the account, signs in |
+| Log in (default) | `/login` (email) → `/verify` | the same two calls |
+| Sign up with a password (optional, "Add a password") | `/signup` → `/verify` | `sign-up/email`, then `email-otp/verify-email` (the address is confirmed before any session) |
+| Log in with a password (optional, "Log in with a password instead") | `/login` | `sign-in/email`; an unconfirmed address answers 403 `EMAIL_NOT_VERIFIED`, mails a code and opens `/verify` |
+| Add or change a password later | `/app/settings`, "Password" card | `POST /api/v1/me/password` `{password, currentPassword?}`; `/api/v1/me` reports `signIn: {password, codes}` |
+
+- `GET /api/auth-options` → `{codes}` tells the pages whether codes can be delivered. Without
+  `RESEND_API_KEY` it is `false` and both pages fall back to email + password, as before.
+- `/verify` gets the address (and the purpose and name) through `sessionStorage`, never the URL; a
+  direct visit asks for the email. It keeps `?next`.
+- Codes: 6 digits, valid 10 minutes, at most 5 wrong tries, stored hashed; a new code voids the
+  old one; Better Auth limits the code endpoints to 3 per minute.
+- A Resend error is logged and does not fail the request; the user asks for a new code.
 
 ## What a customer can do
 
