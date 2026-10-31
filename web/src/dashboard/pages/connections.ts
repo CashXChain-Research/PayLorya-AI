@@ -30,7 +30,7 @@ let cxcLinked = false;
 function cxcOwner(c: Connection): string {
   if (c.kind !== "cashxchain") return "";
   if (c.keyHint) return `<div class="addr-row owner"><span class="muted small">Your account · key</span><span class="mono" title="Stored encrypted">${esc(c.keyHint)}</span></div>`;
-  return `<div class="addr-row owner"><span class="muted small">${cxcLinked ? "Your linked CashXChain sub-account" : "PayLorya AI shared sandbox account"}</span></div>`;
+  return `<div class="addr-row owner"><span class="muted small">${cxcLinked ? "Your linked CashXChain sub-account · payouts need your API key" : "No API key: remove and connect again with your key"}</span></div>`;
 }
 
 /** "Connect Lace" buttons for the browser wallets found; they fill the address field. */
@@ -120,8 +120,8 @@ async function addDialog(entry: CatalogEntry): Promise<Connection | null> {
       ${entry.needsAddress ? `<div class="field"><label for="c-addr">Address</label><input id="c-addr" name="address" class="mono" placeholder="${esc(PLACEHOLDER[entry.kind] ?? "Address")}" autocomplete="off" spellcheck="false"></div>` : ""}
       ${
         entry.acceptsApiKey
-          ? `<div class="field"><label for="c-key">API key${entry.sharedFallback ? ' <span class="opt-l">optional</span>' : ""}</label><input id="c-key" name="apiKey" type="password" class="mono" placeholder="cxc_sk_sandbox_…" autocomplete="off" spellcheck="false">
-        <span class="fine">From your CashXChain sandbox dashboard: a secret key, or a restricted key with accounts:read (to pay, also payments:read, payments:write and beneficiaries:write). Stored encrypted; shown again only by its last four characters.${entry.sharedFallback ? " Leave empty to use PayLorya AI's shared sandbox account." : ""}</span></div>`
+          ? `<div class="field"><label for="c-key">API key${entry.linkedFallback ? ' <span class="opt-l">optional</span>' : ""}</label><input id="c-key" name="apiKey" type="password" class="mono" placeholder="cxc_sk_sandbox_…" autocomplete="off" spellcheck="false">
+        <span class="fine">From your CashXChain sandbox dashboard: a secret key, or a restricted key with accounts:read (to pay, also payments:read, payments:write and beneficiaries:write). Stored encrypted; shown again only by its last four characters.${entry.linkedFallback ? " Leave empty to read your linked CashXChain sub-account; payouts need the key." : ""}</span></div>`
           : ""
       }
       <div class="field"><span class="lbl">Agent access</span>
@@ -161,7 +161,7 @@ async function addDialog(entry: CatalogEntry): Promise<Connection | null> {
       if (entry.acceptsApiKey) {
         const apiKey = val(form, "apiKey");
         if (apiKey && !CXC_KEY.test(apiKey)) return fieldError(form, "apiKey", "Use a CashXChain sandbox key: cxc_sk_sandbox_… or cxc_rk_sandbox_…");
-        if (!apiKey && !entry.sharedFallback) return fieldError(form, "apiKey", "Paste your CashXChain sandbox API key.");
+        if (!apiKey && !entry.linkedFallback) return fieldError(form, "apiKey", "Paste your CashXChain sandbox API key.");
         if (apiKey) body.apiKey = apiKey;
       }
       if (entry.needsAddress) {
