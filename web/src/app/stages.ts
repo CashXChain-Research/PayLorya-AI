@@ -93,7 +93,7 @@ export function stagesFor(run: Run, health: Partial<Health>): Stage[] {
       : verdict === "blocked" ? ` Report: blocked. ${failing.join("; ")}.`
       : ` Report: needs information. ${failing.join("; ")}.`;
     const policy: CheckRow[] = [
-      { status: "pass", message: `Payee is the allow-listed CxC verifier ${short(health.sellerAddress)}` },
+      { status: "pass", message: `Payee is the allow-listed PayFlow verifier ${short(health.sellerAddress)}` },
       { status: "pass", message: `Price ${ada(run.payment.amount)} within the ${ada(health.maxPriceLovelace)} cap` },
       { status: "pass", message: "Within the session budget" },
       { status: "pass", message: "First payment for this invoice" },
