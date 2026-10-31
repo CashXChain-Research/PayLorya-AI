@@ -242,7 +242,7 @@ describe("buyer agent over real x402 (stub signer + stub facilitator)", () => {
       status: "awaiting_human_approval",
       executable: false,
       invoiceId: invoice.id,
-      blockedReason: "CashXChain payouts not configured (CXC_API_KEY)",
+      blockedReason: "CashXChain payouts not configured (CASHXCHAIN_API_KEY)",
     });
     expect(s.agent.spentLovelace).toBe(PRICE);
 
@@ -544,7 +544,7 @@ describe("x402 report -> CashXChain sandbox payout", () => {
     const run = await s.run();
 
     expect(run.state).toBe("DRAFT_READY");
-    expect(run.draft).toMatchObject({ executable: false, blockedReason: expect.stringContaining("no active EUR account") });
+    expect(run.draft).toMatchObject({ executable: false, blockedReason: expect.stringContaining("no active account") });
     expect(s.payouts!.approve(run)).toMatchObject({ ok: false, status: 409 });
   });
 });

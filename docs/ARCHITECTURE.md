@@ -5,7 +5,7 @@
 **CxC Payment Readiness API**: pay-per-request validation for autonomous payment agents.
 Any agent POSTs a structured invoice to `POST /v1/payment-readiness`, pays per response via
 x402 on Cardano Preprod, and gets a readiness report. Our Claude agent is the demo customer.
-With `CXC_API_KEY` set, a ready draft is prepared as a payout on the **CashXChain sandbox**, and
+With `CASHXCHAIN_API_KEY` set, a ready draft is prepared as a payout on the **CashXChain sandbox**, and
 a human approval sends it there. Without it, the draft does not execute.
 
 ## Roles
@@ -15,7 +15,7 @@ a human approval sends it there. Without it, the draft does not execute.
 | Seller (paid API) | `src/seller.ts`, `src/readiness.ts` | `SELLER_ADDRESS` (address only, no key on the server) |
 | Buyer (agent) | `src/agent.ts`, `src/policy.ts`, `src/extract.ts` | `BUYER_MNEMONIC` (test only) |
 | Facilitator | hosted CF preprod facilitator, or `src/facilitator.ts` fallback | none, broadcast only |
-| Supplier payout | `src/payout.ts`, `src/cashxchain.ts` | `CXC_API_KEY`, CashXChain **sandbox** only |
+| Supplier payout | `src/payout.ts`, `src/cashxchain.ts` | `CASHXCHAIN_API_KEY`, CashXChain **sandbox** only |
 
 All three run in one Node process for the hackathon. The buyer reaches the seller over HTTP
 (`PUBLIC_BASE_URL`), so they can be split later without code changes.
@@ -44,7 +44,7 @@ The second line only happens through `POST /api/runs/:id/approve` (a human in th
 6. Seller verifies via facilitator, runs the handler, settles; the middleware withholds the
    body if settlement fails.
 7. Run stores tx hash + explorer URL only from a successful settle response.
-8. Ready report and `CXC_API_KEY` set: prepare the CashXChain payout (below). Moves no money.
+8. Ready report and `CASHXCHAIN_API_KEY` set: prepare the CashXChain payout (below). Moves no money.
 9. A human approves: `POST /v1/banking/payouts` on the CashXChain sandbox.
 
 ## Trust boundary
@@ -60,7 +60,7 @@ The second line only happens through `POST /api/runs/:id/approve` (a human in th
   duplicates, amount ceiling), CashXChain corridor validation and payee-name check, and a human who
   sees supplier, account, amount and fee before approving. A crypto address in the invoice text has
   no field to land in.
-- CashXChain is locked to the sandbox: the base URL is a constant and `CXC_API_KEY` must be a
+- CashXChain is locked to the sandbox: the base URL is a constant and `CASHXCHAIN_API_KEY` must be a
   `cxc_sk_sandbox_` / `cxc_rk_sandbox_` key, or the server refuses to start.
 - Route, fees and FX are `demo-fixture` and labeled "Simulated route/fees".
 - The report is a data-quality and routing check, not an AML, sanctions or KYB decision.
@@ -165,7 +165,7 @@ otherwise `ready_for_review`.
 
 - CashXChain payout path: tested offline against a fake that follows the docs
   (`tests/fake-cashxchain.ts`), not yet against `api.sandbox.cashxchain.com` (this cloud session's
-  network policy blocks the CashXChain hosts). First live check: set `CXC_API_KEY`, run the EUR
+  network policy blocks the CashXChain hosts). First live check: set `CASHXCHAIN_API_KEY`, run the EUR
   sample, approve, and confirm the payout id in the sandbox web app.
 
 - With `LOCAL_FACILITATOR=true`, verify also calls Blockfrost `POST /utils/txs/evaluate/utxos`;

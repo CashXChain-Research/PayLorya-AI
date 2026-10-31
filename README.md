@@ -75,7 +75,7 @@ The supplier payout is a separate step that only a human starts (`POST /api/runs
 It runs on the CashXChain sandbox only: the API base URL is fixed and the server refuses to start
 with anything but a `cxc_sk_sandbox_` / `cxc_rk_sandbox_` key. Its `Idempotency-Key` is derived from
 the invoice, so a retry or a restart replays the earlier payout instead of paying again. Without
-`CXC_API_KEY` the draft has `executable: false`. Details in [ARCHITECTURE](docs/ARCHITECTURE.md#supplier-payout-cashxchain-sandbox).
+`CASHXCHAIN_API_KEY` the draft has `executable: false`. Details in [ARCHITECTURE](docs/ARCHITECTURE.md#supplier-payout-cashxchain-sandbox).
 
 ## Real vs simulated
 
@@ -87,7 +87,7 @@ the invoice, so a retry or a restart replays the earlier payout instead of payin
 | Field extraction | Real Claude API integration for text; JSON skips the model; amounts parsed deterministically; live sample validation pending |
 | IBAN / BIC / ABA checks, duplicates | Real deterministic code; BIC is a format/country check, not bank ownership verification |
 | Corridors, rails, fees, FX, ETA | Simulated (`demo-fixture`), labeled **Simulated route/fees** |
-| Supplier payout | CashXChain sandbox API (`/v1/banking/*`), only after human approval; tested offline against a fake, live sandbox check pending. Not executed without `CXC_API_KEY` |
+| Supplier payout | CashXChain sandbox API (`/v1/banking/*`), only after human approval; tested offline against a fake, live sandbox check pending. Not executed without `CASHXCHAIN_API_KEY` |
 | Payout quote and fee | CashXChain sandbox quote (`simulated: true`, sandbox pricing) |
 | Compliance | Data-quality and routing check; not an AML, sanctions or KYB decision |
 
@@ -103,7 +103,7 @@ npm run wallet:new -- buyer      # put BUYER_MNEMONIC into .env, fund the printe
 1. Fund the buyer address with tADA from the [Cardano testnets faucet](https://docs.cardano.org/cardano-testnets/tools/faucet/).
 2. Create a free Blockfrost **preprod** project and set `BLOCKFROST_PROJECT_ID`.
 3. Set `ANTHROPIC_API_KEY` (optional; structured JSON invoices work without it).
-4. Set `CXC_API_KEY` (optional): a CashXChain **sandbox** key, see
+4. Set `CASHXCHAIN_API_KEY` (optional): a CashXChain **sandbox** key, see
    [DEPLOY](docs/DEPLOY.md#cashxchain-sandbox-key-supplier-payouts).
 
 ```bash

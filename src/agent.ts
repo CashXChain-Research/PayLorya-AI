@@ -24,7 +24,7 @@ export class BuyerAgent {
     private readonly config: Config,
     private readonly runs: RunStore,
     signer?: ClientCardanoSigner, // tests inject a stub; production derives it from BUYER_MNEMONIC
-    private readonly payouts?: PayoutDesk, // CashXChain sandbox; absent when CXC_API_KEY is unset
+    private readonly payouts?: PayoutDesk, // CashXChain sandbox; absent when CASHXCHAIN_API_KEY is unset
   ) {
     if (!(signer || config.BUYER_MNEMONIC) || !config.SELLER_ADDRESS) throw new Error("BUYER_MNEMONIC and SELLER_ADDRESS required");
     this.signer =
@@ -82,7 +82,7 @@ export class BuyerAgent {
             draft.blockedReason = `CashXChain unavailable: ${prepared.reason}`;
           }
         } else {
-          draft.blockedReason = "CashXChain payouts not configured (CXC_API_KEY)";
+          draft.blockedReason = "CashXChain payouts not configured (CASHXCHAIN_API_KEY)";
         }
         run.draft = draft;
         this.runs.transition(run, "DRAFT_READY", "Awaiting human approval; nothing executed");

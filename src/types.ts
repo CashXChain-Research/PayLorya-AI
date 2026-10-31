@@ -49,6 +49,22 @@ export interface RouteQuote {
   label: string;
 }
 
+/** A payout quote from the CashXChain sandbox (`POST /v1/banking/payouts/quote`). Sandbox pricing. */
+export interface CxcRouteQuote {
+  source: "cxc-sandbox";
+  label: string;
+  /** Rails the corridor offers (`GET /v1/banking/corridors`); CashXChain picks one at payout. */
+  rails: string[];
+  payoutCurrency: string;
+  payoutAmount: string;
+  sourceCurrency: string;
+  /** Leaves the payer's account, fee included. */
+  sourceAmount: string;
+  fee: string;
+  /** Units of payoutCurrency per unit of sourceCurrency. */
+  rate: string;
+}
+
 export type Verdict = "ready_for_review" | "needs_info" | "blocked";
 
 export interface ReadinessReport {
@@ -57,6 +73,8 @@ export interface ReadinessReport {
   verdict: Verdict;
   checks: ReadinessCheck[];
   routeQuote?: RouteQuote;
+  /** Set instead of routeQuote when the report was priced on the CashXChain sandbox. */
+  cxcQuote?: CxcRouteQuote;
   source: DataSource;
   payoutExecuted: false;
   disclaimer: string;
@@ -80,7 +98,9 @@ export interface CxcPayoutPlan {
   sourceAccountId: string;
   beneficiaryId: string;
   scheme: string;
-  /** Decimal string sent to CashXChain, e.g. "12480.00". */
+  /** Source account holds another currency; the sandbox rail converts at its own rate. */
+  crossCurrency: boolean;
+  /** Decimal string sent to CashXChain, e.g. "624.00". */
   amount: string;
   currency: string;
   reference: string;

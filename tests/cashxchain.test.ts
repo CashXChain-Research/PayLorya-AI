@@ -85,13 +85,13 @@ async function settle(run: Run): Promise<Run> {
 
 describe("CashXChain sandbox lock (config)", () => {
   it("accepts sandbox secret and restricted keys only", () => {
-    expect(loadConfig({ CXC_API_KEY: "cxc_sk_sandbox_abc123" }).cxcReady).toBe(true);
-    expect(loadConfig({ CXC_API_KEY: "cxc_rk_sandbox_abc123" }).cxcReady).toBe(true);
+    expect(loadConfig({ CASHXCHAIN_API_KEY: "cxc_sk_sandbox_abc123" }).cxcReady).toBe(true);
+    expect(loadConfig({ CASHXCHAIN_API_KEY: "cxc_rk_sandbox_abc123" }).cxcReady).toBe(true);
     expect(loadConfig({}).cxcReady).toBe(false);
-    expect(() => loadConfig({ CXC_API_KEY: "cxc_sk_live_abc123" })).toThrow(/sandbox key/);
+    expect(() => loadConfig({ CASHXCHAIN_API_KEY: "cxc_sk_live_abc123" })).toThrow(/sandbox key/);
     // Legacy format says "sandbox" in every environment, so it may be a production key.
-    expect(() => loadConfig({ CXC_API_KEY: "sk_sandbox_abc123" })).toThrow(/sandbox key/);
-    expect(() => loadConfig({ CXC_API_KEY: "cxc_pk_sandbox_abc123" })).toThrow(/sandbox key/);
+    expect(() => loadConfig({ CASHXCHAIN_API_KEY: "sk_sandbox_abc123" })).toThrow(/sandbox key/);
+    expect(() => loadConfig({ CASHXCHAIN_API_KEY: "cxc_pk_sandbox_abc123" })).toThrow(/sandbox key/);
   });
 });
 
@@ -133,6 +133,7 @@ describe("payout preparation (moves no money)", () => {
         environment: "sandbox",
         sourceAccountId: "mockacct_fake_eur",
         scheme: "iban",
+        crossCurrency: false,
         amount: "12480.00",
         currency: "EUR",
         reference: "PO-7781",
@@ -164,6 +165,20 @@ describe("payout preparation (moves no money)", () => {
     expect(await s.desk.prepare(sepa)).toMatchObject({ kind: "ready", plan: { available: "100.0000", sufficientFunds: false } });
   });
 
+  it("pays a USD invoice from the EUR account when no USD account exists (sandbox converts)", async () => {
+    const s = await setup();
+    const prepared = await s.desk.prepare({ ...us, accountType: "checking" });
+    expect(prepared).toMatchObject({
+      kind: "ready",
+      plan: { sourceAccountId: "mockacct_fake_eur", crossCurrency: true, currency: "USD", amount: "4250.00", quote: { sourceCurrency: "EUR", sourceAmount: "3405.00", rate: "1.25" } },
+    });
+    const run = await draftReady(s, { ...us, accountType: "checking" });
+    s.desk.approve(run);
+    await settle(run);
+    expect(run.state).toBe("PAYOUT_SETTLED");
+    expect(s.fake.state.balances.get("mockacct_fake_eur")).toBe(50_000 - 3_405);
+  });
+
   it("asks for corridor fields the invoice does not carry, and sends them once printed", async () => {
     const s = await setup();
     s.fake.state.accounts.push({ id: "mockacct_fake_usd", currency: "USD", status: "active", display_name: "USD" });
@@ -172,7 +187,7 @@ describe("payout preparation (moves no money)", () => {
     expect(s.fake.state.seen.some(r => r.path === "/v1/banking/beneficiaries")).toBe(false);
 
     const prepared = await s.desk.prepare({ ...us, accountType: "checking" });
-    expect(prepared).toMatchObject({ kind: "ready", plan: { scheme: "us_routing", amount: "4250.00" } });
+    expect(prepared).toMatchObject({ kind: "ready", plan: { scheme: "us_routing", amount: "4250.00", sourceAccountId: "mockacct_fake_usd", crossCurrency: false } });
     expect(s.fake.state.seen.find(r => r.path === "/v1/banking/beneficiaries")?.body).toMatchObject({
       account: { scheme: "us_routing", routing_number: "021000021", account_number: "000123456789" },
       corridor_fields: { account_type: "checking" },
@@ -188,7 +203,9 @@ describe("payout preparation (moves no money)", () => {
     s.fake.state.accounts.push({ id: "mockacct_fake_chf", currency: "CHF", status: "active", display_name: "CHF" });
     expect(await s.desk.prepare({ ...sepa, destinationCountry: "CH", currency: "CHF" })).toMatchObject({ kind: "blocked" });
 
-    expect(await s.desk.prepare({ ...sepa, currency: "PLN" })).toMatchObject({ kind: "unavailable", reason: expect.stringContaining("no active PLN account") });
+    s.fake.state.accounts = [];
+    expect(await s.desk.prepare(sepa)).toMatchObject({ kind: "unavailable", reason: expect.stringContaining("no active account") });
+    s.fake.state.accounts = [{ id: "mockacct_fake_eur", currency: "EUR", status: "active", display_name: "EUR account" }];
 
     s.fake.state.payee = { outcome: "close_match", may_pay: false, account_holder: "Brenner Maschinenbau AG", check: "VOP" };
     expect(await s.desk.prepare(sepa)).toMatchObject({ kind: "needs_info", reason: 'payee-name check: close_match (bank holds "Brenner Maschinenbau AG")' });

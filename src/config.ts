@@ -43,7 +43,7 @@ const EnvSchema = z.object({
 
   // CashXChain supplier payouts (sandbox only). Unset: drafts stay non-executable.
   // A restricted key needs accounts:read, beneficiaries:write and payments:write.
-  CXC_API_KEY: optional.refine(
+  CASHXCHAIN_API_KEY: optional.refine(
     v => v === undefined || CXC_SANDBOX_KEY.test(v),
     "must be a CashXChain sandbox key (cxc_sk_sandbox_… or cxc_rk_sandbox_…); live keys are refused",
   ),
@@ -73,7 +73,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     facilitatorUrl: parsed.LOCAL_FACILITATOR ? `${baseUrl}/facilitator` : parsed.FACILITATOR_URL,
     x402Ready: Boolean(parsed.SELLER_ADDRESS && parsed.BUYER_MNEMONIC && parsed.BLOCKFROST_PROJECT_ID),
     aiReady: Boolean(parsed.ANTHROPIC_API_KEY),
-    cxcReady: Boolean(parsed.CXC_API_KEY),
+    cxcReady: Boolean(parsed.CASHXCHAIN_API_KEY),
   };
 }
 

@@ -135,8 +135,9 @@ export class CashXChainClient {
     this.timeoutMs = opts.timeoutMs ?? 30_000;
   }
 
-  async listAccounts(): Promise<CxcAccount[]> {
-    return (await this.call<{ accounts: CxcAccount[] }>("GET", "/v1/banking/accounts")).accounts;
+  async listAccounts(): Promise<{ accounts: CxcAccount[]; primaryCurrency?: string }> {
+    const res = await this.call<{ accounts: CxcAccount[]; primary_currency?: string }>("GET", "/v1/banking/accounts");
+    return { accounts: res.accounts, ...(res.primary_currency ? { primaryCurrency: res.primary_currency } : {}) };
   }
 
   async balance(accountId: string): Promise<CxcBalance[]> {

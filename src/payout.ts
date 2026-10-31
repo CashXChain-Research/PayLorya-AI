@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import {
   CxcApiError,
   type CashXChainClient,
+  type CxcAccount,
   type CxcAccountInput,
   type CxcBeneficiaryInput,
   type CxcCorridor,
@@ -50,11 +51,8 @@ export class PayoutDesk {
   async prepare(invoice: Invoice): Promise<PrepareOutcome> {
     const { currency, destinationCountry: country } = invoice;
     try {
-      const accounts = await this.client.listAccounts();
-      const source = accounts.find(a => a.currency === currency && a.status === "active");
-      if (!source) {
-        return { kind: "unavailable", reason: `no active ${currency} account in the CashXChain sandbox; open one in the sandbox web app` };
-      }
+      const source = pickSourceAccount(await this.client.listAccounts(), currency);
+      if (!source) return { kind: "unavailable", reason: "no active account in the CashXChain sandbox; open one in the sandbox web app" };
 
       let corridor: CxcCorridor;
       try {
@@ -111,6 +109,7 @@ export class PayoutDesk {
           sourceAccountId: source.id,
           beneficiaryId,
           scheme: account.scheme,
+          crossCurrency: source.currency !== currency,
           amount,
           currency,
           reference: (invoice.reference ?? invoice.id).slice(0, REFERENCE_MAX),
@@ -252,6 +251,19 @@ function errorInfo(error: unknown): { httpStatus?: number; code?: string; messag
   return { message: error instanceof Error ? error.message : String(error) };
 }
 
+/**
+ * An active account in the invoice currency; else the primary (or first) active account. The
+ * sandbox rail converts a cross-currency payout itself. Production would refuse that without an
+ * `fx_quote_id`, which this sandbox-only build does not implement.
+ */
+export function pickSourceAccount(
+  { accounts, primaryCurrency }: { accounts: CxcAccount[]; primaryCurrency?: string },
+  currency: string,
+): CxcAccount | undefined {
+  const active = accounts.filter(a => a.status === "active");
+  return active.find(a => a.currency === currency) ?? active.find(a => a.currency === primaryCurrency) ?? active[0];
+}
+
 /** Maps the invoice's bank details onto a scheme the corridor accepts. Never invents details. */
 export function accountFor(invoice: Invoice, schemes: string[]): CxcAccountInput | undefined {
   if (schemes.includes("iban") && invoice.iban) {
@@ -268,7 +280,7 @@ export function accountFor(invoice: Invoice, schemes: string[]): CxcAccountInput
 }
 
 /** Extra corridor fields we can fill from the invoice, sent only when the corridor asks for them. */
-function corridorFieldsFor(invoice: Invoice, corridor: CxcCorridor): Record<string, string> {
+export function corridorFieldsFor(invoice: Invoice, corridor: CxcCorridor): Record<string, string> {
   const known: Record<string, string | undefined> = { account_type: invoice.accountType };
   const out: Record<string, string> = {};
   for (const field of corridor.fields) {

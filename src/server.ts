@@ -17,7 +17,7 @@ app.use(express.static("public"));
 if (config.LOCAL_FACILITATOR) mountLocalFacilitator(app, config);
 mountSeller(app, config);
 
-const payouts = config.CXC_API_KEY ? new PayoutDesk(new CashXChainClient({ apiKey: config.CXC_API_KEY }), runs) : undefined;
+const payouts = config.CASHXCHAIN_API_KEY ? new PayoutDesk(new CashXChainClient({ apiKey: config.CASHXCHAIN_API_KEY }), runs) : undefined;
 const agent = config.x402Ready ? new BuyerAgent(config, runs, undefined, payouts) : undefined;
 
 app.get(["/health", "/api/health"], (_req, res) => {
@@ -92,7 +92,7 @@ app.post("/api/runs/:id/:decision", (req, res) => {
     return;
   }
   if (decision === "approve" && !payouts) {
-    res.status(503).json({ error: "CashXChain payouts not configured (CXC_API_KEY)" });
+    res.status(503).json({ error: "CashXChain payouts not configured (CASHXCHAIN_API_KEY)" });
     return;
   }
   const result = decision === "approve" ? payouts!.approve(run) : rejectDraft(runs, run);

@@ -60,7 +60,7 @@ export function createFakeCxc() {
     next();
   });
 
-  app.get("/v1/banking/accounts", (_req, res) => void res.json({ accounts: state.accounts, refreshing: false }));
+  app.get("/v1/banking/accounts", (_req, res) => void res.json({ accounts: state.accounts, refreshing: false, primary_currency: "EUR" }));
 
   app.get("/v1/banking/accounts/:id/balance", (req, res) => {
     const account = state.accounts.find(a => a.id === req.params.id);
@@ -105,16 +105,17 @@ export function createFakeCxc() {
   });
 
   app.post("/v1/banking/payouts/quote", (req, res) => {
-    const { source_account_id, currency, amount } = req.body as Record<string, string>;
+    const { source_account_id, currency, amount } = req.body as { source_account_id: string; currency: string; amount: string };
     const account = state.accounts.find(a => a.id === source_account_id);
     if (!account) return envelope(res, 404, "not_found", "account not found");
     const fee = 5;
+    const rate = account.currency === currency ? 1 : RATE_PER_EUR[currency] ?? 1;
     res.json({
       source_currency: account.currency,
-      source_amount: (Number(amount) + fee).toFixed(2),
+      source_amount: (Number(amount) / rate + fee).toFixed(2),
       fee: fee.toFixed(2),
       payment_fee: fee.toFixed(2),
-      rate: "1",
+      rate: String(rate),
       currency,
       amount,
       simulated: true,
@@ -153,7 +154,9 @@ export function createFakeCxc() {
       return envelope(res, failure.status, failure.error, failure.message);
     }
     const available = state.balances.get(body.source_account_id) ?? 0;
-    const debit = Number(body.amount) + 5;
+    const source = state.accounts.find(a => a.id === body.source_account_id);
+    const rate = source && source.currency !== body.currency ? RATE_PER_EUR[body.currency] ?? 1 : 1;
+    const debit = Number(body.amount) / rate + 5;
     if (debit > available) {
       record("failed");
       return envelope(res, 400, "insufficient_balance", "insufficient balance");
@@ -185,6 +188,9 @@ export function createFakeCxc() {
 function beneficiaryDto(id: string, body: Record<string, unknown>) {
   return { id, beneficiary_type: body.beneficiary_type, name: body.name, currency: body.currency, country_code: body.country_code, account: body.account };
 }
+
+// Sandbox-style conversion for cross-currency payouts from the EUR account.
+const RATE_PER_EUR: Record<string, number> = { USD: 1.25, GBP: 0.8 };
 
 const SEPA = ["DE", "FR", "NL", "ES", "IT", "AT", "BE", "IE", "PT", "FI", "LU"];
 

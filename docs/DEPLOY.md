@@ -24,7 +24,7 @@ Cloudflare docs, 2026-10-30). `wrangler deploy --dry-run` passes with this confi
 | `BLOCKFROST_PROJECT_ID` | secret (cloud project) | `npx wrangler secret put` |
 | `BUYER_MNEMONIC` | secret (**buyer-cloud** wallet) | `npx wrangler secret put` |
 | `SELLER_ADDRESS` | secret | `npx wrangler secret put` |
-| `CXC_API_KEY` | secret, optional (CashXChain **sandbox** key, see below) | `npx wrangler secret put` |
+| `CASHXCHAIN_API_KEY` | secret, optional (CashXChain **sandbox** key, see below) | `npx wrangler secret put` |
 | `PUBLIC_BASE_URL` | var | `vars` in `wrangler.jsonc`, after the first deploy |
 | `LOCAL_FACILITATOR`, `PRICE_LOVELACE`, `MAX_PRICE_LOVELACE`, `SESSION_BUDGET_LOVELACE`, `MAX_PAYMENTS_PER_RUN` | var | `vars` in `wrangler.jsonc` |
 | `FACILITATOR_URL`, `CARDANO_L1_CONFIRMATIONS`, `BLOCKFROST_PREPROD_URL`, `EXPLORER_TX_URL`, `DEMO_AMOUNT_CEILING_MINOR`, `CLAUDE_MODEL`, `ANTHROPIC_BASE_URL` | optional var | add to `vars` only to override the default in `src/config.ts` |
@@ -47,13 +47,13 @@ npx wrangler secret put ANTHROPIC_API_KEY
 npx wrangler secret put BLOCKFROST_PROJECT_ID
 npx wrangler secret put BUYER_MNEMONIC
 npx wrangler secret put SELLER_ADDRESS
-npx wrangler secret put CXC_API_KEY          # optional: enables supplier payouts (sandbox)
+npx wrangler secret put CASHXCHAIN_API_KEY          # optional: enables supplier payouts (sandbox)
 npx wrangler deploy
 ```
 
 ### CashXChain sandbox key (supplier payouts)
 
-Without `CXC_API_KEY` the app behaves as before: drafts are not executable. With it, a ready draft is
+Without `CASHXCHAIN_API_KEY` the app behaves as before: drafts are not executable. With it, a ready draft is
 prepared on the CashXChain sandbox and an approval in the UI sends the payout there.
 
 1. Sign up at https://auth.sandbox.cashxchain.com/register (self-serve; the sandbox allows payouts while
@@ -62,10 +62,12 @@ prepared on the CashXChain sandbox and an approval in the UI sends the payout th
    `accounts:read`, `beneficiaries:write`, `payments:write` (least privilege), or a secret key. It
    starts with `cxc_rk_sandbox_` / `cxc_sk_sandbox_`. The app refuses to start with any other key,
    including live keys.
-3. In https://app.sandbox.cashxchain.com, make sure you hold an **EUR** account (and **USD** for the US
-   sample), then **Accounts → Get test funds**. API keys cannot call the faucet.
-4. Check the plan's single-payment limit: on the free plan it is USD 2,500, so the EUR 12,480 sample is
-   refused with `plan_limit_exceeded` (shown in the UI, nothing paid).
+3. In https://app.sandbox.cashxchain.com, hold an active account with test funds (**Accounts → Get test
+   funds**; API keys cannot call the faucet). A payout uses the account in the invoice currency, else
+   the primary account: the sandbox rail converts (production would need an FX quote).
+4. Plan limits apply to every payout. Free plan: USD 2,500 per payout, 5,000 per day, 10,000 per month.
+   The samples are sized for that; a larger invoice is refused with `plan_limit_exceeded` (shown in the
+   UI, nothing paid).
 
 `/api/health` then reports `cashxchain.ready: true`.
 

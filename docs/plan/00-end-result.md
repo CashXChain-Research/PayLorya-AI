@@ -124,7 +124,7 @@ sequenceDiagram
 | Field extraction | **Real** Claude API call. Amounts are parsed deterministically |
 | IBAN / BIC / ABA checks, duplicate detection | **Real**, deterministic code |
 | Corridors, rails, fees, FX, ETA | **Simulated** (`demo-fixture`, "Simulated route/fees") |
-| Supplier payout | **CashXChain sandbox** only, after human approval (`CXC_API_KEY`); not executed without the key |
+| Supplier payout | **CashXChain sandbox** only, after human approval (`CASHXCHAIN_API_KEY`); not executed without the key |
 | Compliance | The report is a data-quality and routing check, **not** an AML, sanctions or KYB decision |
 
 ## 6. Acceptance tests
