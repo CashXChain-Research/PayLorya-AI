@@ -28,7 +28,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/media/home.png" alt="PayLorya AI homepage" width="880">
+  <img src="docs/media/app-overview.png" alt="PayLorya AI dashboard: cash position, payables, 90-day forecast" width="880">
 </p>
 
 ---
@@ -50,9 +50,18 @@ PayLorya AI does the finance work **and** keeps the owner in control:
 | 💸 **Pays, paid on Cardano** | Buys a payment-readiness check per request with **x402 on Cardano Preprod**, then pays from the customer's own wallet. |
 | 🛡️ **Stays inside your rules** | A deterministic policy, not the model, decides whether a payment executes, waits for approval, or is blocked. |
 
-<p align="center">
-  <img src="docs/media/product.png" alt="Dashboard and AI CFO chat (homepage preview, sample data)" width="820">
-</p>
+## Screenshots
+
+Taken from the live product (a demo workspace; documents read and the chat answered by the real AI CFO).
+
+| | |
+| --- | --- |
+| <img src="docs/media/app-chat-top.png" alt="AI CFO chat: reads invoices, searches the web for the payee, drafts the payment through the policy"> | <img src="docs/media/app-chat.png" alt="AI CFO payee check: supplier verified in the company register, IBAN and bank-location problems flagged"> |
+| **AI CFO chat.** Asked to pay an invoice, it reads both Brenner invoices, checks payees and earlier payments, searches the web, and drafts the payment through the policy. | **Payee check.** It confirms the supplier in the company register and flags a placeholder IBAN, a bank-location mismatch and a wrong addressee before anyone approves. |
+| <img src="docs/media/app-documents.png" alt="Documents read by Claude into structured data"> | <img src="docs/media/app-connections.png" alt="Connections: Cardano wallet in Lace with read and write, MetaMask watch-only"> |
+| **Documents.** Invoices and receipts in EUR, USD and tADA, read into counterparty, amount, due date and category. | **Connections.** Own Cardano wallet (read & write, signed in Lace), MetaMask watch-only, CashXChain, banks via Stripe. |
+| <img src="docs/media/app-agent.png" alt="Agent access: read-only, guarded, full access, with limits"> | <img src="docs/media/home.png" alt="PayLorya AI homepage with sign-up by email code or Google"> |
+| **Agent access.** Read-only, Guarded or Full access, with per-payment and monthly limits and known payees only. | **Sign-up** from the homepage with an email code or Google. |
 
 ## Proof on Cardano Preprod
 
@@ -130,9 +139,6 @@ Money decisions never belong to the model.
 - **Secrets stay sealed.** A workspace's own CashXChain key is stored encrypted (AES-256-GCM, key
   derived with HKDF) and shown only as a hint.
 
-<p align="center">
-  <img src="docs/media/autonomy.png" alt="Agent autonomy levels: read-only, guarded, full access" width="820">
-</p>
 
 ## Connections
 
