@@ -10,7 +10,7 @@ import { wordlist } from "@scure/bip39/wordlists/english.js";
 import { NEEDS_AGENT_WALLET } from "../src/cfo/agents.js";
 import { agentWalletAddress } from "../src/cfo/connections.js";
 import { createCfo, mountCfo, type PaymentEngine } from "../src/cfo/index.js";
-import { CHECK_TIMED_OUT, INTERRUPTED, NEEDS_OWN_WALLET } from "../src/cfo/payments.js";
+import { CHECK_TIMED_OUT, explain, INTERRUPTED, NEEDS_OWN_WALLET } from "../src/cfo/payments.js";
 import { InsufficientFunds, type TxKit } from "../src/cfo/wallet-signer.js";
 import { loadConfig } from "../src/config.js";
 import { RunStore, type Run } from "../src/runs.js";
@@ -80,6 +80,8 @@ function stubKit() {
     inBlock: new Set<string>(),
     nextHash: TX,
     holds: 50_000_000n,
+    /** What the agent wallet holds (Blockfrost). */
+    agentBalance: 1_000_000_000n,
     /** Unix ms of the newest block the provider has indexed. */
     tip: Date.now(),
   };
@@ -98,6 +100,7 @@ function stubKit() {
     isDefinitiveRejection: () => state.definitive,
     confirmed: async hash => state.inBlock.has(hash),
     tipTime: async () => state.tip,
+    balance: async () => state.agentBalance,
   };
   return { kit, state };
 }
@@ -377,5 +380,100 @@ describe("each account pays from its own agent wallet, connected with its recove
       expect((await payment(me, draft.id)).verification.payer).toBe(agentWalletAddress(phrase));
     }
     expect(s.made.map(m => m.address)).toEqual([agentWalletAddress(PHRASE), agentWalletAddress(other)]);
+  });
+});
+
+// A minimal valid Cardano transaction (one input, one output): what the agent wallet's signer returns.
+const SIGNED_HEX = `84a300818258${"20" + "aa".repeat(32)}00018182581d60${"11".repeat(28)}1a001e8480021a00029810a0f5f6`;
+const SIGNED_TX = Buffer.from(SIGNED_HEX, "hex").toString("base64");
+const SIGNED_HASH = "c8bf07267ca8d0df9452b467eab54de1fb96234e7f320e0fb20bf5cf15c9a59d";
+
+describe("payments say why they stop, and stop before anything is paid", () => {
+  it("tADA amounts outside the payout limits are blocked when drafted, with the reason, and cost no verification", async () => {
+    const s = await start();
+    const me = await s.user("owner@nordwind.example");
+    await connectAgentWallet(me);
+    const payee = (await me("POST", "/api/v1/payees", { name: "Nordwind Node Services", cardanoAddress: PAYEE })).json;
+    const small = (await me("POST", "/api/v1/payments", { payeeId: payee.id, amountMinor: 500_000, currency: "ADA", reason: "tiny" })).json;
+    expect(small.status).toBe("blocked");
+    expect(small.policy.checks.find((c: { id: string }) => c.id === "limit").message).toMatch(/start at 1 tADA.*This one is 0\.5 tADA/);
+    const big = (await me("POST", "/api/v1/payments", { payeeId: payee.id, amountMinor: 20_000_000_000, currency: "ADA", reason: "huge" })).json;
+    expect(big.status).toBe("blocked");
+    expect(big.policy.checks.find((c: { id: string }) => c.id === "limit").message).toMatch(/at most 10 tADA each.*This one is 20,000 tADA/);
+    // Approving it anyway checks again and pays nothing; no verification was bought.
+    const again = await me("POST", `/api/v1/payments/${big.id}/approve`, { amountMinor: big.amountMinor, currency: big.currency });
+    expect(again.status).toBe(409);
+    expect(again.json.error).toMatch(/at most 10 tADA/);
+    expect(s.processed).toEqual([]);
+  });
+
+  it("an agent wallet too poor for the payment is stopped before the paid check; after a top-up, checking again pays", async () => {
+    const s = await start();
+    const me = await s.user("owner@nordwind.example");
+    await connectAgentWallet(me);
+    const payee = (await me("POST", "/api/v1/payees", { name: "Nordwind Node Services", cardanoAddress: PAYEE })).json;
+    s.state.agentBalance = 2_000_000n;
+    const draft = (await me("POST", "/api/v1/payments", { payeeId: payee.id, amountMinor: 5_000_000, currency: "ADA", reason: "Node hosting" })).json;
+    if (draft.status === "pending_approval") await me("POST", `/api/v1/payments/${draft.id}/approve`, { amountMinor: draft.amountMinor, currency: draft.currency });
+    await settle(async () => (await payment(me, draft.id)).status === "blocked");
+    expect((await payment(me, draft.id)).error).toMatch(/Your agent wallet holds 2 tADA; this payment needs 5 tADA plus up to 4 tADA.*Nothing was paid\./);
+    expect(s.processed).toEqual([]);
+    const activity = (await me("GET", "/api/v1/activity")).json.map((a: { action: string }) => a.action);
+    expect(activity).toContain("payment blocked");
+
+    s.state.agentBalance = 50_000_000n;
+    expect((await me("POST", `/api/v1/payments/${draft.id}/approve`, { amountMinor: draft.amountMinor, currency: draft.currency })).status).toBe(200);
+    await settle(async () => (await payment(me, draft.id)).status === "executed");
+    expect((await payment(me, draft.id)).error).toBeUndefined();
+    expect((await me("GET", "/api/v1/activity")).json.map((a: { action: string }) => a.action)).toContain("approved payment again");
+  });
+
+  it("a verification that does not clear the payment names its failing checks", () => {
+    const run = {
+      state: "BLOCKED",
+      timeline: [{ state: "BLOCKED", at: "", note: "blocked" }],
+      report: { verdict: "blocked", checks: [{ id: "duplicate", status: "fail", message: "This invoice was already checked" }, { id: "amount", status: "pass", message: "ok" }] },
+    } as unknown as Run;
+    expect(explain(run)).toBe("The verification on Cardano did not clear this payment: This invoice was already checked. Nothing was paid.");
+    expect(explain({ state: "BLOCKED", timeline: [{ state: "BLOCKED", at: "", note: "blocked" }] } as unknown as Run)).toBe("The payment stopped (blocked). Nothing was paid.");
+  });
+
+  it("an agent-wallet payout is recorded when signed; a restart is settled from the chain, never paid twice", async () => {
+    const s = await start();
+    const me = await s.user("owner@nordwind.example");
+    const wallet = (await connectAgentWallet(me)).json;
+    const payee = (await me("POST", "/api/v1/payees", { name: "Nordwind Node Services", cardanoAddress: PAYEE })).json;
+    const ws = (await me("GET", "/api/v1/me")).json.workspace.id;
+    const executing = async (reason: string) => {
+      const d = (await me("POST", "/api/v1/payments", { payeeId: payee.id, amountMinor: 2_000_000 + Math.floor(Math.random() * 1000), currency: "ADA", reason })).json;
+      await s.deps.store.claimPayment(ws, d.id, ["pending_approval"], "executing", new Date().toISOString());
+      await s.deps.store.updatePayment(ws, d.id, { cardano: { from: wallet.address, payTo: PAYEE, lovelace: String(d.amountMinor), byAgent: true } });
+      return d;
+    };
+
+    // Signed, then the server restarted: recorded before sending, found in a block → executed.
+    const sent = await executing("sent");
+    await s.deps.payments.recordAgentPayout(ws, { network: "cardano:preprod", payTo: PAYEE, asset: "lovelace", amount: String(sent.amountMinor), maxTimeoutSeconds: 600 }, { transaction: SIGNED_TX, nonce: "x" });
+    expect((await payment(me, sent.id)).cardano.submitted.txHash).toBe(SIGNED_HASH);
+    await s.deps.payments.sweep();
+    expect((await payment(me, sent.id)).status).toBe("executing"); // not in a block, not expired: wait
+    s.state.inBlock.add(SIGNED_HASH);
+    await s.deps.payments.sweep();
+    expect(await payment(me, sent.id)).toMatchObject({ status: "executed", txHash: SIGNED_HASH });
+
+    // Signed, never landed: back to approval only once the chain is well past its validity.
+    const lost = await executing("lost");
+    await s.deps.payments.recordAgentPayout(ws, { network: "cardano:preprod", payTo: PAYEE, asset: "lovelace", amount: String(lost.amountMinor), maxTimeoutSeconds: 600 }, { transaction: SIGNED_TX, nonce: "x" });
+    s.state.inBlock.clear();
+    s.state.tip = Date.now() + 25 * 60_000;
+    await s.deps.payments.sweep(Date.now() + 25 * 60_000);
+    expect(await payment(me, lost.id)).toMatchObject({ status: "pending_approval", error: expect.stringMatching(/nothing was sent\. Approve it again/) });
+    expect((await payment(me, lost.id)).cardano).toBeUndefined();
+
+    // Cut off before anything was signed: straight back to approval.
+    const early = await executing("early");
+    await s.deps.payments.sweep();
+    expect(await payment(me, early.id)).toMatchObject({ status: "pending_approval", error: INTERRUPTED });
+    expect((await payment(me, early.id)).cardano).toBeUndefined();
   });
 });

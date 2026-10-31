@@ -136,7 +136,12 @@ function stubAgent(): BuyerAgent {
 }
 
 const CXC_KEY = "cxc_sk_sandbox_workspaceKey1";
-const fakeCxc = { listAccounts: async () => ({ accounts: [{ id: "acc_1", currency: "USD", status: "active" }] }), balance: async () => [{ account_id: "acc_1", currency: "USD", available: "25000.00" }] };
+// The workspace's own CashXChain account: USD and EUR, enough to pay the tests' payouts.
+const FAKE_BALANCES: Record<string, { currency: string; available: string }> = { acc_1: { currency: "USD", available: "25000.00" }, acc_2: { currency: "EUR", available: "8000.00" } };
+const fakeCxc = {
+  listAccounts: async () => ({ accounts: Object.entries(FAKE_BALANCES).map(([id, b]) => ({ id, currency: b.currency, status: "active" })) }),
+  balance: async (id: string) => [{ account_id: id, ...FAKE_BALANCES[id]! }],
+};
 
 const servers: Server[] = [];
 afterEach(() => {
@@ -300,7 +305,7 @@ describe.each(["local", "cloudflare"] as const)("AI CFO API on %s storage", stor
     const cxc = await me("POST", "/api/v1/connections", { kind: "cashxchain", apiKey: CXC_KEY, access: "read_write" });
     await me("POST", "/api/v1/connections", { kind: "cardano_agent_wallet", recoveryPhrase: AGENT_PHRASE, access: "read_write" });
     expect(cxc.json.access).toBe("read_write");
-    expect(cxc.json.balances).toEqual([{ asset: "USD", amount: "25000.00", usdMinor: 2_500_000 }]);
+    expect(cxc.json.balances).toEqual([{ asset: "USD", amount: "25000.00", usdMinor: 2_500_000 }, expect.objectContaining({ asset: "EUR", amount: "8000.00" })]);
     expect((await me("POST", "/api/v1/connections", { kind: "bank" })).status).toBe(400);
 
     const activity = (await me("GET", "/api/v1/activity")).json.map((a: { action: string }) => a.action);
@@ -329,7 +334,7 @@ describe.each(["local", "cloudflare"] as const)("AI CFO API on %s storage", stor
   it("chat: the agent drafts, the policy decides, approval executes through the payout engine", async () => {
     const { user } = await start(
       [
-        { tool: { name: "draft_payment", input: { payeeName: "Brenner GmbH", amount: 2000, currency: "EUR", reason: "INV-1042" } } },
+        { tool: { name: "draft_payment", input: { payeeName: "Brenner GmbH", amount: 900, currency: "EUR", reason: "INV-1042" } } },
         { text: "Drafted; it needs your approval because it is above your per-payment limit." },
       ],
       stubAgent(),
@@ -345,7 +350,7 @@ describe.each(["local", "cloudflare"] as const)("AI CFO API on %s storage", stor
     expect(stream.json).toContain("event: done");
 
     const [payment] = (await me("GET", "/api/v1/payments")).json;
-    expect(payment).toMatchObject({ requestedBy: "agent", status: "pending_approval", payeeName: "Brenner GmbH", amountMinor: 200_000, currency: "EUR" });
+    expect(payment).toMatchObject({ requestedBy: "agent", status: "pending_approval", payeeName: "Brenner GmbH", amountMinor: 90_000, currency: "EUR" });
     expect(payment.policy.checks.find((c: { id: string }) => c.id === "per_payment").status).toBe("warn");
 
     expect((await me("POST", `/api/v1/payments/${payment.id}/approve`, { amountMinor: payment.amountMinor, currency: payment.currency })).status).toBe(200);

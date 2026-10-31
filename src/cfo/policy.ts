@@ -40,6 +40,8 @@ export interface PaymentFacts {
   railWritable: boolean;
   /** The account's own agent wallet, which pays the verification on Cardano before every payout. */
   agentWallet: "ready" | "missing" | "read_only";
+  /** The amount is outside what this rail pays out (tADA minimum and cap, fiat cap): why. */
+  limitProblem?: string;
   /** Payments the agent executed on its own this calendar month, USD cents. */
   agentExecutedThisMonthUsdMinor: number;
 }
@@ -76,6 +78,10 @@ export function decidePayment(autonomy: Autonomy, limits: AgentLimits, p: Paymen
 
   if (p.usdMinor <= 0) {
     checks.push({ id: "amount", status: "fail", message: "Amount must be positive" });
+    return { decision: "blocked", checks };
+  }
+  if (p.limitProblem) {
+    checks.push({ id: "limit", status: "fail", message: p.limitProblem });
     return { decision: "blocked", checks };
   }
 

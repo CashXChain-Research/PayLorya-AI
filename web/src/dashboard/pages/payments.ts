@@ -166,8 +166,9 @@ function signButtons(p: Payment): string {
 export const needsYou = (p: Payment): boolean => p.status === "pending_approval" || p.status === "awaiting_signature";
 
 export const decisionButtons = (p: Payment): string =>
-  p.status === "pending_approval"
-    ? `<span class="decide"><button type="button" class="btn ghost xs" data-act="reject" data-pid="${esc(p.id)}">Reject</button><button type="button" class="btn primary xs" data-act="approve" data-pid="${esc(p.id)}">${icon("check", 14, 2.6)}Approve</button></span>`
+  // A blocked payment can be approved again once its reason is fixed: approving checks everything anew.
+  p.status === "pending_approval" || p.status === "blocked"
+    ? `<span class="decide"><button type="button" class="btn ghost xs" data-act="reject" data-pid="${esc(p.id)}">Reject</button><button type="button" class="btn primary xs" data-act="approve" data-pid="${esc(p.id)}" ${p.status === "blocked" ? 'title="Checks everything again; pays only if it passes now"' : ""}>${icon("check", 14, 2.6)}${p.status === "blocked" ? "Check again" : "Approve"}</button></span>`
     : p.status === "awaiting_signature"
       ? signButtons(p)
       : "";
@@ -185,11 +186,16 @@ const txLink = (hash: string, url?: string) =>
 /** Where a tADA payout stands on Cardano: verified, waiting for your wallet, sent, in a block. */
 function cardanoNote(p: Payment): string {
   const c = p.cardano;
+  if (p.status === "executing" && !c?.submitted) {
+    return `<div class="callout info">${icon("clock", 15)}<span>${p.rail === "cardano_preprod" || p.rail === "cashxchain" ? "Verifying on Cardano (x402), then paying. This takes up to a few minutes; the page updates by itself." : "Running."}</span></div>`;
+  }
   if (!c) return "";
   if (p.status === "awaiting_signature") {
     return `<div class="callout info">${icon("wallet", 15)}<span>Checked and ready. Sign it in your wallet: the transaction is built from your wallet's funds when you click, and your wallet shows payee, amount and fee before you confirm. Nothing is sent without your signature.</span></div>`;
   }
-  if (p.status === "executing" && c.submitted) return `<div class="callout info">${icon("clock", 15)}<span>Sent to Cardano Preprod; waiting for it to reach a block.</span></div>`;
+  if (p.status === "executing" && c.submitted) {
+    return `<div class="callout info">${icon("clock", 15)}<span>Sent to Cardano Preprod${c.byAgent ? " from your agent wallet" : ""}; waiting for it to reach a block.</span></div>`;
+  }
   return "";
 }
 
@@ -229,7 +235,7 @@ export function paymentRow(p: Payment, open = false): string {
         <dt>Rail</dt><dd>${railChip(p.rail)}</dd>
         <dt>Pays to</dt><dd>${p.payeeId ? "Saved payee account" : destinationText(p)}</dd>
         <dt>Requested by</dt><dd>${p.requestedBy === "agent" ? "AI CFO agent" : "You"}${p.runId ? ` <span class="mono muted">${esc(p.runId)}</span>` : ""}</dd>
-        ${p.cardano ? `<dt>From</dt><dd><span class="mono" title="${esc(p.cardano.from)}">${esc(short(p.cardano.from))}</span> <span class="muted small">your wallet</span></dd>` : ""}
+        ${p.cardano ? `<dt>From</dt><dd><span class="mono" title="${esc(p.cardano.from)}">${esc(short(p.cardano.from))}</span> <span class="muted small">${p.cardano.byAgent ? "your agent wallet" : "your wallet"}</span></dd>` : ""}
         ${verified(p)}
         ${p.reference && !p.txHash ? `<dt>Reference</dt><dd class="mono">${esc(p.reference)}</dd>` : ""}
         ${p.txHash ? `<dt>Transaction</dt><dd>${txLink(p.txHash, p.explorerUrl)}${p.cardano ? (p.cardano.confirmedAt ? ' <span class="pill t-ok">in a block</span>' : ' <span class="pill t-neutral">waiting for a block</span>') : ""}</dd>` : ""}

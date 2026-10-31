@@ -203,7 +203,7 @@ describe("a CashXChain payout cut off by a restart", () => {
     const ws = (await me("GET", "/api/v1/me")).json.workspace.id;
     await s.deps.store.updatePayment(ws, draft.id, { status: "executing", reference: undefined, executedAt: undefined });
     await s.deps.payments.sweep();
-    expect((await me("GET", "/api/v1/payments")).json[0]).toMatchObject({ status: "pending_approval", error: expect.stringMatching(/never twice/) });
+    expect((await me("GET", "/api/v1/payments")).json[0]).toMatchObject({ status: "pending_approval", error: expect.stringMatching(/cannot be paid twice/) });
 
     expect((await me("POST", `/api/v1/payments/${draft.id}/approve`, { amountMinor: draft.amountMinor, currency: draft.currency })).status).toBe(200);
     await settle(async () => (await me("GET", "/api/v1/payments")).json[0].status === "executed");

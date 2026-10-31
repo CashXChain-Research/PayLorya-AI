@@ -137,8 +137,10 @@ export interface Payment {
  * owner signs, or while the network takes the transaction, loses nothing.
  */
 export interface CardanoPayout {
-  /** The wallet it leaves from: the workspace's read & write Cardano connection. */
+  /** The wallet it leaves from: the workspace's read & write Cardano connection, or its agent wallet. */
   from: string;
+  /** Paid by the account's agent wallet on its own (no wallet popup). */
+  byAgent?: boolean;
   /** The verified payee address. */
   payTo: string;
   lovelace: string;
