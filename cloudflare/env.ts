@@ -53,3 +53,13 @@ export function containerEnv(env: Partial<Record<ForwardedKey, string>>): Record
   }
   return vars;
 }
+
+/**
+ * GET /api/auth-options, answered by the Worker so the login pages and the marketing page do not
+ * wait for (or depend on) the container. Same answer as src/cfo/api.ts: codes need a Resend key,
+ * Google needs both OAuth values and works on the canonical origin only.
+ */
+export function authOptions(env: Partial<Record<ForwardedKey, string>>): { codes: boolean; google?: { origin: string } } {
+  const google = env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET && env.PUBLIC_BASE_URL ? { origin: new URL(env.PUBLIC_BASE_URL).origin } : undefined;
+  return { codes: Boolean(env.RESEND_API_KEY), ...(google ? { google } : {}) };
+}
