@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { addressCredentials } from "@x402/cardano";
 import { findCorridor, simulatedQuote } from "./fixtures.js";
 import type { Invoice, ReadinessCheck, ReadinessReport, Verdict } from "./types.js";
 
@@ -38,6 +39,17 @@ export function validateBic(raw: string, country: string): { ok: boolean; reason
   const bic = raw.toUpperCase();
   if (!/^[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}([A-Z0-9]{3})?$/.test(bic)) return { ok: false, reason: "malformed BIC" };
   if (bic.slice(4, 6) !== country) return { ok: false, reason: `BIC country ${bic.slice(4, 6)} != ${country}` };
+  return { ok: true };
+}
+
+/** Bech32 checksum, testnet prefix and a key (not script) payment credential. */
+export function validateCardanoAddress(raw: string): { ok: boolean; reason?: string } {
+  if (!raw.startsWith("addr_test1")) return { ok: false, reason: "not a Cardano testnet address (addr_test1...)" };
+  try {
+    if (addressCredentials(raw).payment.isScript) return { ok: false, reason: "script address, expected a wallet address" };
+  } catch {
+    return { ok: false, reason: "Cardano address checksum or format invalid" };
+  }
   return { ok: true };
 }
 
@@ -134,6 +146,13 @@ export function buildReadinessReport(
 }
 
 function accountCheck(inv: Invoice): ReadinessCheck {
+  if (inv.currency === "ADA") {
+    if (!inv.cardanoAddress) return { id: "account", status: "fail", message: "No Cardano address", source: "deterministic" };
+    const r = validateCardanoAddress(inv.cardanoAddress);
+    return r.ok
+      ? { id: "account", status: "pass", message: "Cardano Preprod address valid (bech32, key credential)", source: "deterministic" }
+      : { id: "account", status: "fail", message: r.reason!, source: "deterministic" };
+  }
   if (inv.iban) {
     const r = validateIban(inv.iban);
     if (!r.ok) return { id: "account", status: "fail", message: r.reason!, source: "deterministic" };

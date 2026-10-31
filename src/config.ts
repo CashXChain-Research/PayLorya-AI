@@ -40,6 +40,12 @@ const EnvSchema = z.object({
   // Demo business limits (minor units of the invoice currency)
   DEMO_AMOUNT_CEILING_MINOR: z.coerce.number().int().positive().default(5_000_000),
 
+  // Invoice payouts (approved drafts). Crypto invoices pay tADA from the buyer wallet to the
+  // verified payee wallet only; caps are separate from the report-fee budget.
+  SUPPLIER_CARDANO_ADDRESS: optional.refine(v => v === undefined || v.startsWith("addr_test1"), "Preprod address (addr_test1...)"),
+  PAYOUT_MAX_LOVELACE: z.coerce.bigint().default(10_000_000n),
+  PAYOUT_BUDGET_LOVELACE: z.coerce.bigint().default(30_000_000n),
+
   // AI (ANTHROPIC_BASE_URL can point at a Cloudflare AI Gateway; the SDK reads it from env)
   ANTHROPIC_API_KEY: optional,
   CLAUDE_MODEL: z.string().default("claude-opus-5-5"),
@@ -67,9 +73,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   };
 }
 
-export function blockfrostProvider(config: Config) {
+export function blockfrostProvider(config: Config, requestTimeoutMs?: number) {
   if (!config.BLOCKFROST_PROJECT_ID) throw new Error("BLOCKFROST_PROJECT_ID is not set");
   return {
     blockfrost: { baseUrl: config.BLOCKFROST_PREPROD_URL, projectId: config.BLOCKFROST_PROJECT_ID },
+    ...(requestTimeoutMs ? { requestTimeoutMs } : {}),
   };
 }

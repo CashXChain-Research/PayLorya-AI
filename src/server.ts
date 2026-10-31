@@ -2,7 +2,7 @@ import express from "express";
 import { BuyerAgent } from "./agent.js";
 import { loadConfig } from "./config.js";
 import { mountLocalFacilitator } from "./facilitator.js";
-import { SAMPLE_INVOICES } from "./fixtures.js";
+import { sampleInvoices } from "./fixtures.js";
 import { RunStore } from "./runs.js";
 import { mountSeller } from "./seller.js";
 
@@ -30,11 +30,15 @@ app.get(["/health", "/api/health"], (_req, res) => {
     maxPriceLovelace: config.MAX_PRICE_LOVELACE.toString(),
     sessionBudgetLovelace: config.SESSION_BUDGET_LOVELACE.toString(),
     spentLovelace: agent?.spentLovelace.toString() ?? "0",
+    supplierCardanoAddress: config.SUPPLIER_CARDANO_ADDRESS,
+    payoutMaxLovelace: config.PAYOUT_MAX_LOVELACE.toString(),
+    payoutBudgetLovelace: config.PAYOUT_BUDGET_LOVELACE.toString(),
+    paidOutLovelace: agent?.paidOutLovelace.toString() ?? "0",
   });
 });
 
 app.get("/api/samples", (_req, res) => {
-  res.json(SAMPLE_INVOICES);
+  res.json(sampleInvoices(config.SUPPLIER_CARDANO_ADDRESS));
 });
 
 app.post("/api/runs", (req, res) => {
@@ -64,6 +68,8 @@ app.get("/api/runs", (_req, res) => {
       amountMinor: run.invoice?.amountMinor,
       currency: run.invoice?.currency,
       transactionHash: run.payment?.transactionHash,
+      rail: run.route?.rail,
+      payoutStatus: run.payout?.status,
     })),
   );
 });
@@ -75,6 +81,22 @@ app.get("/api/runs/:id", (req, res) => {
     return;
   }
   res.json(run);
+});
+
+// Human decision on a draft. Public on the demo deployment: payouts are testnet or simulated and capped.
+app.post("/api/runs/:id/:decision", (req, res) => {
+  const run = runs.get(req.params.id);
+  const decision = req.params.decision;
+  if (!agent || !run || (decision !== "approve" && decision !== "reject")) {
+    res.status(404).json({ error: "not found" });
+    return;
+  }
+  const result = decision === "approve" ? agent.approve(run) : agent.reject(run);
+  if (!result.ok) {
+    res.status(409).json({ error: result.reason });
+    return;
+  }
+  res.status(202).json({ id: run.id, state: run.state });
 });
 
 app.listen(config.PORT, () => {

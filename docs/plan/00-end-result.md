@@ -196,6 +196,7 @@ write it into your PR description). Additive changes to shared files are fine af
 | C Cloudflare | **Live** at https://cxc-agentpay.cashxchain.workers.dev with all four secrets (`x402Ready`, `aiReady`). CI green. Open: protect `POST /api/runs` (token or rate limit), lower the budget. The GitHub check "Workers Builds" fails instantly (the deploy itself works) | – |
 | D Submission | Drafts on `main` (README, PITCH, DEMO-SCRIPT, SUBMISSION). The repo is already public, and a history scan found no secrets. Open: switch the story to "agent checks, pays the check via x402, pays the invoice on approval"; video ≤ 2.5 min; Devfolio; license | invoice payout, UI |
 | CashXChain fiat route | Owned by a separate Claude session. Sandbox payouts per the docs; secret `CASHXCHAIN_API_KEY` (`cxc_sk_sandbox_…`) | sandbox account, test funds, key |
+| Invoice payout core (decision A) | Branch `claude/happy-brahmagupta-267ekd`: vendor registry routing, approve/reject endpoints, real Cardano Preprod payout, fiat via `FiatPayoutClient` (simulated until the CashXChain client lands), redesigned UI. 122 tests green, not run live | `SUPPLIER_CARDANO_ADDRESS` on Cloudflare; one live payout; CashXChain branch to plug in as `FiatPayoutClient` |
 
 ## 10. Rules for everyone (humans and agents)
 
@@ -247,8 +248,31 @@ write it into your PR description). Additive changes to shared files are fine af
 - API keys (Blockfrost, Anthropic) live only on Cloudflare. Live payments run against the
   deployment (2026-10-30).
 - Tracks: Cardano is primary. API3 and BSV: no. Adevar Labs: only if it needs no extra build.
+- Implementation of the invoice payout decision: section 14.
 
 ## 13. Non-goals
 
-Mainnet, real payouts, real CashXChain API calls, AML/KYB/sanctions decisions, Masumi, persistence
-beyond memory, multi-instance scaling, user accounts.
+Mainnet, real fiat payouts, real CashXChain API calls (until the sandbox contract is wired),
+AML/KYB/sanctions decisions, Masumi, persistence beyond memory, multi-instance scaling, user accounts.
+
+## 14. Payout extension: what changed and who needs to act
+
+What it adds: routing (`src/routing.ts`), payout rails (`src/payout.ts`), `BuyerAgent.approve()` /
+`reject()`, `POST /api/runs/:id/approve|reject`, states `EXECUTING`, `EXECUTED`, `PAYOUT_UNKNOWN`,
+`REJECTED`, UI steps 6 to 8, samples `crypto_ok` and `wallet_swap`. Details:
+[ARCHITECTURE.md](../ARCHITECTURE.md#route-and-payout).
+
+Demo additions (about 60 s):
+
+1. **Crypto invoice (tADA):** pay the report fee via x402, route to Cardano, approve, a second tx
+   pays 3.5 tADA to the verified supplier wallet. Two explorer links, two purposes.
+2. **Wallet swapped:** same supplier, new wallet on the invoice. The report says the address is
+   valid; the route policy blocks it (invoice redirection). Nothing is paid out.
+3. **EUR invoice:** approve, simulated CashXChain payout to the verified IBAN, clearly labeled.
+
+| Owner | Action |
+| --- | --- |
+| A (Korbi) | `npm run wallet:new -- supplier`, give the address to C. Fund buyer-cloud for fees plus payouts (30 tADA payout budget + 20 tADA report budget + network fees). One live payout, then fill in "Verified live" in ARCHITECTURE.md |
+| C (Valentin) | Set `SUPPLIER_CARDANO_ADDRESS` on Cloudflare (an address, not a secret: `vars` in `wrangler.jsonc` or `wrangler secret put`). Optional: `PAYOUT_MAX_LOVELACE`, `PAYOUT_BUDGET_LOVELACE`. Already forwarded by `cloudflare/env.ts` |
+| D (Valentin) | README, PITCH, SUBMISSION and DEMO-SCRIPT still say "no supplier payout is executed" and "`executable: false`". Update the real-vs-simulated table: Cardano payout real (testnet, after approval), CashXChain fiat payout simulated |
+| CashXChain session | Rebase `claude/festive-meitner-k6e0oz` onto this: keep the routing and registry, wrap the sandbox client as a `FiatPayoutClient` (prepare/quote can move into the route step). Beneficiary data must come from the registry record, not the invoice (decision A) |

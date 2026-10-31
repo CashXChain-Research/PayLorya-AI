@@ -116,6 +116,7 @@ async function startModel(): Promise<string> {
       bic: field(/BIC\s+([A-Z0-9]+)/),
       routingNumber: null,
       accountNumber: null,
+      cardanoAddress: /addr_test1\w+/.exec(text)?.[0] ?? null,
     };
     res.json({
       id: "msg_stub",
@@ -322,7 +323,7 @@ describe("remote:run against a real seller stack", () => {
       invoiceId: expect.stringMatching(/^LIVE-\d+$/),
       payment: { sellerAddress: SELLER, buyerAddress: BUYER, amount: "2000000", transactionHash: TX },
       report: { verdict: "ready_for_review", payoutExecuted: false },
-      draft: { status: "awaiting_human_approval", executable: false },
+      draft: { status: "awaiting_human_approval", executable: true },
       input: { source: "default", sha256: expect.stringMatching(/^[0-9a-f]{64}$/) },
       health: { network: CARDANO_NETWORK, facilitator: s.fac.url, sellerAddress: SELLER, buyerAddress: BUYER, priceLovelace: "2000000", spentLovelaceBefore: "0", spentLovelaceAfter: "2000000" },
     });
