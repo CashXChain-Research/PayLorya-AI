@@ -209,19 +209,24 @@ Payout safety mirrors the report payment:
   error stays `PAYOUT_UNKNOWN`.
 - CashXChain route (`src/payout-cashxchain.ts`): source account in the invoice currency,
   beneficiary from the payee record, `POST /v1/banking/payouts` under the agent's key, polled to
-  a final status. `reference` is the invoice id normalized like `payoutKey` (upper case, letters
-  and digits only), so every id variant behind one key sends the same body.
+  a final status. `reference` is `payoutKey`'s normalized invoice id (lower-cased, letters and
+  digits only), then upper-cased, so every id variant behind one key sends the same body.
   - **Refused** (`isDefinitiveRejection`, nothing paid): any failure before the payout POST; on the
-    POST, `plan_limit_exceeded` / `insufficient_balance` (they prove no payout exists under the
-    key), or another 4xx on a key this process never sent; and the final statuses `failed` /
+    POST, only `corridor_unsupported`, `plan_limit_exceeded` and `insufficient_balance`; and the
+    final statuses `failed` /
     `cancelled`. **Deviation from the payout contract**, agreed with workstream A: the contract
     listed `failed`/`cancelled` as unknown; CashXChain documents both as "did not happen", and a
     same-key retry after `insufficient_balance` replays `failed`, so such an invoice stays
     refusable and cannot pay (CashXChain wants a new key for that, which we do not mint).
   - **Unknown** (locked): 5xx, timeout or network on the POST; any 409 (a payout exists under the
-    key); 429 (recorded as `created`); a 4xx on a key this process sent before (a replay re-runs
-    CashXChain's checks and can fail after the first attempt settled); `created` after polling;
-    `returned`; polling errors.
+    key); 429 (recorded as `created`); every other 4xx; `created` after polling; `returned`;
+    polling errors.
+  - **Why the 4xx split** (CashXChain backend `http/banking/payouts.rs`): a replay of a key re-runs
+    the verification, account-hold, beneficiary/account-ownership and payee-name checks before it
+    finds the stored payout, so a 403/404/422 from those can hide a payout that already settled,
+    e.g. one sent before a restart. Corridor and plan-limit checks run only on a first attempt,
+    and a funds refusal replays as 200 `failed`, so those three codes prove nothing exists under
+    the key. Keys never expire (`idempotency.md`: "stays bound to that transaction").
 - Payouts go through the same wallet queue as report payments (one tx in flight per wallet).
 
 ## Public endpoint limits

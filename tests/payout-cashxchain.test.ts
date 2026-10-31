@@ -181,13 +181,35 @@ describe("CashXChainPayoutRoute: a 4xx is a refusal only when no payout can exis
     expect(await rejection(s.pay(sepa, BRENNER, "payout-k2"))).toBeInstanceOf(PayoutUnknownError);
   });
 
-  it("another 4xx refuses a fresh key, but not a key this process sent before (a replay may follow a settle)", async () => {
+  it("any other 4xx is unknown, even on a fresh key: a replay re-runs checks before it finds the payout", async () => {
     const s = await setup();
-    const hold = { status: 403, error: "account_on_hold", message: "This account is on hold. Contact support." };
-    s.fake.state.failNextCreate = hold;
-    expect(await rejection(s.pay())).toMatchObject({ constructor: PayoutRefusedError, code: "account_on_hold" });
-    s.fake.state.failNextCreate = hold;
-    expect(await rejection(s.pay())).toBeInstanceOf(PayoutUnknownError);
+    for (const failure of [
+      { status: 403, error: "account_on_hold", message: "This account is on hold. Contact support." },
+      { status: 403, error: "account_not_verified", message: "This account cannot move money until its business verification is approved." },
+      { status: 404, error: "not_found", message: "no beneficiary mockben_x" },
+      { status: 422, error: "payee_name_mismatch", message: "The receiving bank says this account is held by someone else." },
+    ]) {
+      s.fake.state.failNextCreate = failure;
+      expect(await rejection(s.pay(sepa, BRENNER, `payout-${failure.error}`))).toBeInstanceOf(PayoutUnknownError);
+    }
+  });
+
+  it("after a restart, a settled payout behind a re-run 403 is not reported as nothing paid", async () => {
+    const s = await setup();
+    const { reference } = await s.pay(); // settled by the process before the restart
+    const restarted = new CashXChainPayoutRoute(new CashXChainClient({ apiKey: FAKE_KEY, baseUrl: await listen(s.fake.app) }), { pollIntervalMs: 1 });
+    s.fake.state.failNextCreate = { status: 403, error: "account_on_hold", message: "This account is on hold. Contact support.", beforeReplay: true };
+    const error = await rejection(restarted.payout({ idempotencyKey: "payout-k1", invoice: sepa, destination: IBAN, payee: BRENNER }));
+    expect(error).toBeInstanceOf(PayoutUnknownError);
+    expect(restarted.isDefinitiveRejection(error)).toBe(false);
+    expect(s.fake.payoutCount()).toBe(1);
+    expect([...s.fake.state.payouts.values()][0]?.payout.id).toBe(reference);
+  });
+
+  it("corridor_unsupported is a refusal: CashXChain checks corridors only on a first attempt", async () => {
+    const s = await setup();
+    s.fake.state.failNextCreate = { status: 422, error: "corridor_unsupported", message: "EUR payouts to DE are not offered." };
+    expect(await rejection(s.pay())).toMatchObject({ constructor: PayoutRefusedError, code: "corridor_unsupported" });
   });
 
   it("plan_limit_exceeded stays a refusal on a resent key: limits run after the replay lookup", async () => {
@@ -197,6 +219,17 @@ describe("CashXChainPayoutRoute: a 4xx is a refusal only when no payout can exis
     expect(await rejection(s.pay())).toBeInstanceOf(PayoutRefusedError);
     s.fake.state.failNextCreate = limit;
     expect(await rejection(s.pay())).toBeInstanceOf(PayoutRefusedError);
+  });
+
+  it("ids whose case only differs outside ASCII share a key and send one reference", async () => {
+    const s = await setup();
+    // Same payoutKey (it lower-cases first), but upper-casing the raw ids would differ.
+    for (const [a, b] of [["İNV-7", "inv-7"], ["ẞ-11", "ß-11"]] as const) {
+      expect(payoutKey(BRENNER, { ...sepa, id: a })).toBe(payoutKey(BRENNER, { ...sepa, id: b }));
+      const key = `payout-${payoutKey(BRENNER, { ...sepa, id: a })}`;
+      expect((await s.pay({ ...sepa, id: a }, BRENNER, key)).reference).toBe((await s.pay({ ...sepa, id: b }, BRENNER, key)).reference);
+    }
+    expect(s.fake.payoutCount()).toBe(2);
   });
 
   it("invoice id variants that share the agent's payout key send an identical body", async () => {
