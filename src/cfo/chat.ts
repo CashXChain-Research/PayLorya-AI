@@ -198,6 +198,11 @@ export interface ChatDeps {
   model: string;
   /** Tests inject a fake; production uses the SDK client. */
   client?: Pick<Anthropic, "messages">;
+  /**
+   * The turn came with an API key (REST or MCP), not a person in the dashboard: the CFO cannot change
+   * budgets, and what it drafts waits for a person's approval, whatever the agent's autonomy.
+   */
+  viaApiKey?: boolean;
 }
 
 export interface Attachment {
@@ -237,7 +242,11 @@ export async function runChatTurn(deps: ChatDeps, ws: string, chatId: string, te
   messages.push({ role: "user", content: [...liveBlocks, { type: "text", text: userText || "Please look at the attached document." }] });
 
   const workspace = (await store.workspace(ws))!;
-  const system = `${SYSTEM}\n\nToday is ${new Date().toISOString().slice(0, 10)}. Workspace: ${workspace.name}. Reporting currency: USD.`;
+  const system = [
+    `${SYSTEM}\n\nToday is ${new Date().toISOString().slice(0, 10)}. Workspace: ${workspace.name}. Reporting currency: USD.`,
+    deps.viaApiKey ? "This turn comes through the API (an API key), not the dashboard: you cannot change budgets, and every payment you draft waits for a person to approve it in the dashboard." : "",
+  ].filter(Boolean).join("\n\n");
+  const workspaceTools = deps.viaApiKey ? TOOLS.filter(t => t.name !== "set_budget") : TOOLS;
   const tools: Array<{ name: string; summary: string }> = [];
   let reply = "";
 
@@ -250,7 +259,7 @@ export async function runChatTurn(deps: ChatDeps, ws: string, chatId: string, te
       model: deps.model,
       max_tokens: 32000,
       system,
-      tools: hosted ? [...TOOLS, ...SERVER_TOOLS] : TOOLS,
+      tools: hosted ? [...workspaceTools, ...SERVER_TOOLS] : workspaceTools,
       messages,
       thinking: { type: "adaptive" },
       output_config: { effort: "high" },
@@ -497,6 +506,7 @@ async function runTool(deps: ChatDeps, ws: string, name: string, input: unknown)
       return { summary: `Checked ${budgets.length} budget${budgets.length === 1 ? "" : "s"}`, data: budgets.map(b => ({ id: b.id, name: b.name, category: b.category, limitUsd: usd(b.limitUsdMinor), spentUsd: usd(b.spentUsdMinor) })) };
     }
     case "set_budget": {
+      if (deps.viaApiKey) throw new Error("Budgets can only be changed by a person signed in to the dashboard");
       const b = BudgetInput.parse(args);
       if (b.id && !(await store.budget(ws, b.id))) throw new Error("budget not found");
       const saved = await store.saveBudget(ws, { name: b.name.slice(0, 80), category: b.category, limitUsdMinor: Math.round(b.monthlyLimitUsd * 100) }, b.id);
@@ -530,7 +540,7 @@ async function runTool(deps: ChatDeps, ws: string, name: string, input: unknown)
       if (p.documentId && !(await store.document(ws, p.documentId))) throw new Error("document not found");
       const amountMinor = majorToMinor(p.amount, p.currency);
       const { payeeName, amount: _a, currency, reason, documentId, ...account } = p;
-      const payment = await deps.payments.draft(ws, { payeeName, amountMinor, currency, reason, documentId, destination: account, requestedBy: "agent" });
+      const payment = await deps.payments.draft(ws, { payeeName, amountMinor, currency, reason, documentId, destination: account, requestedBy: deps.viaApiKey ? "user" : "agent" });
       const outcome =
         payment.status === "executing" ? "executing within your rules" : payment.status === "blocked" ? "drafted, cannot execute yet" : "drafted, waiting for approval";
       return {

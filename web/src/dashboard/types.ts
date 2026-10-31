@@ -314,3 +314,32 @@ export interface FundingStatus {
   granted?: { address: string; lovelace: string; at: string; status: "sending" | "sent"; txHash?: string; explorerUrl?: string };
   reason?: string;
 }
+
+/** GET /api/v1/api-keys (src/cfo/api-keys.ts). Only the prefix is ever shown again. */
+export type ApiKeyScope = "read" | "write";
+export interface ApiKey {
+  id: string;
+  name: string;
+  prefix: string;
+  scopes: ApiKeyScope[];
+  createdAt: string;
+  lastUsedAt?: string;
+  revokedAt?: string;
+}
+/** POST /api/v1/api-keys: the full key, in this reply only. */
+export interface ApiKeyCreated extends ApiKey {
+  key: string;
+}
+
+/** GET /api/v1/webhooks. A server without webhooks answers 404 and the Settings section stays hidden. */
+export type WebhookEvent = "payment.created" | "payment.updated";
+export interface Webhook {
+  id: string;
+  url: string;
+  events: WebhookEvent[];
+  createdAt: string;
+}
+/** POST /api/v1/webhooks: the signing secret, in this reply only. */
+export interface WebhookCreated extends Webhook {
+  secret: string;
+}

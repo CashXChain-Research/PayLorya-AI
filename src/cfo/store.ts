@@ -1,3 +1,4 @@
+import type { ApiKey, Scope } from "./api-keys.js";
 import { randomUUID } from "node:crypto";
 import type { CxcLink } from "./cxc-link.js";
 import type { AgentLimits, Autonomy, PolicyDecision, Rail } from "./policy.js";
@@ -225,6 +226,69 @@ export class Store {
   }
   private async run(sql: string, ...params: SqlValue[]): Promise<number> {
     return (await this.sql.query(sql, params)).changes;
+  }
+
+  // API keys -------------------------------------------------------------------------------
+
+  async addApiKey(ws: string, k: { name: string; prefix: string; hash: string; scopes: Scope[] }): Promise<ApiKey> {
+    const id = randomUUID();
+    await this.run(
+      "INSERT INTO api_keys (id, workspace_id, name, prefix, hash, scopes_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      id,
+      ws,
+      k.name,
+      k.prefix,
+      k.hash,
+      JSON.stringify(k.scopes),
+      now(),
+    );
+    return (await this.apiKeys(ws)).find(x => x.id === id)!;
+  }
+
+  async apiKeys(ws: string): Promise<ApiKey[]> {
+    return (await this.all("SELECT * FROM api_keys WHERE workspace_id = ? ORDER BY created_at DESC", ws)).map(toApiKey);
+  }
+
+  /** The live key with this hash, and its account. */
+  async apiKeyByHash(hash: string): Promise<{ ws: string; key: ApiKey } | undefined> {
+    const row = await this.get("SELECT * FROM api_keys WHERE hash = ? AND revoked_at IS NULL", hash);
+    return row ? { ws: String(row.workspace_id), key: toApiKey(row) } : undefined;
+  }
+
+  async revokeApiKey(ws: string, id: string): Promise<boolean> {
+    return (await this.run("UPDATE api_keys SET revoked_at = ? WHERE workspace_id = ? AND id = ? AND revoked_at IS NULL", now(), ws, id)) > 0;
+  }
+
+  async touchApiKey(id: string): Promise<void> {
+    await this.run("UPDATE api_keys SET last_used_at = ? WHERE id = ?", now(), id);
+  }
+
+  async workspaceById(id: string): Promise<Workspace | undefined> {
+    return this.workspace(id);
+  }
+
+  /** Claims an Idempotency-Key for a request; returns the earlier reply if there was one. */
+  async claimIdempotency(keyId: string, idem: string, requestHash: string): Promise<"claimed" | { status: number; body: unknown; requestHash: string }> {
+    await this.run("DELETE FROM api_idempotency WHERE created_at < ?", new Date(Date.now() - 24 * 3_600_000).toISOString());
+    const changes = await this.run(
+      "INSERT INTO api_idempotency (key_id, idem_key, request_hash, status, created_at) VALUES (?, ?, ?, 0, ?) ON CONFLICT (key_id, idem_key) DO NOTHING",
+      keyId,
+      idem,
+      requestHash,
+      now(),
+    );
+    if (changes > 0) return "claimed";
+    const row = (await this.get("SELECT * FROM api_idempotency WHERE key_id = ? AND idem_key = ?", keyId, idem))!;
+    return { status: Number(row.status), body: row.body_json ? JSON.parse(String(row.body_json)) : undefined, requestHash: String(row.request_hash) };
+  }
+
+  async finishIdempotency(keyId: string, idem: string, status: number, body: unknown): Promise<void> {
+    await this.run("UPDATE api_idempotency SET status = ?, body_json = ? WHERE key_id = ? AND idem_key = ?", status, JSON.stringify(body ?? null), keyId, idem);
+  }
+
+  /** A failed request (5xx) frees its key, so a retry runs again. */
+  async releaseIdempotency(keyId: string, idem: string): Promise<void> {
+    await this.run("DELETE FROM api_idempotency WHERE key_id = ? AND idem_key = ?", keyId, idem);
   }
 
   // Workspaces -----------------------------------------------------------------------------
@@ -841,6 +905,18 @@ function toPayee(r: Row): Payee {
 
 function toBudget(r: Row): BudgetRow {
   return { id: String(r.id), name: String(r.name), category: String(r.category), limitUsdMinor: Number(r.limit_usd_minor), createdAt: String(r.created_at) };
+}
+
+function toApiKey(r: Row): ApiKey {
+  return {
+    id: String(r.id),
+    name: String(r.name),
+    prefix: String(r.prefix),
+    scopes: json<Scope[]>(r.scopes_json, []),
+    createdAt: String(r.created_at),
+    ...(r.last_used_at ? { lastUsedAt: String(r.last_used_at) } : {}),
+    ...(r.revoked_at ? { revokedAt: String(r.revoked_at) } : {}),
+  };
 }
 
 function toPayment(r: Row): Payment {

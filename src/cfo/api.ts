@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import express, { type Express, type NextFunction, type Request, type Response } from "express";
 import { toNodeHandler } from "better-auth/node";
@@ -7,11 +8,13 @@ import type { Auth, SessionUser } from "./auth.js";
 import { runChatTurn, toPublic, type Attachment, type ChatDeps, type ChatEvent } from "./chat.js";
 import { catalog, fetchBalances, networkOf, prepareConnection, supportsWrite, type ConnectionEnv } from "./connections.js";
 import { accountLabel } from "./stripe.js";
+import { bearerToken, hashKey, KEY_PATTERN, keyRefusal, newKey, RateLimiter, SCOPES, type ApiKey } from "./api-keys.js";
 import { KeyRefused, type CxcKeys } from "./cxc-keys.js";
 import type { Funder } from "./funder.js";
 import { CXC_SANDBOX_SIGNUP, type CxcLinker } from "./cxc-link.js";
 import { SUPPORTED_CURRENCIES } from "./fx.js";
 import { ingestDocument, type Extractor } from "./ingest.js";
+import { mountMcp } from "./mcp.js";
 import { DraftRefused, Payments } from "./payments.js";
 import type { ConnectionRow, DocumentRow, Store, Workspace } from "./store.js";
 
@@ -46,6 +49,8 @@ const json = express.json({ limit: "256kb" });
 interface Ctx {
   user: SessionUser;
   ws: Workspace;
+  /** Set when the call came with an API key (Authorization: Bearer ply_sk_…), not a session. */
+  apiKey?: ApiKey;
 }
 const ctx = (res: Response) => res.locals.cfo as Ctx;
 
@@ -119,8 +124,9 @@ function passwordError(error: unknown): unknown {
 }
 
 /**
- * Mounts Better Auth (/api/auth/*), the dashboard pages and the AI CFO API (/api/v1/*). Must run
- * before any global express.json(): Better Auth reads the raw request body itself.
+ * Mounts Better Auth (/api/auth/*), the dashboard pages, the AI CFO API (/api/v1/*) and its MCP
+ * server (/mcp). Must run before any global express.json(): Better Auth and the MCP transport read
+ * the raw request body themselves.
  */
 export function mountCfo(app: Express, deps: CfoDeps): void {
   const { store, auth } = deps;
@@ -163,7 +169,56 @@ export function mountCfo(app: Express, deps: CfoDeps): void {
     }
     next();
   });
+  // Public API: an account's key (Authorization: Bearer ply_sk_…) instead of a session. Rate limited
+  // per key; it never approves, signs, or manages credentials (api-keys.ts, keyRefusal).
+  const limiter = new RateLimiter();
   api.use(async (req: Request, res: Response, next: NextFunction) => {
+    const bearer = bearerToken(req.header("authorization"));
+    if (!bearer) return next();
+    try {
+      const found = KEY_PATTERN.test(bearer) ? await store.apiKeyByHash(hashKey(bearer)) : undefined;
+      if (!found) return void res.status(401).json({ error: "This API key is not valid: unknown, mistyped or revoked.", code: "invalid_key" });
+      const wait = limiter.take(found.key.id);
+      if (wait) {
+        res.setHeader("retry-after", String(wait));
+        return void res.status(429).json({ error: `Too many requests with this key: try again in ${wait} s.`, code: "rate_limited" });
+      }
+      const refused = keyRefusal(req.method, req.path, found.key.scopes);
+      if (refused) return void res.status(refused.status).json({ error: refused.error, code: refused.code });
+      const ws = await store.workspaceById(found.ws);
+      if (!ws) return void res.status(401).json({ error: "This API key's account no longer exists.", code: "invalid_key" });
+      void store.touchApiKey(found.key.id).catch(() => undefined);
+      res.locals.cfo = { user: { id: `key:${found.key.id}`, name: found.key.name, email: "" }, ws, apiKey: found.key } satisfies Ctx;
+      // Idempotency-Key on a write: the same key and body get the first reply again, never a second effect.
+      const idem = req.header("idempotency-key");
+      if (!idem || req.method === "GET" || req.method === "HEAD") return next();
+      if (idem.length > 200) return void res.status(400).json({ error: "Idempotency-Key is longer than 200 characters.", code: "invalid_request" });
+      await new Promise<void>((resolve, reject) => bigJson(req, res, error => (error ? reject(error) : resolve())));
+      const requestHash = createHash("sha256").update(`${req.method} ${req.originalUrl} ${JSON.stringify(req.body ?? null)}`).digest("hex");
+      const claim = await store.claimIdempotency(found.key.id, idem, requestHash);
+      if (claim !== "claimed") {
+        if (claim.requestHash !== requestHash) return void res.status(422).json({ error: "This Idempotency-Key was used with a different request.", code: "idempotency_mismatch" });
+        if (claim.status === 0) return void res.status(409).json({ error: "A request with this Idempotency-Key is still running.", code: "idempotency_in_progress" });
+        res.setHeader("idempotent-replayed", "true");
+        // A reply that was not JSON (204, a chat stream) is replayed as its status alone.
+        return void (claim.body == null ? res.status(claim.status).end() : res.status(claim.status).json(claim.body));
+      }
+      let stored = false;
+      const store1 = (status: number, body: unknown) => {
+        if (stored) return;
+        stored = true;
+        void (status >= 500 ? store.releaseIdempotency(found.key.id, idem) : store.finishIdempotency(found.key.id, idem, status, body)).catch(() => undefined);
+      };
+      const send = res.json.bind(res);
+      res.json = (body: unknown) => (store1(res.statusCode, body), send(body));
+      res.on("finish", () => store1(res.statusCode, null));
+      next();
+    } catch (error) {
+      next(error);
+    }
+  });
+  api.use(async (req: Request, res: Response, next: NextFunction) => {
+    if (res.locals.cfo) return next(); // signed in with an API key above
     try {
       const user = await auth.userFrom(req.headers);
       if (!user) {
@@ -185,9 +240,29 @@ export function mountCfo(app: Express, deps: CfoDeps): void {
     if (!(await store.takeAiCall(ws, deps.aiDailyLimit))) throw new HttpError(429, `Daily AI limit reached (${deps.aiDailyLimit} documents and messages). Try again tomorrow.`);
   };
 
+  // API keys (dashboard only: a key cannot manage keys) ------------------------------------
+  api.get("/api-keys", async (_req, res) => res.json(await store.apiKeys(ctx(res).ws.id)));
+  api.post("/api-keys", json, async (req, res) => {
+    const ws = ctx(res).ws.id;
+    const body = z.object({ name: z.string().trim().min(1).max(80), scopes: z.array(z.enum(SCOPES as [string, ...string[]])).min(1).default(["read"]) }).parse(req.body ?? {});
+    if ((await store.apiKeys(ws)).filter(k => !k.revokedAt).length >= 20) throw new HttpError(409, "This account has 20 active API keys: revoke one first.");
+    const { key, hash, prefix } = newKey();
+    const created = await store.addApiKey(ws, { name: body.name, prefix, hash, scopes: [...new Set(body.scopes)] as ApiKey["scopes"] });
+    await store.log(ws, "user", "created API key", `${body.name} (${created.scopes.join(", ")})`, { type: "api_key", id: created.id });
+    // The key is shown once: only its SHA-256 is stored.
+    res.status(201).json({ ...created, key });
+  });
+  api.delete("/api-keys/:id", async (req, res) => {
+    const ws = ctx(res).ws.id;
+    if (!(await store.revokeApiKey(ws, req.params.id as string))) throw new HttpError(404, "API key not found or already revoked");
+    await store.log(ws, "user", "revoked API key", String(req.params.id), { type: "api_key", id: String(req.params.id) });
+    res.status(204).end();
+  });
+
   // Workspace ------------------------------------------------------------------------------
   api.get("/me", async (req, res) => {
-    const { user, ws } = ctx(res);
+    const { user, ws, apiKey } = ctx(res);
+    if (apiKey) return void res.json({ workspace: ws, apiKey });
     res.json({ user, workspace: ws, signIn: { password: await auth.hasPassword(req.headers), codes: auth.codes } });
   });
 
@@ -609,7 +684,8 @@ export function mountCfo(app: Express, deps: CfoDeps): void {
     const keepAlive = setInterval(() => res.write(": keep-alive\n\n"), 15_000);
     busy.add(chat.id);
     try {
-      await runChatTurn({ store, payments: deps.payments, extract: deps.extract, model: deps.model, client: deps.chatClient }, ws, chat.id, body.text, files, emit);
+      const viaApiKey = Boolean(ctx(res).apiKey);
+      await runChatTurn({ store, payments: deps.payments, extract: deps.extract, model: deps.model, client: deps.chatClient, viaApiKey }, ws, chat.id, body.text, files, emit);
     } catch (error) {
       console.error("chat turn failed", error);
       emit({ type: "error", message: "The AI CFO could not answer. Please try again." });
@@ -634,4 +710,5 @@ export function mountCfo(app: Express, deps: CfoDeps): void {
     }
   });
   app.use("/api/v1", api);
+  mountMcp(app, store);
 }
