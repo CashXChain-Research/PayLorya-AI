@@ -62,14 +62,20 @@
   <div class="col">
     <section class="card compose reveal" style="--d:200ms">
       <h2>New invoice</h2>
-      <p class="muted">Paste a supplier invoice or try an example.</p>
+      <p class="muted">Paste a supplier invoice, attach a PDF or try an example.</p>
       <div class="group-label" id="g-ex">Examples</div>
       <div class="opts" id="chips"></div>
       <div class="group-label" id="g-safe">Safety tests</div>
       <div class="opts" id="chips-safety"></div>
       <textarea id="input" placeholder="Free text, an email, or structured JSON" spellcheck="false" aria-label="Invoice text"></textarea>
+      <div class="compose-tools">
+        <button class="attach" id="attach" type="button"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5l-8.6 8.6a5.5 5.5 0 0 1-7.8-7.8l8.6-8.6a3.7 3.7 0 0 1 5.2 5.2l-8.6 8.6a1.8 1.8 0 0 1-2.6-2.6l7.9-7.9"/></svg><span>Attach PDF or text</span></button>
+        <span class="fine">or drop a file on this card</span>
+        <input type="file" id="file" hidden>
+      </div>
       <button class="btn primary block" id="send" type="button"><span>Send to AI CFO</span><svg class="arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
       <p class="fine" id="send-hint">Each verification costs <span id="price">2</span> tADA on Cardano Preprod (test funds).</p>
+      <div class="chat-drop" aria-hidden="true"><div class="zone"><span class="ic"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4M7.5 8.5L12 4l4.5 4.5"/><path d="M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg></span><b>Drop the invoice here</b><span>It is read in your browser. Check the text, then send.</span></div></div>
     </section>
     <section class="card reveal" style="--d:260ms">
       <div class="card-head"><h2>Inbox</h2><span class="count" id="k-count"></span></div>

@@ -1,6 +1,9 @@
 import type { PayoutResult } from "../../../src/types.js";
 import { ada, esc, money, short } from "../shared/dom.js";
 import type { Health, Run, RunState } from "./api.js";
+import { autoLimitText, autoNeedsToken, wasAttempted, wasAutoApproved } from "./settings/auto-state.js";
+import { approvalBlock, autoApproves } from "./settings/policy.js";
+import { getSettings } from "./settings/store.js";
 import { I, callout, checkList, clock, eta, txLink, type CheckRow } from "./ui.js";
 
 /** States where polling stops: the agent is done or waits for a human. */
@@ -143,7 +146,7 @@ export function stagesFor(run: Run, health: Partial<Health>): Stage[] {
   out.push(r3);
 
   // 4. Approve
-  const a: Stage = { key: "approve", cls: later, title: "Your approval", by: "You", sum: "" };
+  const a: Stage = { key: "approve", cls: later, title: "Your approval", by: wasAutoApproved(run.id) ? "Your settings" : "You", sum: "" };
   if (run.draft) {
     const decided = s === "EXECUTING" || s === "EXECUTED" || s === "PAYOUT_UNKNOWN" || (s === "FAILED" && reached(run, "EXECUTING"));
     a.cls = s === "REJECTED" ? "bad" : decided ? "done" : run.draft.executable ? "active" : "warn";
@@ -209,11 +212,26 @@ function payCard(run: Run, decided: boolean): string {
   let foot: string;
   if (decided) {
     const at = run.timeline.find(t => t.state === "EXECUTING")?.at;
-    foot = `<div class="stamp">${I.check} Approved by you${at ? ` at ${esc(clock(at))}` : ""}</div>`;
+    const who = wasAutoApproved(run.id) ? "Approved automatically by your settings" : "Approved by you";
+    foot = `<div class="stamp">${I.check} ${who}${at ? ` at ${esc(clock(at))}` : ""}</div>`;
   } else if (s === "REJECTED") {
     foot = `<div class="stamp bad">Rejected by you. Nothing will be paid.</div>`;
   } else if (d.executable && s === "DRAFT_READY") {
-    foot = `<div class="actions"><button class="btn primary" type="button" data-act="approve">${I.lock} Approve and pay</button><button class="btn ghost" type="button" data-act="reject">Reject</button></div><p class="fine">${esc(d.note)}</p>`;
+    // Agent settings apply on top of the server: a switched-off rail disables Approve, Reject stays.
+    const settings = getSettings();
+    const block = approvalBlock(run, settings);
+    const auto = !block && autoApproves(run, settings) && !wasAttempted(run.id);
+    const note = block
+      ? `<div class="guard" id="guard-${esc(run.id)}">${I.alert}<span>${esc(block)}. <a href="#/settings">Change in Agent settings</a></span></div>`
+      : auto && autoNeedsToken()
+        ? `<p class="auto-note wait">${I.lock}<span>Within your ${esc(autoLimitText(d.currency, settings))} auto-approve limit. Waiting for the operator token: <a href="#/settings">enter it in Agent settings</a>.</span></p>`
+        : auto
+          ? `<p class="auto-note"><i></i><span>Within your ${esc(autoLimitText(d.currency, settings))} auto-approve limit. Approving automatically…</span></p>`
+          : `<p class="fine">${esc(d.note)}</p>`;
+    const approve = block
+      ? `<button class="btn primary" type="button" data-act="approve" disabled aria-describedby="guard-${esc(run.id)}">${I.lock} Approve and pay</button>`
+      : `<button class="btn primary" type="button" data-act="approve">${I.lock} Approve and pay</button>`;
+    foot = `<div class="actions">${approve}<button class="btn ghost" type="button" data-act="reject">Reject</button></div>${note}`;
   } else {
     foot = `${callout("warn", "Cannot be paid yet", `${esc(rt.reason)}.`)}${s === "DRAFT_READY" ? `<div class="actions"><button class="btn ghost" type="button" data-act="reject">Reject</button></div>` : ""}`;
   }

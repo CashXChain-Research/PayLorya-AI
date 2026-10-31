@@ -1,7 +1,11 @@
 import { $, esc } from "../shared/dom.js";
 import { reducedMotion } from "../shared/nav.js";
 import { createRun, getSamples } from "./api.js";
+import { dropTarget } from "./assistant/drop.js";
 import { select } from "./detail.js";
+import { INVOICE_ACCEPT, readInvoiceFile } from "./files.js";
+import { sendBlock } from "./settings/policy.js";
+import { getSettings } from "./settings/store.js";
 import { I, toast } from "./ui.js";
 
 // Keys of /api/samples (src/fixtures.ts). "repeat" re-sends the last input to show the duplicate stop.
@@ -59,6 +63,11 @@ async function send(): Promise<void> {
     textarea.focus();
     return;
   }
+  const blocked = sendBlock(getSettings());
+  if (blocked) {
+    toast(`${blocked}.`);
+    return;
+  }
   const button = $<HTMLButtonElement>("send");
   button.disabled = true;
   button.classList.add("loading");
@@ -79,6 +88,44 @@ async function send(): Promise<void> {
   }
 }
 
+/** Reads a dropped, picked or pasted file into the textarea, so the user sees what will be sent. */
+async function attach(file: File | undefined): Promise<void> {
+  if (!file) return;
+  const button = $<HTMLButtonElement>("attach");
+  button.classList.add("loading");
+  try {
+    const { text } = await readInvoiceFile(file);
+    for (const o of document.querySelectorAll(".opt")) o.classList.remove("on");
+    const input = $<HTMLTextAreaElement>("input");
+    input.value = text;
+    input.classList.remove("flash");
+    void input.offsetWidth;
+    input.classList.add("flash");
+    toast(`Read ${file.name}: check the text, then send`);
+  } catch (error) {
+    toast(error instanceof Error ? error.message : "Could not read the file");
+  } finally {
+    button.classList.remove("loading");
+  }
+}
+
 export function initCompose(): void {
   $("send").addEventListener("click", () => void send());
+  const picker = $<HTMLInputElement>("file");
+  picker.accept = INVOICE_ACCEPT;
+  $("attach").addEventListener("click", () => picker.click());
+  picker.addEventListener("change", () => {
+    void attach(picker.files?.[0]);
+    picker.value = "";
+  });
+  $("input").addEventListener("paste", e => {
+    const file = e.clipboardData?.files[0];
+    if (!file) return;
+    e.preventDefault();
+    void attach(file);
+  });
+
+  // The whole card is a drop target.
+  const card = document.querySelector<HTMLElement>(".compose");
+  if (card) dropTarget(card, card, files => void attach(files[0]));
 }

@@ -1,12 +1,18 @@
 import { $, esc, money } from "../shared/dom.js";
-import { decide, getRun, type Decision, type Run } from "./api.js";
+import { getRun, type Decision, type Run } from "./api.js";
+import { decideRun } from "./approval.js";
 import { health, loadHealth } from "./health.js";
 import { loadList } from "./list.js";
+import { markAttempted, onAutoChange } from "./settings/auto-state.js";
+import { approvalBlock } from "./settings/policy.js";
+import { getSettings, onSettings } from "./settings/store.js";
 import { TERMINAL, stageHtml, stagesFor } from "./stages.js";
 import { clock, initials, pill, toast, tone } from "./ui.js";
 
 let selected: string | null = null;
 let renderedRun: string | null = null;
+/** Last run drawn, re-rendered when Agent settings or auto-approve change. */
+let shown: Run | undefined;
 let pollTimer: number | undefined;
 /** Open "Details" folds as `${runId}:${stageKey}`, kept across re-renders and run switches. */
 const openSet = new Set<string>();
@@ -55,6 +61,7 @@ function headHtml(run: Run): string {
  * whose class changed pops its node.
  */
 function renderDetail(run: Run): void {
+  shown = run;
   const detail = $("detail");
   const fresh = renderedRun !== run.id;
   if (fresh) {
@@ -101,23 +108,45 @@ function renderDetail(run: Run): void {
 async function act(button: HTMLButtonElement): Promise<void> {
   const id = selected;
   if (!id) return;
+  const decision = button.dataset.act as Decision;
+  // Agent settings may have changed since the card was drawn.
+  const block = decision === "approve" && shown?.id === id ? approvalBlock(shown, getSettings()) : undefined;
+  if (block) {
+    toast(`${block}.`);
+    renderDetail(shown!);
+    return;
+  }
   const buttons = [...$("detail").querySelectorAll<HTMLButtonElement>("[data-act]")];
+  const was = buttons.map(b => b.disabled);
   for (const b of buttons) b.disabled = true;
   button.classList.add("loading");
+  // A click takes over from auto-approve for this draft.
+  if (decision === "approve") markAttempted(id);
   try {
-    const res = await decide(id, button.dataset.act as Decision);
-    if (!res.ok) toast(res.error);
+    const res = await decideRun(id, decision);
+    if (!res.ok) {
+      if (decision === "approve" && (res.status === 0 || res.status === 401)) markAttempted(id, false);
+      if (res.status !== 401) toast(res.error); // decideRun already said why
+    }
   } catch {
     toast("Could not reach the agent.");
   }
   await select(id);
   // Still attached only when the card did not re-render (refused, or the agent was unreachable).
-  for (const b of buttons) b.disabled = false;
+  buttons.forEach((b, i) => (b.disabled = was[i]!));
   button.classList.remove("loading");
 }
 
 /** Details folds and approve/reject, delegated on the detail card. */
 export function initDetail(): void {
+  onSettings(() => {
+    if (shown && shown.id === selected) renderDetail(shown);
+  });
+  // Auto-approve acted on the open run: poll it again; otherwise redraw for the token hint.
+  onAutoChange(id => {
+    if (id && id === selected) void select(id);
+    else if (shown && shown.id === selected) renderDetail(shown);
+  });
   $("detail").addEventListener("click", e => {
     const target = e.target as Element;
     const more = target.closest<HTMLElement>("[data-more]");
