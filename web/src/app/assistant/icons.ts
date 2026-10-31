@@ -14,5 +14,5 @@ export const AI = {
   ask: svg(13, 2.2, `<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/>`),
 };
 
-/** The PayFlow AI mark, as in the nav logo. */
+/** The PayLorya AI mark, as in the nav logo. */
 export const MARK = `<svg width="15" height="15" viewBox="0 0 64 64" aria-hidden="true"><path d="M22 50V14H35A11 11 0 0 1 35 36H22" fill="none" stroke="#fff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/><circle cx="46" cy="49" r="6.5" fill="#e8553a"/></svg>`;
