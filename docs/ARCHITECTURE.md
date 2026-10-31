@@ -9,7 +9,8 @@ x402 on Cardano Preprod, and gets a readiness report. Our Claude agent is the de
 **Payout (after human approval):** the agent then picks a payout rail with deterministic rules
 against a verified payee directory and, once a human approves, executes it: a tADA transfer on
 Cardano Preprod for ADA invoices (real testnet tx), or a CashXChain payout for fiat invoices
-(simulated in this build: no bank transfer, no CashXChain API call). The report fee and the
+(CashXChain **sandbox** when `CASHXCHAIN_API_KEY` is set: test ledger, no real money; otherwise
+simulated, no API call). The report fee and the
 invoice payout are separate transactions with separate budgets.
 
 ## Roles
@@ -19,7 +20,7 @@ invoice payout are separate transactions with separate budgets.
 | Seller (paid API) | `src/seller.ts`, `src/readiness.ts` | `SELLER_ADDRESS` (address only, no key on the server) |
 | Buyer (agent) | `src/agent.ts`, `src/policy.ts`, `src/extract.ts` | `BUYER_MNEMONIC` (test only) |
 | Facilitator | hosted CF preprod facilitator, or `src/facilitator.ts` fallback | none, broadcast only |
-| Payout rails | `src/routing.ts`, `src/payout.ts`, `BuyerAgent.approve()` | buyer wallet pays tADA payouts; fiat rail simulated |
+| Payout rails | `src/routing.ts`, `src/payout.ts`, `src/payout-cashxchain.ts`, `BuyerAgent.approve()` | buyer wallet pays tADA payouts; fiat via the CashXChain sandbox (`CASHXCHAIN_API_KEY`) or simulated |
 
 All three run in one Node process for the hackathon. The buyer reaches the seller over HTTP
 (`PUBLIC_BASE_URL`), so they can be split later without code changes.
@@ -51,8 +52,8 @@ executable. `PAID -> BLOCKED` also covers a payout route the policy blocks.
    selected.
 9. Human approves: the route is derived again from the directory. ADA: the buyer wallet signs a
    plain lovelace transfer to the verified wallet (same `@x402/cardano` signer, `default`
-   method), Blockfrost broadcasts it and waits up to 2 min. Fiat: `FiatPayoutClient`
-   (`simulatedCxcPayouts` today).
+   method), Blockfrost broadcasts it and waits up to 2 min. Fiat: `FiatPayoutClient`, i.e.
+   `CashXChainPayoutRoute` with `CASHXCHAIN_API_KEY`, else `simulatedCxcPayouts`.
 
 ## Trust boundary
 
@@ -63,8 +64,10 @@ executable. `PAID -> BLOCKED` also covers a payout route the policy blocks.
   record; an invoice account that differs from the record blocks the payout.
 - Network, asset, recipient allowlist and caps come from env config only.
 - Seller holds no signing key. Facilitator holds no funds.
-- No CashXChain payout endpoint is called; the fiat rail is simulated and labeled. The seller's
-  report keeps `payoutExecuted: false`: the report itself never pays anyone.
+- CashXChain is called only for an approved fiat payout, only on the sandbox: the base URL is fixed
+  and config refuses anything but `cxc_sk_sandbox_` / `cxc_rk_sandbox_` keys. Without the key the
+  fiat rail is simulated and labeled. The seller's report keeps `payoutExecuted: false`: the report
+  itself never pays anyone.
 - Invoice payouts need a human approval per invoice. The approval endpoint is public on the
   demo deployment; payouts are capped by `PAYOUT_MAX_LOVELACE` and `PAYOUT_BUDGET_LOVELACE`.
 - Route, fees and FX are `demo-fixture` and labeled "Simulated route/fees".
@@ -84,6 +87,11 @@ executable. `PAID -> BLOCKED` also covers a payout route the policy blocks.
   pass verify and the second broadcast would fail after signing. Runs wait in `PRECHECKED` for
   their turn. Settle waits for confirmation, so the next payment sees the updated UTxO set. Use a
   separate buyer wallet per deployment (laptop vs cloud) for the same reason.
+- **Wallet sync:** before the next wallet tx (report payment or invoice payout), the queue waits
+  until Blockfrost has indexed the previous one (`GET /txs/{hash}`, up to 90 s), plus 30 s after it
+  settled for other indexers such as the hosted facilitator's. A7 (2026-10-30) showed why: a payment
+  built ~27 s after the previous block was rejected at verify. Only txs that were (or may have been)
+  broadcast are waited for; a verify rejection is not.
 - **SETTLEMENT_UNKNOWN:** if anything fails after the buyer signed a transaction, the tx may
   already be on-chain. The run moves to `SETTLEMENT_UNKNOWN`, the amount counts against the
   budget, and the invoice is locked against re-payment until resolved. This includes verify
@@ -118,10 +126,33 @@ Payout safety mirrors the report payment:
 
 - `approve()` switches to `EXECUTING` synchronously; a second click gets 409.
 - The payout ledger reserves the invoice before signing and releases it only if signing threw.
-- Any error after signing: `PAYOUT_UNKNOWN`, amount counted, invoice locked, `run.payout`
+- A definitive node rejection before broadcast (Blockfrost `submitTx` HTTP 400, e.g. a spent
+  input) returns the run to `DRAFT_READY` with the hold released: nothing was sent, approve again.
+  The SDK's reference signer does not implement `isDefinitiveSubmissionRejection`, so the classifier
+  is ours and deliberately narrow (to be confirmed live).
+- Any other error after signing: `PAYOUT_UNKNOWN`, amount counted, invoice locked, `run.payout`
   carries the signed tx hash for the explorer. Same for an error from a fiat client, which may have
   accepted the payout before failing.
 - A Blockfrost wait timeout after broadcast is `EXECUTED` with `payout.status: "submitted"`.
+- Fiat payouts are keyed per invoice (`Idempotency-Key: payout-<fingerprint>`), so a retry or a
+  new run after a restart replays instead of paying again. The client gets the verified payee
+  record (name, IBAN/BIC or routing/account/type), never text from the invoice. A client that
+  proves nothing was sent (`isDefinitiveRejection`) returns the run to `DRAFT_READY`; any other
+  error stays `PAYOUT_UNKNOWN`.
+- CashXChain route (`src/payout-cashxchain.ts`): source account in the invoice currency,
+  beneficiary from the payee record, `POST /v1/banking/payouts` under the agent's key, polled to
+  a final status.
+  - **Refused** (`isDefinitiveRejection`, nothing paid): any failure before the payout POST; on the
+    POST, `plan_limit_exceeded` / `insufficient_balance` (they prove no payout exists under the
+    key), or another 4xx on a key this process never sent; and the final statuses `failed` /
+    `cancelled`. **Deviation from the payout contract**, agreed with workstream A: the contract
+    listed `failed`/`cancelled` as unknown; CashXChain documents both as "did not happen", and a
+    same-key retry after `insufficient_balance` replays `failed`, so such an invoice stays
+    refusable and cannot pay (CashXChain wants a new key for that, which we do not mint).
+  - **Unknown** (locked): 5xx, timeout or network on the POST; any 409 (a payout exists under the
+    key); 429 (recorded as `created`); a 4xx on a key this process sent before (a replay re-runs
+    CashXChain's checks and can fail after the first attempt settled); `created` after polling;
+    `returned`; polling errors.
 - Payouts go through the same wallet queue as report payments (one tx in flight per wallet).
 
 ## Readiness checks
@@ -168,8 +199,9 @@ otherwise `ready_for_review`.
   read from the installed source and covered offline with a stub only.
 - Whether Claude copies a 100+ character bech32 address exactly. A single wrong character fails
   the checksum and the run ends `NEEDS_INFO`, so this fails safe.
-- The fiat rail is simulated: the CashXChain sandbox client (separate session) plugs in as a
-  `FiatPayoutClient`.
+- CashXChain sandbox payouts are tested offline against a fake that follows the CashXChain docs
+  and the backend's mock rail (`tests/fake-cashxchain.ts`), not yet against
+  `api.sandbox.cashxchain.com`.
 - With `LOCAL_FACILITATOR=true`, verify also calls Blockfrost `POST /utils/txs/evaluate/utxos`;
   untested against real Blockfrost for a script-free tx.
 - Cloudflare Containers deploy is written against `@cloudflare/containers@0.3.7` and the

@@ -170,6 +170,9 @@ export function stagesFor(run: Run, health: Partial<Health>): Stage[] {
     set(p, { cls: "bad", sum: `Nothing was sent: ${esc(run.error)}` });
   } else if (s === "REJECTED") {
     set(p, { cls: "skip", sum: "Rejected. Nothing will be paid." });
+  } else if (s === "DRAFT_READY" && reached(run, "EXECUTING")) {
+    // The rail refused before anything was sent; the backend reopens the draft for another approval.
+    set(p, { cls: "warn", sum: `Refused before anything was sent: ${esc(run.error)}. Nothing was paid; you can approve again.` });
   } else if (s === "DRAFT_READY" && run.draft?.executable) {
     set(p, { cls: "pending", sum: "Runs on the selected rail after you approve." });
   } else {

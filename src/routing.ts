@@ -8,8 +8,11 @@ import type { Invoice, RouteCheck, RouteDecision } from "./types.js";
 export interface VerifiedPayee {
   name: string;
   iban?: string;
+  bic?: string;
   routingNumber?: string;
   accountNumber?: string;
+  /** US ACH payouts: the CashXChain US corridor requires it. */
+  accountType?: "checking" | "savings";
   cardanoAddress?: string;
 }
 
@@ -17,9 +20,9 @@ export const CRYPTO_PAYEE = "Nordwind Node Services OÜ";
 
 export function payeeDirectory(supplierCardanoAddress?: string): VerifiedPayee[] {
   return [
-    { name: "Brenner Maschinenbau GmbH", iban: "DE89370400440532013000" },
-    { name: "Hofmann Feinwerktechnik GmbH", iban: "DE89370400440532013000" },
-    { name: "Lakeside Robotics Inc.", routingNumber: "021000021", accountNumber: "000123456789" },
+    { name: "Brenner Maschinenbau GmbH", iban: "DE89370400440532013000", bic: "COBADEFFXXX" },
+    { name: "Hofmann Feinwerktechnik GmbH", iban: "DE89370400440532013000", bic: "COBADEFFXXX" },
+    { name: "Lakeside Robotics Inc.", routingNumber: "021000021", accountNumber: "000123456789", accountType: "checking" },
     { name: CRYPTO_PAYEE, ...(supplierCardanoAddress ? { cardanoAddress: supplierCardanoAddress } : {}) },
   ];
 }
