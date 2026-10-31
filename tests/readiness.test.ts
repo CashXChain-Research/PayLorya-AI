@@ -88,3 +88,44 @@ describe("extraction normalization", () => {
     ).toThrow();
   });
 });
+
+describe("report cross-checks", () => {
+  const WALLET = "addr_test1qrh6ayyhzdj2q464ayvyft9awz46ne46hyzwmjsq6s2frflw7j6laqexupvgqym3smjccxmwu6fc3tyu07kffmh4fkyscvyuvz";
+  const report = (inv: Invoice) => buildReadinessReport(inv, "x", new ReadinessLedger(), opts);
+  const check = (r: ReturnType<typeof report>, id: string) => r.checks.find(c => c.id === id);
+
+  it("names a currency mismatch on a served country, and keeps unserved countries apart", () => {
+    const mismatch = report({ ...sepa, currency: "USD" });
+    expect(mismatch.verdict).toBe("blocked");
+    expect(check(mismatch, "corridor")?.message).toBe("No demo corridor for DE/USD: currency mismatch, the DE corridor pays EUR");
+    const unserved = report({ ...sepa, destinationCountry: "PL", currency: "PLN", iban: "PL61109010140000071219812874", bic: undefined });
+    expect(unserved.verdict).toBe("blocked");
+    expect(check(unserved, "corridor")?.message).toBe("No demo corridor for PL/PLN");
+  });
+
+  it("does not block an ADA invoice from a country whose fiat corridor pays another currency", () => {
+    const ada: Invoice = { id: "NNS-1", supplier: "Nordwind Node Services OÜ", destinationCountry: "DE", currency: "ADA", amountMinor: 3_500_000, cardanoAddress: WALLET };
+    const r = report(ada);
+    expect(check(r, "corridor")?.status).toBe("pass");
+    expect(r.verdict).toBe("ready_for_review");
+  });
+
+  it("reports the payment reference without changing the verdict", () => {
+    expect(check(report({ ...sepa, reference: "PO-7781" }), "reference")).toMatchObject({ status: "pass", message: "Payment reference present", source: "deterministic" });
+    for (const reference of [undefined, "  "]) {
+      const r = report({ ...sepa, reference });
+      expect(check(r, "reference")).toMatchObject({ status: "pass", message: "No separate payment reference: reconcile by invoice id" });
+      expect(r.verdict).toBe("ready_for_review");
+    }
+  });
+
+  // Already enforced by the account check: the IBAN must match the destination, and the BIC must match it too.
+  it("flags BIC and IBAN countries that disagree", () => {
+    const bic = report({ ...sepa, bic: "BNPAFRPPXXX" });
+    expect(check(bic, "account")).toMatchObject({ status: "fail", message: "BIC country FR != DE" });
+    expect(bic.verdict).toBe("needs_info");
+    const iban = report({ ...sepa, destinationCountry: "FR" });
+    expect(check(iban, "account")).toMatchObject({ status: "warn", message: "IBAN country differs from destination country" });
+    expect(iban.verdict).toBe("needs_info");
+  });
+});

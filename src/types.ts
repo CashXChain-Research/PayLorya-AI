@@ -34,7 +34,7 @@ export type CheckStatus = "pass" | "fail" | "warn" | "skip";
 export type DataSource = "deterministic" | "demo-fixture" | "cxc-sandbox";
 
 export interface ReadinessCheck {
-  id: "account" | "corridor" | "required_fields" | "duplicate" | "amount" | "quote";
+  id: "account" | "corridor" | "required_fields" | "duplicate" | "amount" | "quote" | "reference";
   status: CheckStatus;
   message: string;
   source: DataSource;
