@@ -466,10 +466,31 @@ a.today-item:hover { background: var(--surface-2); }
 .pay-row.open + .pay-row, .pay-row:hover + .pay-row { border-top-color: transparent; }
 .pay-row:hover, .pay-row.open { background: var(--surface-2); }
 :root[data-theme="dark"] .pay-row:hover, :root[data-theme="dark"] .pay-row.open { background: rgba(255, 255, 255, .03); }
-.pay-main {
-  display: grid; grid-template-columns: 36px minmax(0, 1fr) 132px 78px 118px 120px 196px; gap: 14px; align-items: center;
-  padding: 12px 12px; cursor: pointer; outline: none; border-radius: 16px;
+/* Rows and the column header share one grid: avatar, payee, rail, requested, amount, status, paid, actions. */
+.pay-main, .pay-cols { display: grid; grid-template-columns: 36px minmax(0, 1fr) 124px 78px 112px 120px 74px 196px; gap: 14px; align-items: center; }
+.pay-main { padding: 12px 12px; cursor: pointer; outline: none; border-radius: 16px; }
+.pay-cols { padding: 4px 12px 8px; border-bottom: 1px solid var(--line); font-size: 11.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-3); }
+.pay-cols .pc-r { text-align: right; }
+.pay-paid { display: grid; gap: 1px; font-variant-numeric: tabular-nums; }
+.pay-paid b { font-size: 13px; font-weight: 600; white-space: nowrap; }
+.pay-paid span { font-size: 11.5px; color: var(--ink-3); white-space: nowrap; }
+.pay-paid .pp-wait { color: var(--warn); font-weight: 500; }
+
+/* Filters: search, rail, requested by, period */
+.pay-filters { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 0 10px 14px; }
+.pay-filters .search { width: 260px; }
+.fsel {
+  appearance: none; border: 1.5px solid transparent; border-radius: 999px; padding: 7px 30px 7px 13px; font: inherit; font-size: 13px; font-weight: 500;
+  color: var(--ink-2); cursor: pointer; outline: none; transition: background-color .2s, color .2s, box-shadow .2s;
+  background-color: var(--field); background-repeat: no-repeat; background-size: 5px 5px;
+  background-image: linear-gradient(45deg, transparent 50%, var(--ink-3) 50%), linear-gradient(135deg, var(--ink-3) 50%, transparent 50%);
+  background-position: calc(100% - 16px) 52%, calc(100% - 11px) 52%;
 }
+.fsel:hover { background-color: var(--field-hover); color: var(--ink); }
+.fsel:focus-visible { border-color: var(--accent-line); box-shadow: 0 0 0 4px var(--accent-soft); }
+.fsel.on { background-color: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.pf-count { margin-left: auto; font-size: 12.5px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.pay-filters [hidden] { display: none; }
 .pay-main:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
 .pay-who { min-width: 0; }
 .pay-who b, .pay-who span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -894,8 +915,8 @@ a.file-chip:hover { box-shadow: var(--shadow); }
 
 /* Responsive */
 @media (max-width: 1240px) {
-  .pay-main { grid-template-columns: 36px minmax(0, 1fr) 128px 118px 116px 190px; }
-  .pay-by { display: none; }
+  .pay-main, .pay-cols { grid-template-columns: 36px minmax(0, 1fr) 112px 120px 74px 190px; }
+  .pay-by, .pay-rail, .pay-cols .pc-by, .pay-cols .pc-rail { display: none; }
   .ov-grid.three { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .ov-grid.three > :last-child { grid-column: 1 / -1; }
 }
@@ -911,6 +932,24 @@ a.file-chip:hover { box-shadow: var(--shadow); }
   .c-cat { display: none; }
   .payee-list li { grid-template-columns: auto minmax(0, 1fr) minmax(0, 1.2fr) auto; }
   .pe-rails { display: none; }
+}
+/* Payments list: stacked rows below 1100 px (the table needs ~1100 px next to the sidebar). */
+@media (max-width: 1100px) {
+  .pay-main { grid-template-columns: 36px minmax(0, 1fr) auto; grid-template-areas: "av who amt" "av st paid" "av act act"; gap: 6px 12px; }
+  .pay-act:has(.decide) { margin-top: 4px; }
+  .pay-act { justify-content: flex-end; }
+  .pay-act:not(:has(.decide)) { display: none; }
+  .pay-act .chev { display: none; }
+  .pay-main > .av { grid-area: av; align-self: start; }
+  .pay-who { grid-area: who; }
+  .pay-amt { grid-area: amt; }
+  .pay-status { grid-area: st; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .pay-paid { grid-area: paid; display: flex; gap: 6px; align-items: baseline; justify-content: flex-end; }
+  .pay-paid .pp-none { display: none; }
+  .pay-act { grid-area: act; }
+  .pay-rail { display: none; }
+  .pay-cols { display: none; }
+  .pay-detail-in { grid-template-columns: minmax(0, 1fr); padding: 0 12px; gap: 16px; }
 }
 @media (max-width: 900px) {
   .shell { grid-template-columns: minmax(0, 1fr); }
@@ -948,18 +987,6 @@ a.file-chip:hover { box-shadow: var(--shadow); }
   .msgs-in { padding: 20px 16px; }
   .composer { width: calc(100% - 24px); }
   .comp-hint { visibility: hidden; }
-  .pay-main { grid-template-columns: 36px minmax(0, 1fr) auto; grid-template-areas: "av who amt" "av st st" "av act act"; gap: 6px 12px; }
-  .pay-act:has(.decide) { margin-top: 4px; }
-  .pay-act { justify-content: flex-end; }
-  .pay-act:not(:has(.decide)) { display: none; }
-  .pay-act .chev { display: none; }
-  .pay-main > .av { grid-area: av; align-self: start; }
-  .pay-who { grid-area: who; }
-  .pay-amt { grid-area: amt; }
-  .pay-status { grid-area: st; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-  .pay-act { grid-area: act; }
-  .pay-rail { display: none; }
-  .pay-detail-in { grid-template-columns: minmax(0, 1fr); padding: 0 12px; gap: 16px; }
   .c-kind, .c-cp { display: none; }
 }
 @media (max-width: 640px) {
@@ -989,6 +1016,10 @@ a.file-chip:hover { box-shadow: var(--shadow); }
   .page-head { margin-bottom: 18px; }
   .page-actions .btn.sm { padding: 9px 13px; font-size: 13.5px; }
   .list-head .search { width: 100%; }
+  .pay-filters { padding: 0 6px 12px; }
+  .pay-filters .search { width: 100%; }
+  .pay-filters .fsel { flex: 1 1 0; min-width: 0; }
+  .pf-count { margin-left: 0; }
   .list-head { padding: 6px 6px 10px; }
   .tabs { width: 100%; }
   .tabs button { flex: 1; justify-content: center; padding: 8px 8px; }

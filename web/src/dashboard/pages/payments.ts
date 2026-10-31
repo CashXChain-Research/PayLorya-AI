@@ -2,7 +2,7 @@
 import { esc, short, shortHash } from "../../shared/dom.js";
 import { ApiError, get, post } from "../api.js";
 import { type Ctx, refreshBadges } from "../state.js";
-import type { Payee, PayeeInput, Payment, PaymentCreate } from "../types.js";
+import type { Payee, PayeeInput, Payment, PaymentCreate, Rail } from "../types.js";
 import { cardanoWallets, openCardanoPayer } from "../wallets.js";
 import {
   amount,
@@ -14,6 +14,7 @@ import {
   fieldError,
   icon,
   pageHead,
+  RAIL,
   railChip,
   skLines,
   statusPill,
@@ -185,6 +186,17 @@ function cardanoNote(p: Payment): string {
   return "";
 }
 
+/** "Paid" column: when the money left, or why there is no date yet. */
+function paidCell(p: Payment): string {
+  if (p.status === "executed") {
+    const at = p.executedAt ?? p.decidedAt ?? p.createdAt;
+    const time = new Date(at).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+    return `<b>${esc(date(at))}</b><span>${esc(time)}</span>`;
+  }
+  if (p.status === "approved" || p.status === "executing" || p.status === "awaiting_signature") return `<span class="pp-wait">Not yet</span>`;
+  return `<span class="pp-none" aria-label="Not paid">—</span>`;
+}
+
 export function paymentRow(p: Payment, open = false): string {
   const isAda = p.currency === "ADA";
   return `<li class="pay-row${open ? " open" : ""}" data-row="${esc(p.id)}" id="pay-${esc(p.id)}">
@@ -195,6 +207,7 @@ export function paymentRow(p: Payment, open = false): string {
       <div class="pay-by"><span class="by by-${p.requestedBy}">${icon(p.requestedBy === "agent" ? "bot" : "user", 13, 2)}${p.requestedBy === "agent" ? "Agent" : "You"}</span><em>${esc(date(p.createdAt))}</em></div>
       <div class="pay-amt"><b>${esc(amount(p.amountMinor, p.currency))}</b>${isAda || p.currency !== "USD" ? `<span>≈ ${esc(usd(p.usdMinor))}</span>` : ""}</div>
       <div class="pay-status">${statusPill(p.status)}${checkSummary(p)}</div>
+      <div class="pay-paid">${paidCell(p)}</div>
       <div class="pay-act">${decisionButtons(p)}<span class="chev">${icon("chevronDown", 16)}</span></div>
     </div>
     <div class="pay-detail"><div class="pay-detail-in">
@@ -407,10 +420,54 @@ export async function renderPayments(view: HTMLElement, ctx: Ctx): Promise<void>
         <button data-f="any" class="on">All</button><button data-f="done">Paid</button><button data-f="live">In progress</button><button data-f="stopped">Rejected &amp; failed</button>
       </div>
     </div>
+    <div class="pay-filters" role="search">
+      <label class="search">${icon("search", 15)}<input id="pf-q" type="search" autocomplete="off" placeholder="Search payee, reason or amount" aria-label="Search payments"></label>
+      <select class="fsel" id="pf-rail" aria-label="Rail"><option value="">All rails</option>${(Object.keys(RAIL) as Rail[]).map(r => `<option value="${r}">${esc(RAIL[r].name)}</option>`).join("")}</select>
+      <select class="fsel" id="pf-by" aria-label="Requested by"><option value="">Anyone</option><option value="agent">Agent</option><option value="user">You</option></select>
+      <select class="fsel" id="pf-period" aria-label="Created"><option value="">Any time</option><option value="month">This month</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option></select>
+      <button type="button" class="link-sm" id="pf-clear" hidden>Clear filters</button>
+      <span class="pf-count" id="pf-count" aria-live="polite"></span>
+    </div>
+    <div class="pay-cols" aria-hidden="true"><span></span><span>Payee</span><span class="pc-rail">Rail</span><span class="pc-by">Requested</span><span class="pc-r">Amount</span><span>Status</span><span>Paid</span><span></span></div>
     <ul class="pay-list" id="pay-list">${skLines(5)}</ul>
   </section>`;
   let payments: Payment[] = [];
   const list = view.querySelector<HTMLElement>("#pay-list")!;
+
+  // Filters on top of the tab and status chips: search, rail, who asked, when it was created.
+  const flt = { q: "", rail: "", by: "", period: "" };
+  const active = () => Boolean(flt.q || flt.rail || flt.by || flt.period);
+  const matches = (p: Payment): boolean => {
+    if (flt.rail && p.rail !== flt.rail) return false;
+    if (flt.by && p.requestedBy !== flt.by) return false;
+    if (flt.period === "month" && !p.createdAt.startsWith(new Date().toISOString().slice(0, 7))) return false;
+    if (/^\d+$/.test(flt.period) && Date.now() - Date.parse(p.createdAt) > Number(flt.period) * 86_400_000) return false;
+    if (flt.q) {
+      const hay = `${p.payeeName} ${p.reason} ${p.reference ?? ""} ${amount(p.amountMinor, p.currency)} ${usd(p.usdMinor)}`.toLowerCase();
+      if (!flt.q.toLowerCase().split(/\s+/).every(w => hay.includes(w))) return false;
+    }
+    return true;
+  };
+  const filterBar = view.querySelector<HTMLElement>(".pay-filters")!;
+  const fields = {
+    q: view.querySelector<HTMLInputElement>("#pf-q")!,
+    rail: view.querySelector<HTMLSelectElement>("#pf-rail")!,
+    by: view.querySelector<HTMLSelectElement>("#pf-by")!,
+    period: view.querySelector<HTMLSelectElement>("#pf-period")!,
+  };
+  const readFilters = () => {
+    flt.q = fields.q.value.trim();
+    flt.rail = fields.rail.value;
+    flt.by = fields.by.value;
+    flt.period = fields.period.value;
+    for (const k of ["rail", "by", "period"] as const) fields[k].classList.toggle("on", Boolean(flt[k]));
+    paint();
+  };
+  filterBar.addEventListener("input", readFilters);
+  const clearFilters = () => {
+    fields.q.value = fields.rail.value = fields.by.value = fields.period.value = "";
+    readFilters();
+  };
 
   const paint = () => {
     for (const b of view.querySelectorAll<HTMLButtonElement>("[data-tab]")) b.setAttribute("aria-selected", String(b.dataset.tab === tab));
@@ -424,11 +481,16 @@ export async function renderPayments(view: HTMLElement, ctx: Ctx): Promise<void>
       live: ["pending_approval", "approved", "executing", "awaiting_signature"],
       stopped: ["rejected", "failed", "blocked"],
     };
-    const rows = tab === "approvals" ? pending : filter === "any" ? payments : payments.filter(p => groups[filter]!.includes(p.status));
+    const base = tab === "approvals" ? pending : filter === "any" ? payments : payments.filter(p => groups[filter]!.includes(p.status));
+    const rows = base.filter(matches);
+    view.querySelector<HTMLElement>("#pf-clear")!.hidden = !active();
+    view.querySelector("#pf-count")!.textContent = active() ? `${rows.length} of ${base.length}` : "";
     list.innerHTML = rows.length
       ? rows.map(p => paymentRow(p, p.id === focus)).join("")
       : `<li class="list-empty">${
-          tab === "approvals"
+          base.length && active()
+            ? empty({ icon: "search", title: "No payments match these filters", text: "Change the search or the filters above.", action: `<button class="btn ghost sm" type="button" data-clear>Clear filters</button>` })
+            : tab === "approvals"
             ? empty({ icon: "shieldCheck", title: "Nothing waiting for you", text: "When the agent or a teammate drafts a payment that needs a human, it shows up here with its policy checks." })
             : empty({ icon: "pay", title: "No payments yet", text: "Draft one yourself, or ask the AI CFO to prepare payments from your invoices.", action: `<button class="btn primary sm" type="button" data-new>${icon("plus", 15, 2.4)}New payment</button>` })
         }</li>`;
@@ -463,6 +525,7 @@ export async function renderPayments(view: HTMLElement, ctx: Ctx): Promise<void>
       tab = tb.dataset.tab as typeof tab;
       paint();
     }
+    if (t.closest("#pf-clear, [data-clear]")) clearFilters();
     const f = t.closest<HTMLButtonElement>("[data-f]");
     if (f) {
       filter = f.dataset.f!;
