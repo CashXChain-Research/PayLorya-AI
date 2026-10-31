@@ -75,6 +75,8 @@ async function confirmApproval(id: string): Promise<Payment> {
           : ""
       }
       <p class="muted small">${p.rail === "cardano_preprod" ? "Next, you sign the payout in your wallet." : "The payout starts as soon as you approve."} Test money only: CashXChain sandbox and Cardano Preprod.</p>`,
+    // Focus starts on Cancel: Enter or a stray key press never pays.
+    onOpen: form => form.querySelector<HTMLButtonElement>(".dlg-foot [data-close]")?.focus(),
     onSubmit: form => {
       if (risky && !(form.elements.namedItem("verified") as HTMLInputElement | null)?.checked) return fieldError(form, "verified", "Tick this to confirm you checked the account");
       return true;
