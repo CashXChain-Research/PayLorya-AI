@@ -11,7 +11,7 @@ body.auth::before {
 
 .auth-main { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 32px 16px 48px; }
 .auth-card { width: 100%; max-width: 420px; background: var(--surface); border-radius: var(--r-xl); box-shadow: var(--shadow-lift); padding: 40px 36px 32px; }
-.mark.lg { width: 48px; height: 48px; border-radius: 15px; font-size: 22px; margin-bottom: 24px; }
+.mark.lg { width: 48px; height: 48px; border-radius: 24%; font-size: 22px; margin-bottom: 24px; }
 .auth-card h1 { margin: 0; font-size: 28px; line-height: 1.15; letter-spacing: -.035em; font-weight: 700; }
 .auth-card .sub { margin: 8px 0 0; color: var(--ink-2); font-size: 15px; }
 

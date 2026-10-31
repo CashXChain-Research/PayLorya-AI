@@ -83,7 +83,7 @@ export interface CatalogEntry {
   needsAddress: boolean;
   /** cashxchain: an own API key can be connected. */
   acceptsApiKey?: boolean;
-  /** cashxchain: without a key, PayFlow AI's shared sandbox account is used. */
+  /** cashxchain: without a key, PayLorya AI's shared sandbox account is used. */
   sharedFallback?: boolean;
 }
 

@@ -47,7 +47,7 @@ export class Payments {
 
   /**
    * The fiat route of a workspace that connected its own CashXChain account (by API key): its
-   * payouts leave from that account. Undefined: the engine's route (PayFlow AI's shared sandbox
+   * payouts leave from that account. Undefined: the engine's route (PayLorya AI's shared sandbox
    * account). Throws when the stored key can no longer be opened; never falls back then.
    */
   private async ownFiatRoute(ws: string): Promise<FiatPayoutClient | undefined> {

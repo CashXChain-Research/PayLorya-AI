@@ -759,7 +759,7 @@ body.full .main { max-width: none; padding: 0; height: 100vh; height: 100dvh; }
 .file-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .file-chip .i { color: var(--brand); }
 a.file-chip:hover { box-shadow: var(--shadow); }
-.bot-av { width: 30px; height: 30px; border-radius: 9px; background: var(--mark-bg); color: #fff; display: grid; place-items: center; font-weight: 700; font-size: 14px; flex: none; margin-top: 2px; }
+.bot-av { width: 30px; height: 30px; border-radius: 24%; background: var(--mark-bg); color: #fff; display: grid; place-items: center; font-weight: 700; font-size: 14px; flex: none; margin-top: 2px; }
 :root[data-theme="dark"] .bot-av { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .18); }
 .msg-body { flex: 1; min-width: 0; display: grid; gap: 8px; }
 .tools { display: flex; flex-wrap: wrap; gap: 6px; }

@@ -11,7 +11,7 @@ export interface CatalogEntry {
   needsAddress: boolean;
   /** CashXChain: the workspace may connect its own account with an API key. */
   acceptsApiKey?: boolean;
-  /** CashXChain: without a key, PayFlow AI's shared sandbox account is used. */
+  /** CashXChain: without a key, PayLorya AI's shared sandbox account is used. */
   sharedFallback?: boolean;
 }
 

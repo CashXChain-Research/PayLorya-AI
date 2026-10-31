@@ -203,7 +203,7 @@ describe("Resend mailer", () => {
     const calls: { url: string; init: RequestInit }[] = [];
     const mailer = resendMailer({
       apiKey: "re_test_key",
-      from: "PayFlow AI <no-reply@cashxchain.com>",
+      from: "PayLorya AI <no-reply@cashxchain.com>",
       expiresMinutes: 10,
       fetch: (async (url: string, init: RequestInit) => {
         calls.push({ url, init });
@@ -216,11 +216,11 @@ describe("Resend mailer", () => {
     expect(calls[0]!.url).toBe("https://api.resend.com/emails");
     const headers = calls[0]!.init.headers as Record<string, string>;
     expect(headers.authorization).toBe("Bearer re_test_key");
-    expect(headers["idempotency-key"]).toMatch(/^payflow-code-[0-9a-f]{32}$/);
+    expect(headers["idempotency-key"]).toMatch(/^paylorya-code-[0-9a-f]{32}$/);
     expect((calls[1]!.init.headers as Record<string, string>)["idempotency-key"]).toBe(headers["idempotency-key"]);
     const body = JSON.parse(String(calls[0]!.init.body));
-    expect(body).toMatchObject({ from: "PayFlow AI <no-reply@cashxchain.com>", to: ["ada@example.com"] });
-    expect(body.subject).toBe("123456 is your PayFlow AI code: confirm your email");
+    expect(body).toMatchObject({ from: "PayLorya AI <no-reply@cashxchain.com>", to: ["ada@example.com"] });
+    expect(body.subject).toBe("123456 is your PayLorya AI code: confirm your email");
     expect(body.text).toContain("123456");
     expect(body.text).toContain("expires in 10 minutes");
     expect(body.html).toContain("123456");
@@ -229,7 +229,7 @@ describe("Resend mailer", () => {
   it("reports a refused send with Resend's status", async () => {
     const mailer = resendMailer({
       apiKey: "re_x",
-      from: "PayFlow AI <no-reply@cashxchain.com>",
+      from: "PayLorya AI <no-reply@cashxchain.com>",
       expiresMinutes: 10,
       fetch: (async () => new Response('{"message":"domain is not verified"}', { status: 403 })) as unknown as typeof fetch,
     });
@@ -238,7 +238,7 @@ describe("Resend mailer", () => {
 
   it("names the product and nothing user-supplied in the mail", () => {
     const mail = codeEmail("654321", "forget-password", 10);
-    expect(mail.subject).toBe("654321 is your PayFlow AI code: reset your password");
-    expect(mail.html).toContain("PayFlow AI");
+    expect(mail.subject).toBe("654321 is your PayLorya AI code: reset your password");
+    expect(mail.html).toContain("PayLorya AI");
   });
 });

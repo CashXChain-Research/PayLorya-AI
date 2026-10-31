@@ -1,4 +1,4 @@
-# PayFlow AI — pitch and judge Q&A
+# PayLorya AI — pitch and judge Q&A
 
 Target: 4 minutes, eight slides. Confirm event limits before presenting. This script describes
 the implemented design; switch to past-tense live success claims only when the proof register in
@@ -9,13 +9,13 @@ the implemented design; switch to past-tense live success claims only when the p
 | Time | Slide content | Speaker notes |
 | --- | --- | --- |
 | 0:00–0:25 | **1. Reading an invoice is not payment readiness.** Invalid account details, missing fields, duplicates | “Agents can interpret a supplier invoice. They still need to know whether its payment data is usable. And untrusted invoice text must never become authority to spend.” |
-| 0:25–0:50 | **2. A readiness API an agent can buy.** Invoice → paid report → review draft | “PayFlow AI sells a report per request. It checks account details and duplicates, with Simulated route/fees. Our Claude agent is the demo customer. The supplier payout is never executed.” |
+| 0:25–0:50 | **2. A readiness API an agent can buy.** Invoice → paid report → review draft | “PayLorya AI sells a report per request. It checks account details and duplicates, with Simulated route/fees. Our Claude agent is the demo customer. The supplier payout is never executed.” |
 | 0:50–1:50 | **3. Show the product.** Live invoice, timeline, proof, report, draft | Use the short successful take from DEMO-SCRIPT. “Watch extraction, the 402 offer, the settled report purchase and the non-executing draft.” Open the real explorer proof only when verified. Shorten idle confirmation time with a disclosed edit; if live evidence is unavailable, say “implemented flow; live settlement pending” and show no fabricated proof. |
 | 1:50–2:20 | **4. Why x402 + Cardano.** HTTP price discovery; testnet ledger proof | “HTTP 402 lets an agent discover a price and retry with payment authorization. The official Cardano SDK builds a signed transaction; the facilitator broadcasts it. Cardano Preprod lets us demonstrate settlement with test funds. This is no claim that another chain could not implement the product.” |
 | 2:20–2:55 | **5. The trust boundary.** Claude extracts; code authorizes; humans approve payout | “The model has no wallet or spending-limit fields. Code checks seller, asset, network, price and budget. It reserves an invoice before signing. If settlement becomes unclear, SETTLEMENT_UNKNOWN counts that price and locks the invoice. The final draft cannot execute a supplier payout.” |
 | 2:55–3:20 | **6. Business.** CashXChain infrastructure; pay per API report | “CashXChain's direction is infrastructure for agent payments. A pay-per-call readiness API is a concrete entry point. Today's two-tADA test price is a demo setting, not a commercial USD price or revenue result. Real CashXChain rails are future integration work.” |
 | 3:20–3:45 | **7. What comes next.** Persistent ledger, stablecoin pricing, sandbox, more corridors | “First prove the live workflow and persist its payment locks. Then explore tUSDM pricing and a CashXChain sandbox. Mainnet requires legal and security review. Current corridors, FX, fees and timing remain simulated.” |
-| 3:45–4:00 | **8. Team and proof.** Valentin Israel, CEO; Korbinian Weber, CTO; links | “We are Valentin and Korbi, and this is PayFlow AI: Claude reads, code decides, you approve. Here are the code, live demo and payment evidence.” Display only verified links; omit missing resources rather than showing placeholders to judges. |
+| 3:45–4:00 | **8. Team and proof.** Valentin Israel, CEO; Korbinian Weber, CTO; links | “We are Valentin and Korbi, and this is PayLorya AI: Claude reads, code decides, you approve. Here are the code, live demo and payment evidence.” Display only verified links; omit missing resources rather than showing placeholders to judges. |
 
 No market-size numbers, savings, traction, partnerships or production claims are substantiated
 by this repository. Do not add them without a source. Show fiat fee examples in USD and preserve

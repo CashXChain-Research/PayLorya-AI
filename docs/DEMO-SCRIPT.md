@@ -31,7 +31,7 @@ room for clicks; rehearse and trim to the confirmed event limit.
 
 | Time | Screen action | Voice-over |
 | --- | --- | --- |
-| 0:00–0:15 | Open the live URL; title card “PayFlow AI” | “An agent can read an invoice. But are the payment details ready? PayFlow AI sells a readiness report, paid per call with x402 using tADA on Cardano Preprod, a testnet.” |
+| 0:00–0:15 | Open the live URL; title card “PayLorya AI” | “An agent can read an invoice. But are the payment details ready? PayLorya AI sells a readiness report, paid per call with x402 using tADA on Cardano Preprod, a testnet.” |
 | 0:15–0:35 | Click `sepa_ok`, show synthetic invoice, click **Run agent** | “This synthetic supplier invoice goes to our reference buyer agent. Claude extracts the fields. Deterministic code converts the amount and checks for an account identifier before buying a report.” |
 | 0:35–0:55 | Show `EXTRACTED`, `PRECHECKED`, `PAYING`. If shipped, show policy checks. Overlay confirmation-wait cut | “The API returns a 402 offer. Code checks the allowlisted seller, the price cap and session budget, and reserves this invoice before signing. The report costs two test ADA. The facilitator verifies and settles the payment.” |
 | 0:55–1:10 | After `PAID`, click the actual proof's explorer link; show network and seller output | “This is the run's transaction on Cardano Preprod. Check the seller's two-tADA output. Network fees are additional. This purchase paid for the report, not the supplier invoice.” |
@@ -40,7 +40,7 @@ room for clicks; rehearse and trim to the confirmed event limit.
 | 1:50–2:05 | Run exactly the same injection invoice again; show rejection and unchanged spend from health | “Repeat the same invoice in this session: it is refused before another signature. Spend stays unchanged. These locks are in memory, so this is not a persistent duplicate guarantee.” |
 | 2:05–2:20 | Paste no-account JSON below; run; show `NEEDS_INFO` and unchanged spend | “No bank details? The local precheck requests more information without paying for a report.” |
 | 2:20–2:40 | Clean terminal: unpaid curl, HTTP 402 and decoded offer | “The API is the product. An external agent can discover its price through HTTP 402. Our Claude agent is one customer. No wallet secret is needed to request this unpaid offer.” |
-| 2:40–2:50 | Closing card: repo, live URL, video/evidence links | “PayFlow AI: Claude reads. Code decides. You approve. Payment readiness for agents, with explicit spending limits and human approval before payout.” |
+| 2:40–2:50 | Closing card: repo, live URL, video/evidence links | “PayLorya AI: Claude reads. Code decides. You approve. Payment readiness for agents, with explicit spending limits and human approval before payout.” |
 
 Use the injection narration as a claimed outcome only after that live take proves it. If it fails,
 report the failure to B/A and retain a truthful limitation; do not edit the output into a success.

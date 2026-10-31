@@ -1,4 +1,4 @@
-# PayFlow AI (AI CFO)
+# PayLorya AI (AI CFO)
 
 The product built on top of the hackathon payment engine. One app, one domain:
 
@@ -15,7 +15,7 @@ The product built on top of the hackathon payment engine. One app, one domain:
 
 ## Sign-up and login: email code first, password optional (Resend)
 
-With `RESEND_API_KEY` set (`src/cfo/auth.ts`, `src/cfo/mail.ts`), PayFlow AI accounts work without a
+With `RESEND_API_KEY` set (`src/cfo/auth.ts`, `src/cfo/mail.ts`), PayLorya AI accounts work without a
 password by default. Codes are mailed through Resend (`POST https://api.resend.com/emails`, sender
 `RESEND_FROM`).
 
@@ -130,7 +130,7 @@ account gets a CashXChain sub-account: a [Platform managed account](https://docs
 
 ## Your own CashXChain account and wallets
 
-A workspace can bring its own accounts instead of PayFlow AI's shared ones (Connections page).
+A workspace can bring its own accounts instead of PayLorya AI's shared ones (Connections page).
 
 - **CashXChain by API key.** Adding the CashXChain connection takes the workspace's own sandbox
   key (`cxc_sk_sandbox_…`, or `cxc_rk_sandbox_…` with `accounts:read`; to pay, also
@@ -144,7 +144,7 @@ A workspace can bring its own accounts instead of PayFlow AI's shared ones (Conn
 - **Balances and payouts use that key.** An approved fiat payment of a workspace whose read & write
   CashXChain connection carries a key leaves from that account (`BuyerAgent.useFiatRoute`). If the
   key cannot be opened, the payment fails; it never falls back to the shared account. Without a
-  key the connection is PayFlow AI's shared sandbox account (`CASHXCHAIN_API_KEY`), as before.
+  key the connection is PayLorya AI's shared sandbox account (`CASHXCHAIN_API_KEY`), as before.
 - **Wallets by browser popup.** The Cardano and EVM watch-only connections offer "Connect Lace /
   Eternl / …" (CIP-30) and "Connect browser wallet" (EIP-1193, MetaMask). The wallet's permission
   popup hands over an address only; Cardano must be on a testnet (network id 0). The AI CFO reads

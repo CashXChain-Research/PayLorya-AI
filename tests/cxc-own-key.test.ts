@@ -45,7 +45,7 @@ function routeAgent() {
       const fiat = routes.get(run);
       const invoice = JSON.parse(run.input) as Invoice;
       const done = (async () => {
-        // No own route: the engine's default (PayFlow AI's shared account) would pay.
+        // No own route: the engine's default (PayLorya AI's shared account) would pay.
         const { reference } = fiat
           ? await fiat.payout({ idempotencyKey: `payout-${invoice.id}`, invoice, destination: "x", payee: run.payees![0] as VerifiedPayee })
           : { reference: "shared_account_payout" };

@@ -11,7 +11,7 @@ export class Vault {
   private readonly key: Buffer;
 
   constructor(secret: string) {
-    this.key = Buffer.from(hkdfSync("sha256", secret, "payflow-ai", "connection-credentials v1", 32));
+    this.key = Buffer.from(hkdfSync("sha256", secret, "cxc-agentpay", "connection-credentials v1", 32));
   }
 
   seal(plaintext: string, context: string): string {
@@ -36,7 +36,7 @@ export class Vault {
 }
 
 /** What a sealed connection credential is bound to. */
-export const connectionContext = (ws: string): string => `payflow:connection:${ws}`;
+export const connectionContext = (ws: string): string => `connection:${ws}`;
 
 /** "cxc_sk_sandbox_…LzQb": enough to recognise a key, never enough to use it. */
 export function keyHint(key: string): string {

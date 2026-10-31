@@ -21,7 +21,7 @@ const agent = config.x402Ready ? new BuyerAgent(config, runs, undefined, fiat ? 
 engine.agent = agent;
 
 createApp(config, { runs, agent, cfo }).listen(config.PORT, () => {
-  console.log(`PayFlow AI on ${config.baseUrl}`);
+  console.log(`PayLorya AI on ${config.baseUrl}`);
   console.log(`  facilitator: ${config.facilitatorUrl}`);
   console.log(`  x402Ready=${config.x402Ready} aiReady=${config.aiReady}`);
   if (agent) console.log(`  buyer: ${agent.buyerAddress}\n  seller: ${config.SELLER_ADDRESS}`);
