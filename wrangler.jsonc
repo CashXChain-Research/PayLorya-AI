@@ -22,7 +22,10 @@
   "d1_databases": [{ "binding": "CFO_DB", "database_name": "cxc-ai-cfo", "database_id": "86dd0418-3689-413f-8b1b-ccb77bc2b87e" }],
   "r2_buckets": [{ "binding": "CFO_FILES", "bucket_name": "cxc-ai-cfo-documents" }],
   "observability": { "enabled": true },
-  // Non-secret config. Every deploy overwrites vars with these values; keep them here, not in the dashboard.
+  // Variables set in the dashboard (e.g. CLAUDE_MODEL) survive deploys. The ones listed under "vars"
+  // below are still set from this file on every deploy; change those here.
+  "keep_vars": true,
+  // Non-secret config, applied on every deploy.
   // Secrets (never here): ANTHROPIC_API_KEY, BLOCKFROST_PROJECT_ID, BUYER_MNEMONIC, SELLER_ADDRESS, CASHXCHAIN_API_KEY
   // via `npx wrangler secret put <NAME>`. See docs/DEPLOY.md.
   "vars": {
