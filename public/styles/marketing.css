@@ -34,9 +34,31 @@ h1, h2, h3 { text-wrap: balance; }
 .hero h1 span { display: block; color: var(--ink-3); }
 .lead { margin: 28px auto 0; max-width: 660px; font-size: clamp(17px, 1.7vw, 21px); line-height: 1.5; color: var(--ink-2); text-wrap: balance; }
 .cta { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; margin-top: 36px; }
+.cta[hidden], .quick[hidden] { display: none; }
 .cta .btn { padding: 16px 26px; font-size: 16px; }
 .cta .btn.ghost { background: var(--surface); box-shadow: var(--shadow-chip); }
 .cta .btn.ghost:hover { background: var(--surface); box-shadow: var(--shadow); transform: translateY(-1px); }
+/* Hero sign-up: email code or Google, like a login box on the page itself. */
+.quick { max-width: 800px; margin: 36px auto 0; }
+.quick-row { display: flex; gap: 12px; justify-content: center; align-items: stretch; flex-wrap: wrap; }
+.quick-email { flex: 1 1 380px; display: flex; align-items: center; gap: 6px; padding: 6px; border-radius: 999px; background: var(--surface); box-shadow: var(--shadow-chip); }
+.quick-email:focus-within { box-shadow: var(--shadow-chip), 0 0 0 2px var(--primary); }
+.quick-email input { flex: 1; min-width: 0; height: 44px; border: 0; background: transparent; color: var(--ink); font: inherit; font-size: 16px; padding: 0 14px; outline: none; }
+.quick-email .btn { padding: 13px 20px; font-size: 15px; white-space: nowrap; }
+.quick .google { gap: 10px; padding: 0 22px; min-height: 56px; font-size: 15px; background: var(--surface); box-shadow: var(--shadow-chip); }
+.quick .google:hover { background: var(--surface); box-shadow: var(--shadow); transform: translateY(-1px); }
+.quick .google[hidden] { display: none; }
+.quick-err { margin: 12px 0 0; color: var(--danger); font-size: 14px; font-weight: 600; }
+.quick-err[hidden] { display: none; }
+.quick-fine { margin: 12px 0 0; color: var(--ink-3); font-size: 13px; }
+.quick-fine a { color: var(--ink-2); text-decoration: underline; text-underline-offset: 2px; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+@media (max-width: 560px) {
+  .quick-email { flex-wrap: wrap; border-radius: 22px; }
+  .quick-email input { flex: 1 1 100%; }
+  .quick-email .btn { flex: 1 1 100%; }
+  .quick .google { flex: 1 1 100%; }
+}
 .mantra { list-style: none; margin: 28px 0 0; padding: 0; display: flex; justify-content: center; flex-wrap: wrap; gap: 8px 22px; color: var(--ink-2); font-size: 14px; }
 .mantra li { display: inline-flex; align-items: center; gap: 8px; }
 .mantra li { position: relative; padding-left: 26px; }

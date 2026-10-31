@@ -1,3 +1,4 @@
+import { type AuthOptions, loadAuthOptions, startGoogle } from "../shared/google.js";
 import { initChrome } from "../shared/nav.js";
 
 initChrome();
@@ -123,10 +124,11 @@ function setFormError(message: string): void {
 }
 
 // ── Code or password ─────────────────────────────────────────────────────────────────────
-// With email codes on the server, sign-up and login send a code; a password is only used when the
-// customer chooses one. Without codes (no Resend key), the password is required as before.
-let codes = false;
-let usePassword = true;
+// With email codes on the server (the normal case), sign-up and login send a code and the password
+// field stays hidden until the customer asks for it. Without codes (no Resend key), the password is
+// required as before.
+let codes = true;
+let usePassword = false;
 const passwordField = document.getElementById("password-field");
 const toggle = document.querySelector<HTMLAnchorElement>("[data-password-toggle]");
 const submitLabel = form?.querySelector<HTMLElement>('button[type="submit"] span');
@@ -143,24 +145,30 @@ function applyMethod(): void {
   if (mode === "login" && submitLabel) submitLabel.textContent = usePassword ? "Log in" : "Email me a code";
   if (!usePassword) setFieldError("password", "");
 }
-
-interface AuthOptions {
-  codes?: boolean;
-  /** Present when "Continue with Google" is configured; it only works on this origin. */
-  google?: { origin: string };
-}
+if (mode && mode !== "verify") applyMethod();
+// From the marketing page's email box (server without email codes): keep what was typed.
+const presetEmail = mode !== "verify" ? new URLSearchParams(location.search).get("email") : null;
+if (presetEmail && field("email")) (field("email") as HTMLInputElement).value = presetEmail;
 
 const oauth = document.getElementById("oauth");
 const googleButton = document.querySelector<HTMLButtonElement>("[data-google]");
 
 function showGoogle(google: AuthOptions["google"]): void {
   if (!oauth || !google) return;
-  // On another origin (workers.dev) Google would return to the canonical one: send the user there.
-  if (google.origin !== location.origin) {
-    googleButton?.addEventListener("click", () => location.assign(google.origin + location.pathname + location.search));
-  } else {
-    googleButton?.addEventListener("click", () => void startGoogle());
-  }
+  googleButton?.addEventListener("click", async () => {
+    googleButton.disabled = true;
+    googleButton.classList.add("loading");
+    const error = await startGoogle(google, {
+      callbackURL: next,
+      errorCallbackURL: `/${mode === "signup" ? "signup" : "login"}?error=google`,
+      fallbackPath: location.pathname + location.search,
+    });
+    if (error) {
+      setFormError(error);
+      googleButton.disabled = false;
+      googleButton.classList.remove("loading");
+    }
+  });
   oauth.hidden = false;
   // Back from Google with an error (Better Auth appends its code to errorCallbackURL).
   if (new URLSearchParams(location.search).has("error")) {
@@ -168,43 +176,19 @@ function showGoogle(google: AuthOptions["google"]): void {
   }
 }
 
-async function startGoogle(): Promise<void> {
-  if (!googleButton) return;
-  googleButton.disabled = true;
-  googleButton.classList.add("loading");
-  try {
-    const res = await postJson("/api/auth/sign-in/social", {
-      provider: "google",
-      callbackURL: next,
-      errorCallbackURL: `/${mode === "signup" ? "signup" : "login"}?error=google`,
-    });
-    const body = (await res.json().catch(() => ({}))) as { url?: string } & ApiError;
-    if (res.ok && body.url) {
-      location.assign(body.url);
-      return;
-    }
-    setFormError(body.message || "Google sign-in is not available right now. Use your email instead.");
-  } catch {
-    setFormError("Could not reach the server. Check your connection and try again.");
-  }
-  googleButton.disabled = false;
-  googleButton.classList.remove("loading");
-}
-
 const ready: Promise<void> =
   mode === "verify"
     ? Promise.resolve()
-    : fetch("/api/auth-options", { headers: { accept: "application/json" } })
-        .then(res => (res.ok ? (res.json() as Promise<AuthOptions>) : {}))
-        .then(o => {
-          codes = Boolean((o as AuthOptions).codes);
-          showGoogle((o as AuthOptions).google);
-        })
-        .catch(() => undefined) // unknown: passwords, as before
-        .then(() => {
+    : loadAuthOptions().then(o => {
+        // Unknown (request failed): keep codes, the normal server setup.
+        if (!o) return;
+        showGoogle(o.google);
+        if (Boolean(o.codes) !== codes) {
+          codes = Boolean(o.codes);
           usePassword = !codes;
           applyMethod();
-        });
+        }
+      });
 
 toggle?.addEventListener("click", event => {
   event.preventDefault();
