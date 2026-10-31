@@ -9,7 +9,7 @@ import { ExactCardanoScheme } from "@x402/cardano/exact/client";
 import type { PaymentPayload, PaymentRequirements } from "@x402/core/types";
 import { decodePaymentResponseHeader, wrapFetchWithPayment, x402Client } from "@x402/fetch";
 import { BuyerAgent, type PayoutRails } from "../src/agent.js";
-import { isDefinitiveSubmitRejection, type ChainSubmitter, type ChainView } from "../src/payout.js";
+import { isDefinitiveSubmitRejection, type ChainSubmitter, type ChainView, type FiatPayoutClient, type FiatPayoutRequest } from "../src/payout.js";
 import { CRYPTO_PAYEE } from "../src/routing.js";
 import { CARDANO_NETWORK, loadConfig } from "../src/config.js";
 import { RunStore, type Run } from "../src/runs.js";
@@ -97,6 +97,27 @@ function stubSigner(): StubSigner {
     },
   };
   return signer;
+}
+
+interface StubFiat extends FiatPayoutClient {
+  calls: FiatPayoutRequest[];
+  fail?: Error;
+}
+
+/** A fiat client that marks errors starting with "refused:" as definitive (nothing sent). */
+function stubFiat(): StubFiat {
+  const fiat: StubFiat = {
+    simulated: false,
+    label: "Stub CashXChain sandbox payout",
+    calls: [],
+    isDefinitiveRejection: error => error instanceof Error && error.message.startsWith("refused:"),
+    async payout(request) {
+      fiat.calls.push(request);
+      if (fiat.fail) throw fiat.fail;
+      return { reference: `po_${fiat.calls.length}` };
+    },
+  };
+  return fiat;
 }
 
 interface StubSubmitter extends ChainSubmitter {
@@ -212,7 +233,9 @@ const env = (facilitatorUrl: string, overrides: Env = {}): Env => ({
 /** Replaces the seller's report on its way out; `send` is the original res.json. */
 type Tamper = (res: Response, send: (body: unknown) => Response) => Response;
 
-async function startStack(opts: { seller?: Env; buyer?: Env; tamperReport?: Tamper; chain?: ChainView; walletSync?: PayoutRails["walletSync"] } = {}) {
+async function startStack(
+  opts: { seller?: Env; buyer?: Env; tamperReport?: Tamper; chain?: ChainView; walletSync?: PayoutRails["walletSync"]; fiat?: FiatPayoutClient } = {},
+) {
   const events: string[] = [];
   const handled: ReadinessReport[] = [];
   const fac = await startFacilitator(events);
@@ -240,7 +263,7 @@ async function startStack(opts: { seller?: Env; buyer?: Env; tamperReport?: Tamp
   const signer = stubSigner();
   const submitter = stubSubmitter();
   // No grace by default so tests stay fast; wallet-sync tests set their own.
-  const agent = new BuyerAgent(config, runs, signer, { submitter, chain: opts.chain, walletSync: { graceMs: 0, ...opts.walletSync } });
+  const agent = new BuyerAgent(config, runs, signer, { submitter, fiat: opts.fiat, chain: opts.chain, walletSync: { graceMs: 0, ...opts.walletSync } });
   const run = async (inv: Invoice = invoice): Promise<Run> => {
     const r = runs.create(JSON.stringify(inv));
     await agent.process(r);
@@ -654,6 +677,38 @@ describe("invoice payout after human approval", () => {
     expect(run.draft).toBeUndefined();
     expect(s.agent.approve(run)).toMatchObject({ ok: false });
     expect(s.signer.calls).toHaveLength(1);
+  });
+
+  it("fiat: a definitive refusal returns the draft; approving again reuses the per-invoice key and the payee record", async () => {
+    const fiat = stubFiat();
+    const s = await startStack({ fiat });
+    const run = await s.run();
+    fiat.fail = new Error("refused: insufficient_balance");
+    await approve(s.agent, run);
+
+    expect(states(run).slice(-2)).toEqual(["EXECUTING", "DRAFT_READY"]);
+    expect(lastNote(run)).toBe("Payout refused before it was sent, nothing paid; approve again: refused: insufficient_balance");
+    expect(run.payout).toBeUndefined();
+
+    fiat.fail = undefined;
+    await approve(s.agent, run);
+    expect(run.state).toBe("EXECUTED");
+    expect(run.payout).toMatchObject({ rail: "cxc_fiat", status: "submitted", simulated: false, reference: "po_2" });
+    expect(fiat.calls.map(c => c.idempotencyKey)).toEqual([`payout-${run.fingerprint}`, `payout-${run.fingerprint}`]);
+    expect(fiat.calls[0]?.payee).toEqual({ name: "Brenner Maschinenbau GmbH", iban: "DE89370400440532013000", bic: "COBADEFFXXX" });
+  });
+
+  it("fiat: any other error may have reached CashXChain -> PAYOUT_UNKNOWN, invoice locked", async () => {
+    const fiat = stubFiat();
+    const s = await startStack({ fiat });
+    const run = await s.run();
+    fiat.fail = new Error("timeout after POST /v1/banking/payouts");
+    await approve(s.agent, run);
+
+    expect(run.state).toBe("PAYOUT_UNKNOWN");
+    expect(run.payout).toMatchObject({ rail: "cxc_fiat", status: "unknown" });
+    expect(s.agent.approve(run)).toMatchObject({ ok: false });
+    expect(fiat.calls).toHaveLength(1);
   });
 
   it("crypto: node refuses the payout before broadcast -> back to DRAFT_READY, nothing counted, approve again pays", async () => {

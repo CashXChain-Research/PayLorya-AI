@@ -24,6 +24,8 @@ describe("verified payee directory", () => {
   it("matches extracted names with legal forms, cities and diacritics", () => {
     expect(findPayee(directory, "Brenner Maschinenbau GmbH, Augsburg")?.name).toBe("Brenner Maschinenbau GmbH");
     expect(findPayee(directory, "Lakeside Robotics Inc. (Austin, TX)")?.name).toBe("Lakeside Robotics Inc.");
+    // The CashXChain US corridor requires an account type for ACH payouts.
+    expect(findPayee(directory, "Lakeside Robotics Inc.")?.accountType).toBe("checking");
     expect(findPayee(directory, "Nordwind Node Services OU")?.name).toBe(CRYPTO_PAYEE);
     expect(findPayee(directory, "Studio Nord GmbH")).toBeUndefined();
   });

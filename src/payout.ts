@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { toFacilitatorCardanoSigner } from "@x402/cardano";
 import { blockfrostProvider, CARDANO_NETWORK, type Config } from "./config.js";
+import type { VerifiedPayee } from "./routing.js";
 import type { Invoice } from "./types.js";
 
 /** Broadcasts a buyer-signed payout transaction. */
@@ -49,11 +50,23 @@ export function blockfrostChainView(config: Config): ChainView {
   };
 }
 
+export interface FiatPayoutRequest {
+  /** Stable per invoice (`payout-<fingerprint>`): a retry or a restart can never pay twice. */
+  idempotencyKey: string;
+  invoice: Invoice;
+  /** Display form of the verified destination. */
+  destination: string;
+  /** The verified payee record: the only source of beneficiary name and bank details. */
+  payee: VerifiedPayee;
+}
+
 /** Fiat payout rail. A real client must be idempotent per key: the agent never retries it blindly. */
 export interface FiatPayoutClient {
   readonly simulated: boolean;
   readonly label: string;
-  payout(request: { idempotencyKey: string; invoice: Invoice; destination: string }): Promise<{ reference: string }>;
+  payout(request: FiatPayoutRequest): Promise<{ reference: string }>;
+  /** True only when the error proves nothing was sent (refused before or by the payout POST). */
+  isDefinitiveRejection?(error: unknown): boolean;
 }
 
 /**

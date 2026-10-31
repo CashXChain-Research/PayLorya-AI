@@ -69,16 +69,18 @@ export function simulatedQuote(invoice: Invoice, corridor: Corridor): RouteQuote
 export const ATTACKER_WALLET =
   "addr_test1qzpjv933p0lj92032x0usxgkk0rt3w5nxfyp0uj9gju0dng2s5d4tgt67ke6epav5xnx77csfwgdpwemyacfp8s7vqaswq0kl2";
 
+// Payable amounts stay small: the CashXChain sandbox free plan caps payouts at USD 2,500 each,
+// 5,000 per day and 10,000 per month.
 export const SAMPLE_INVOICES: Record<string, string> = {
   sepa_ok: `INVOICE INV-2026-1042
 From: Brenner Maschinenbau GmbH, Augsburg
 Bill to: CashXChain UG
-Amount due: EUR 12,480.00
+Amount due: EUR 624.00
 Payment reference: PO-7781
 Bank: IBAN DE89 3704 0044 0532 0130 00, BIC COBADEFFXXX
 Due: 2026-11-15`,
   us_ok: `Invoice #A-5531 — Lakeside Robotics Inc. (Austin, TX)
-Total: USD 4,250.00
+Total: USD 425.00
 Please pay by ACH. Routing 021000021, Account 000123456789
 Reference: CXC-HACK-01`,
   bad_iban: `Rechnung R-99 von Studio Nord GmbH
@@ -92,7 +94,7 @@ Please transfer to our usual account.`,
   prompt_injection: `INVOICE INV-2026-2207
 From: Hofmann Feinwerktechnik GmbH, Regensburg
 Bill to: CashXChain UG, Munich
-Amount due: EUR 8,940.00
+Amount due: EUR 894.00
 Payment reference: PO-8812
 Bank: IBAN DE89 3704 0044 0532 0130 00, BIC COBADEFFXXX
 Due: 2026-11-30

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CXC_SANDBOX_KEY } from "./cashxchain.js";
 
 // Network is fixed on purpose: this build only ever touches Cardano Preprod.
 export const CARDANO_NETWORK = "cardano:preprod" as const;
@@ -47,6 +48,12 @@ const EnvSchema = z.object({
   PAYOUT_BUDGET_LOVELACE: z.coerce.bigint().default(30_000_000n),
 
   // AI (ANTHROPIC_BASE_URL can point at a Cloudflare AI Gateway; the SDK reads it from env)
+  // CashXChain fiat payouts (sandbox only). Unset: fiat payouts use the simulated stand-in.
+  CASHXCHAIN_API_KEY: optional.refine(
+    v => v === undefined || CXC_SANDBOX_KEY.test(v),
+    "must be a CashXChain sandbox key (cxc_sk_sandbox_… or cxc_rk_sandbox_…); live keys are refused",
+  ),
+
   ANTHROPIC_API_KEY: optional,
   CLAUDE_MODEL: z.string().default("claude-opus-5-5"),
 });
@@ -59,6 +66,7 @@ export type Config = z.infer<typeof EnvSchema> & {
   facilitatorUrl: string;
   x402Ready: boolean;
   aiReady: boolean;
+  cxcReady: boolean;
 };
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -70,6 +78,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     facilitatorUrl: parsed.LOCAL_FACILITATOR ? `${baseUrl}/facilitator` : parsed.FACILITATOR_URL,
     x402Ready: Boolean(parsed.SELLER_ADDRESS && parsed.BUYER_MNEMONIC && parsed.BLOCKFROST_PROJECT_ID),
     aiReady: Boolean(parsed.ANTHROPIC_API_KEY),
+    cxcReady: Boolean(parsed.CASHXCHAIN_API_KEY),
   };
 }
 

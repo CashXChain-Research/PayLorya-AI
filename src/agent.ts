@@ -6,7 +6,7 @@ import { extractInvoice } from "./extract.js";
 import { blockfrostChainView, blockfrostSubmitter, simulatedCxcPayouts, type ChainSubmitter, type ChainView, type FiatPayoutClient } from "./payout.js";
 import { filterOffers, precheck, SpendLedger, type SpendPolicy } from "./policy.js";
 import { invoiceFingerprint } from "./readiness.js";
-import { decideRoute, payeeDirectory, type VerifiedPayee } from "./routing.js";
+import { decideRoute, findPayee, payeeDirectory, type VerifiedPayee } from "./routing.js";
 import type { Run, RunStore } from "./runs.js";
 import { READINESS_PATH } from "./seller.js";
 import { InvoiceSchema, type Invoice, type PaymentDraft, type PayoutResult, type ReadinessReport, type RouteDecision } from "./types.js";
@@ -152,7 +152,8 @@ export class BuyerAgent {
         throw new Error("payout route changed since the draft; nothing executed");
       }
       if (route.rail === "cardano_preprod") await this.withWallet(() => this.payOnCardano(run, invoice, route.destination!));
-      else await this.payViaCxc(run, invoice, route.destination!);
+      // decideRoute selected this payee, so the record exists; the client gets the record, not text.
+      else await this.payViaCxc(run, invoice, route.destination!, findPayee(this.payees, invoice.supplier)!);
     } catch (error) {
       run.error = error instanceof Error ? error.message : String(error);
       if (run.state === "EXECUTING") this.runs.transition(run, "FAILED", run.error);
@@ -214,15 +215,21 @@ export class BuyerAgent {
     this.runs.transition(run, "EXECUTED", sent.txHash);
   }
 
-  private async payViaCxc(run: Run, invoice: Invoice, destination: string): Promise<void> {
+  private async payViaCxc(run: Run, invoice: Invoice, destination: string, payee: VerifiedPayee): Promise<void> {
     const fingerprint = run.fingerprint!;
     const hold = this.payoutLedger.reserve(fingerprint, 0n);
     if (!hold.ok) throw new Error(`payout refused: ${hold.reason}`);
     const base = { rail: "cxc_fiat" as const, simulated: this.fiat.simulated, amountMinor: invoice.amountMinor, currency: invoice.currency, destination };
     let reference: string;
     try {
-      ({ reference } = await this.fiat.payout({ idempotencyKey: run.id, invoice, destination }));
+      // Keyed per invoice, not per run: a new run for the same invoice replays instead of paying again.
+      ({ reference } = await this.fiat.payout({ idempotencyKey: `payout-${fingerprint}`, invoice, destination, payee }));
     } catch (error) {
+      if (this.fiat.isDefinitiveRejection?.(error)) {
+        run.error = error instanceof Error ? error.message : String(error);
+        this.payoutLedger.release(fingerprint);
+        return this.runs.transition(run, "DRAFT_READY", `Payout refused before it was sent, nothing paid; approve again: ${run.error}`);
+      }
       // A real API may have accepted the payout before failing: lock, never retry blindly.
       this.payoutLedger.markUnknown(fingerprint, 0n);
       run.error = error instanceof Error ? error.message : String(error);
