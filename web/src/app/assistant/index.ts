@@ -85,7 +85,7 @@ function welcome(): void {
     const group = (title: string, items: typeof SAMPLES) => items.length
       ? `<span class="m-label">${title}</span><div class="chips">${items.map(s => chip(`data-sample="${esc(s.key)}"`, `${s.safety ? I.shieldSm : AI.spark}${esc(s.label)}`)).join("")}</div>`
       : "";
-    const pdfs = `<span class="m-label">Sample PDFs to upload</span><div class="chips">${PDFS.map(p => `<a class="chip dl" href="${p.href}" download>${AI.save}${esc(p.label)}</a>`).join("")}</div>`;
+    const pdfs = `<span class="m-label">Sample PDFs to upload</span><div class="chips">${PDFS.map(p => `<a class="chip dl" href="${p.href}" download>${AI.save}${esc(p.label)}</a>`).join("")}<a class="chip dl" href="/samples/test/" target="_blank" rel="noopener">${AI.file}All test invoices (text + PDF)</a></div>`;
     const html = `${group("Try an example", shown.filter(s => !s.safety))}${group("Safety tests", shown.filter(s => s.safety))}${pdfs}`;
     await post("hello", { kind: "card", html: `<div class="m-chips">${html}</div>` }, { delay: 0 });
     await post("hello", { html: `You can also ask me about your payments, wallets and budgets.${askChips(ASK_CHIPS.slice(0, 3))}` }, { delay: 0 });

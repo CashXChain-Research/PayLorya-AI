@@ -1,0 +1,11 @@
+INVOICE INV-2026-1101
+From: Brenner Maschinenbau GmbH, Messerschmittstraße 14, 86165 Augsburg, Germany
+Bill to: CashXChain UG, Munich
+Date: 2026-10-31
+- Spindle bearing set SB-40, 2 pcs: EUR 624.00
+Amount due: EUR 624.00
+Payment reference: PO-7801
+Bank: Commerzbank Augsburg
+IBAN: DE89 3704 0044 0532 0130 00
+BIC: COBADEFFXXX
+Due: 2026-11-30
