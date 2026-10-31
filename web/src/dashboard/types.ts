@@ -338,6 +338,9 @@ export interface Webhook {
   url: string;
   events: WebhookEvent[];
   createdAt: string;
+  /** The latest attempt, delivered or not; lastStatus 0 means no HTTP answer. */
+  lastDeliveryAt?: string;
+  lastStatus?: number;
 }
 /** POST /api/v1/webhooks: the signing secret, in this reply only. */
 export interface WebhookCreated extends Webhook {

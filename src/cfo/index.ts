@@ -19,6 +19,7 @@ import { Payments, type PaymentEngine } from "./payments.js";
 import { evolutionKit, type TxKit } from "./wallet-signer.js";
 import { localFiles, localSql, memoryFiles, remoteFiles, remoteSql, type Files, type Sql } from "./sql.js";
 import { Store } from "./store.js";
+import { isProductionServer, Webhooks, type Resolve } from "./webhooks.js";
 
 export { mountCfo } from "./api.js";
 export type { PaymentEngine } from "./payments.js";
@@ -45,8 +46,10 @@ export async function createCfo(
     cashxchainFor?: (apiKey: string) => CashXChainClient;
     /** Tests: builds tADA payouts from a workspace wallet; production: Evolution SDK over Blockfrost. */
     walletKit?: TxKit;
-    /** Tests: no background sweep (they call payments.sweep() themselves). */
+    /** Tests: no background sweep (they call payments.sweep() themselves), and no background webhook delivery (webhooks.deliverDue()). */
     noSweep?: boolean;
+    /** Tests: production rules for webhook URLs (default: isProductionServer), and a stand-in for DNS. */
+    webhooks?: { production?: boolean; resolve?: Resolve };
     /** Tests: a shorter limit for the paid verification step. */
     checkTimeoutMs?: number;
     /** Tests: the funding wallet's signer ("Get test tADA"), and how long a grant waits for the previous one. */
@@ -118,6 +121,16 @@ export async function createCfo(
     ...(opts.checkTimeoutMs ? { checkTimeoutMs: opts.checkTimeoutMs } : {}),
   });
   agents.onPayoutSigned = (ws, input, out) => payments.recordAgentPayout(ws, input, out);
+  // Outbound webhooks: every payment created and every status change, from the store's payment writes.
+  const webhooks = new Webhooks(store, config.BETTER_AUTH_SECRET, {
+    production: opts.webhooks?.production ?? isProductionServer(config),
+    // The data proxy (http://cfo-data.internal on Cloudflare) answers SQL: never a webhook target.
+    blockedHosts: config.CFO_DATA_URL ? [URL.parse(config.CFO_DATA_URL)?.hostname ?? config.CFO_DATA_URL] : [],
+    ...(opts.webhooks?.resolve ? { resolve: opts.webhooks.resolve } : {}),
+  });
+  store.onPaymentEvent = (ws, event) => webhooks.emitPayment(ws, event);
+  // Sends what a restart left queued, then retries every 30 s and sends each new event at once.
+  if (!opts.noSweep) webhooks.start();
   if (!opts.noSweep) {
     // Settles what a restart left behind, then follows sent tADA payouts to their block.
     void payments.sweep();
@@ -127,6 +140,7 @@ export async function createCfo(
     store,
     auth,
     payments,
+    webhooks,
     keys,
     ...(funder ? { funder } : {}),
     connections: {

@@ -213,6 +213,37 @@ const MIGRATIONS: string[][] = [
        used_at TEXT
      )`,
   ],
+  // Outbound webhooks (src/cfo/webhooks.ts): endpoints per account with their signing secret sealed by
+  // vault.ts, and one delivery row per event and endpoint, retried from here so a restart loses none.
+  [
+    `CREATE TABLE webhooks (
+       id TEXT PRIMARY KEY,
+       workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+       url TEXT NOT NULL,
+       events_json TEXT NOT NULL,
+       secret_enc TEXT NOT NULL,
+       created_at TEXT NOT NULL,
+       last_delivery_at TEXT,
+       last_status INTEGER
+     )`,
+    `CREATE INDEX webhooks_ws ON webhooks(workspace_id, created_at)`,
+    `CREATE TABLE webhook_deliveries (
+       webhook_id TEXT NOT NULL REFERENCES webhooks(id) ON DELETE CASCADE,
+       event_id TEXT NOT NULL,
+       workspace_id TEXT NOT NULL,
+       event_type TEXT NOT NULL,
+       event_json TEXT NOT NULL,
+       status TEXT NOT NULL,
+       attempts INTEGER NOT NULL DEFAULT 0,
+       next_attempt_at TEXT,
+       last_status INTEGER,
+       last_error TEXT,
+       last_attempt_at TEXT,
+       created_at TEXT NOT NULL,
+       PRIMARY KEY (webhook_id, event_id)
+     )`,
+    `CREATE INDEX webhook_deliveries_due ON webhook_deliveries(status, next_attempt_at)`,
+  ],
 ];
 
 export async function migrate(sql: Sql): Promise<void> {

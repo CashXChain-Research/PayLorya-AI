@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import type { CxcLink } from "./cxc-link.js";
 import type { AgentLimits, Autonomy, PolicyDecision, Rail } from "./policy.js";
 import type { Files, Sql, SqlRow, SqlValue } from "./sql.js";
+import type { Webhook, WebhookEventType } from "./webhooks.js";
 
 // Row shapes follow web/src/dashboard/types.ts (the dashboard's API contract).
 
@@ -181,6 +182,22 @@ export interface ChatSummary {
   updatedAt: string;
 }
 
+/** A payment was created, or its status changed: what outbound webhooks announce (webhooks.ts). */
+export type PaymentEvent = { type: "payment.created"; payment: Payment } | { type: "payment.updated"; payment: Payment; previousStatus: PaymentStatus };
+
+/** A webhook delivery that is due, with its endpoint. `body` is the exact JSON that is signed and sent. */
+export interface DueDelivery {
+  webhookId: string;
+  eventId: string;
+  ws: string;
+  type: WebhookEventType;
+  body: string;
+  attempts: number;
+  nextAttemptAt: string;
+  url: string;
+  secretEnc: string;
+}
+
 export interface StoredMessage {
   id: string;
   role: "user" | "assistant";
@@ -217,6 +234,22 @@ export class Store {
     readonly sql: Sql,
     readonly files: Files,
   ) {}
+
+  /**
+   * Called after every payment is created and after every status change, from the three methods
+   * that write a payment's status (addPayment, updatePayment, claimPayment): so the sweep and every
+   * other path announce theirs too. Its failure never fails the payment write (emitPayment).
+   */
+  onPaymentEvent?: (ws: string, event: PaymentEvent) => Promise<void>;
+
+  private async emitPayment(ws: string, event: PaymentEvent): Promise<void> {
+    if (!this.onPaymentEvent) return;
+    try {
+      await this.onPaymentEvent(ws, event);
+    } catch (error) {
+      console.error(`webhook event ${event.type} (${event.payment.id}) not queued`, error);
+    }
+  }
 
   private async all(sql: string, ...params: SqlValue[]): Promise<Row[]> {
     return (await this.sql.query(sql, params)).rows;
@@ -289,6 +322,119 @@ export class Store {
   /** A failed request (5xx) frees its key, so a retry runs again. */
   async releaseIdempotency(keyId: string, idem: string): Promise<void> {
     await this.run("DELETE FROM api_idempotency WHERE key_id = ? AND idem_key = ?", keyId, idem);
+  }
+
+  // Webhooks -------------------------------------------------------------------------------
+
+  /** `secretEnc` is sealed for this webhook's id (webhooks.ts), so the id is chosen by the caller. */
+  async addWebhook(ws: string, w: { id: string; url: string; events: WebhookEventType[]; secretEnc: string }): Promise<Webhook> {
+    await this.run(
+      "INSERT INTO webhooks (id, workspace_id, url, events_json, secret_enc, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+      w.id,
+      ws,
+      w.url,
+      JSON.stringify(w.events),
+      w.secretEnc,
+      now(),
+    );
+    return (await this.webhook(ws, w.id))!;
+  }
+
+  async webhooks(ws: string): Promise<Webhook[]> {
+    return (await this.all("SELECT * FROM webhooks WHERE workspace_id = ? ORDER BY created_at DESC", ws)).map(toWebhook);
+  }
+
+  async webhook(ws: string, id: string): Promise<Webhook | undefined> {
+    const row = await this.get("SELECT * FROM webhooks WHERE workspace_id = ? AND id = ?", ws, id);
+    return row ? toWebhook(row) : undefined;
+  }
+
+  /** The sealed signing secret. Kept out of Webhook on purpose. */
+  async webhookSecret(ws: string, id: string): Promise<string | undefined> {
+    const row = await this.get("SELECT secret_enc FROM webhooks WHERE workspace_id = ? AND id = ?", ws, id);
+    return row ? String(row.secret_enc) : undefined;
+  }
+
+  /** Its deliveries go with it (ON DELETE CASCADE, and explicitly should foreign keys be off). */
+  async deleteWebhook(ws: string, id: string): Promise<boolean> {
+    if ((await this.run("DELETE FROM webhooks WHERE workspace_id = ? AND id = ?", ws, id)) === 0) return false;
+    await this.run("DELETE FROM webhook_deliveries WHERE webhook_id = ?", id);
+    return true;
+  }
+
+  /**
+   * One delivery row per endpoint of this account that subscribed to the event (or for `only`, that
+   * endpoint whatever it subscribed to), in one statement. Returns how many were queued.
+   */
+  async enqueueWebhookEvent(ws: string, e: { eventId: string; type: WebhookEventType; body: string; at: string; nextAttemptAt: string }, only?: string): Promise<number> {
+    return this.run(
+      `INSERT INTO webhook_deliveries (webhook_id, event_id, workspace_id, event_type, event_json, status, attempts, next_attempt_at, created_at)
+       SELECT id, ?, workspace_id, ?, ?, 'pending', 0, ?, ? FROM webhooks
+       WHERE workspace_id = ? AND ${only ? "id = ?" : "instr(events_json, ?) > 0"}`,
+      e.eventId,
+      e.type,
+      e.body,
+      e.nextAttemptAt,
+      e.at,
+      ws,
+      only ?? JSON.stringify(e.type),
+    );
+  }
+
+  /** Pending deliveries due by `at`, oldest event first, over all accounts: what the delivery loop sends. */
+  async dueWebhookDeliveries(at: string, limit: number): Promise<DueDelivery[]> {
+    const rows = await this.all(
+      `SELECT d.webhook_id, d.event_id, d.workspace_id, d.event_type, d.event_json, d.attempts, d.next_attempt_at, w.url, w.secret_enc
+       FROM webhook_deliveries d JOIN webhooks w ON w.id = d.webhook_id
+       WHERE d.status = 'pending' AND d.next_attempt_at <= ? ORDER BY d.created_at, d.rowid LIMIT ?`,
+      at,
+      limit,
+    );
+    return rows.map(r => ({
+      webhookId: String(r.webhook_id),
+      eventId: String(r.event_id),
+      ws: String(r.workspace_id),
+      type: r.event_type as WebhookEventType,
+      body: String(r.event_json),
+      attempts: Number(r.attempts),
+      nextAttemptAt: String(r.next_attempt_at),
+      url: String(r.url),
+      secretEnc: String(r.secret_enc),
+    }));
+  }
+
+  /**
+   * Takes a due delivery for one attempt: counts the attempt and moves it out of reach until
+   * `leaseUntil` (a crash mid-attempt is retried then). False when another pass took it first.
+   */
+  async claimWebhookDelivery(d: Pick<DueDelivery, "webhookId" | "eventId" | "nextAttemptAt">, leaseUntil: string): Promise<boolean> {
+    const changes = await this.run(
+      "UPDATE webhook_deliveries SET attempts = attempts + 1, next_attempt_at = ? WHERE webhook_id = ? AND event_id = ? AND status = 'pending' AND next_attempt_at = ?",
+      leaseUntil,
+      d.webhookId,
+      d.eventId,
+      d.nextAttemptAt,
+    );
+    return changes > 0;
+  }
+
+  /** Records an attempt's outcome on the delivery and on its endpoint (lastDeliveryAt, lastStatus). */
+  async finishWebhookDelivery(
+    d: Pick<DueDelivery, "webhookId" | "eventId">,
+    r: { status: "pending" | "delivered" | "failed"; attempts: number; nextAttemptAt: string | null; httpStatus: number; error: string | null; at: string },
+  ): Promise<void> {
+    await this.sql.batch([
+      {
+        sql: "UPDATE webhook_deliveries SET status = ?, attempts = ?, next_attempt_at = ?, last_status = ?, last_error = ?, last_attempt_at = ? WHERE webhook_id = ? AND event_id = ?",
+        params: [r.status, r.attempts, r.nextAttemptAt, r.httpStatus, r.error, r.at, d.webhookId, d.eventId],
+      },
+      { sql: "UPDATE webhooks SET last_delivery_at = ?, last_status = ? WHERE id = ?", params: [r.at, r.httpStatus, d.webhookId] },
+    ]);
+  }
+
+  /** Delivered and failed rows older than `before` are dropped. */
+  async pruneWebhookDeliveries(before: string): Promise<void> {
+    await this.run("DELETE FROM webhook_deliveries WHERE status <> 'pending' AND created_at < ?", before);
   }
 
   // Workspaces -----------------------------------------------------------------------------
@@ -632,7 +778,9 @@ export class Store {
       now(),
       p.destination ? JSON.stringify(p.destination) : null,
     );
-    return (await this.payment(ws, id))!;
+    const payment = (await this.payment(ws, id))!;
+    await this.emitPayment(ws, { type: "payment.created", payment });
+    return payment;
   }
 
   /** Payments in these states across all workspaces: what the sweep after a restart looks at. */
@@ -685,24 +833,36 @@ export class Store {
       ws,
       id,
     );
-    return (await this.payment(ws, id))!;
+    const updated = (await this.payment(ws, id))!;
+    if (updated.status !== p.status) await this.emitPayment(ws, { type: "payment.updated", payment: updated, previousStatus: p.status });
+    return updated;
   }
 
   /**
    * Moves a payment from one status to another only if it is still in `from`: a double click or
-   * two tabs cannot both start the same payment. True when this call made the move.
+   * two tabs cannot both start the same payment. True when this call made the move. `error` is set
+   * in the same write when given (null clears it), so the status change is announced with it.
    */
-  async claimPayment(ws: string, id: string, from: PaymentStatus[], to: PaymentStatus, decidedAt?: string): Promise<boolean> {
-    const placeholders = from.map(() => "?").join(", ");
-    const changes = await this.run(
-      `UPDATE payments SET status = ?, decided_at = COALESCE(?, decided_at) WHERE workspace_id = ? AND id = ? AND status IN (${placeholders})`,
-      to,
-      decidedAt ?? null,
-      ws,
-      id,
-      ...from,
-    );
-    return changes > 0;
+  async claimPayment(ws: string, id: string, from: PaymentStatus[], to: PaymentStatus, decidedAt?: string, error?: string | null): Promise<boolean> {
+    // Compare-and-set on the status read just before: the same guarantee as one `status IN (from)`
+    // update, and the status it moved from is known exactly (the webhook's previousStatus).
+    for (let i = 0; i < 3; i++) {
+      const current = (await this.get("SELECT status FROM payments WHERE workspace_id = ? AND id = ?", ws, id))?.status as PaymentStatus | undefined;
+      if (!current || !from.includes(current)) return false;
+      const changes = await this.run(
+        `UPDATE payments SET status = ?, decided_at = COALESCE(?, decided_at)${error === undefined ? "" : ", error = ?"} WHERE workspace_id = ? AND id = ? AND status = ?`,
+        to,
+        decidedAt ?? null,
+        ...(error === undefined ? [] : [error]),
+        ws,
+        id,
+        current,
+      );
+      if (changes === 0) continue; // changed in between: read it again
+      if (current !== to) await this.emitPayment(ws, { type: "payment.updated", payment: (await this.payment(ws, id))!, previousStatus: current });
+      return true;
+    }
+    return false;
   }
 
   /** USD cents of payments the agent executed on its own (no human decision) since `since`. */
@@ -905,6 +1065,17 @@ function toPayee(r: Row): Payee {
 
 function toBudget(r: Row): BudgetRow {
   return { id: String(r.id), name: String(r.name), category: String(r.category), limitUsdMinor: Number(r.limit_usd_minor), createdAt: String(r.created_at) };
+}
+
+function toWebhook(r: Row): Webhook {
+  return {
+    id: String(r.id),
+    url: String(r.url),
+    events: json<WebhookEventType[]>(r.events_json, []) as Webhook["events"],
+    createdAt: String(r.created_at),
+    ...(r.last_delivery_at ? { lastDeliveryAt: String(r.last_delivery_at) } : {}),
+    ...(r.last_status !== null && r.last_status !== undefined ? { lastStatus: Number(r.last_status) } : {}),
+  };
 }
 
 function toApiKey(r: Row): ApiKey {
