@@ -4,6 +4,7 @@ import { blockfrostProvider, type Config } from "../config.js";
 import type { CfoDeps } from "./api.js";
 import { createAuth } from "./auth.js";
 import { openDatabase } from "./db.js";
+import { CxcLinker } from "./cxc-link.js";
 import { claudeExtractor } from "./ingest.js";
 import { Payments, type PaymentEngine } from "./payments.js";
 import { Store } from "./store.js";
@@ -31,5 +32,6 @@ export async function createCfo(config: Config, engine: PaymentEngine, opts: { d
     model: config.CLAUDE_MODEL,
     aiReady: config.aiReady,
     aiDailyLimit: config.CFO_AI_DAILY_LIMIT,
+    cxc: new CxcLinker(store, config.CASHXCHAIN_MASTER_KEY ? new CashXChainClient({ apiKey: config.CASHXCHAIN_MASTER_KEY }) : undefined),
   };
 }

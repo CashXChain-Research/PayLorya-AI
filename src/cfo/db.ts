@@ -159,6 +159,8 @@ const MIGRATIONS = [
    CREATE INDEX payments_ws ON payments(workspace_id, created_at);
    CREATE INDEX activity_ws ON activity(workspace_id, at);
    CREATE INDEX chat_messages_chat ON chat_messages(chat_id, seq);`,
+  // CashXChain sandbox sub-account (Platform managed account) per workspace: src/cfo/cxc-link.ts.
+  `ALTER TABLE workspaces ADD COLUMN cxc_link_json TEXT;`
 ];
 
 function migrate(db: DatabaseSync): void {
