@@ -12,7 +12,7 @@ import { renderOverview } from "./pages/overview.js";
 import { renderPayees } from "./pages/payees.js";
 import { renderPayments } from "./pages/payments.js";
 import { renderSettings } from "./pages/settings.js";
-import { type Ctx, emitState, onStateChange, refreshBadges, setNavigate, state } from "./state.js";
+import { type Ctx, emitState, onStateChange, refreshBadges, setNavigate, signOut, state } from "./state.js";
 import type { Me } from "./types.js";
 import { AUTONOMY, avatar, icon } from "./ui.js";
 
@@ -108,14 +108,6 @@ function shell(): string {
   </div>
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>`;
-}
-
-export async function signOut(): Promise<void> {
-  try {
-    await fetch("/api/auth/sign-out", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: "{}" });
-  } finally {
-    location.href = "/";
-  }
 }
 
 function paintIdentity(me: Me): void {

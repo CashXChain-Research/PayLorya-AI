@@ -1,0 +1,404 @@
+// AI CFO chat: thread list, streamed replies (SSE over fetch), tool status chips, file attachments.
+import { esc } from "../../shared/dom.js";
+import { del, get, post, stream } from "../api.js";
+import { markdown } from "../markdown.js";
+import { type Ctx, navigate, state, takePendingPrompt } from "../state.js";
+import type { ChatEvent, ChatMessage, ChatSummary, DocumentUpload } from "../types.js";
+import { ACCEPT, ago, AUTONOMY, bytes, confirmDialog, fileIcon, fileToBase64, icon, MAX_FILE, mimeOf, sk, toast } from "../ui.js";
+
+const SUGGESTIONS: Array<[string, string]> = [
+  ["budget", "Summarise my spending this month"],
+  ["calendar", "Which invoices are due in the next 14 days?"],
+  ["shield", "Create a budget for software at $2,000/month"],
+  ["pay", "Draft payment for the latest invoice"],
+  ["trend", "Forecast my cash for the next 90 days"],
+];
+const ALLOWED = /^(image\/|application\/pdf$|text\/csv$|text\/plain$|application\/vnd\.ms-excel$)/;
+
+interface Pending {
+  id: number;
+  file: File;
+  mime: string;
+  url?: string;
+}
+
+function groupLabel(iso: string): string {
+  const d = new Date(iso);
+  const t = new Date();
+  t.setHours(0, 0, 0, 0);
+  const diff = (t.getTime() - new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()) / 86400000;
+  return diff <= 0 ? "Today" : diff <= 1 ? "Yesterday" : diff <= 7 ? "Previous 7 days" : diff <= 30 ? "Previous 30 days" : "Older";
+}
+
+const toolChip = (summary: string, running: boolean, name = "") =>
+  `<span class="tool ${running ? "run" : "done"}" data-tool="${esc(name)}">${running ? '<i class="spin"></i>' : icon("check", 12, 2.8)}<span>${esc(summary)}</span></span>`;
+
+function userMsg(m: Pick<ChatMessage, "text" | "attachments">, localFiles?: Pending[]): string {
+  const atts = m.attachments?.length
+    ? m.attachments.map(a => `<a class="file-chip" href="/app/documents/${esc(a.documentId)}">${icon("doc", 14)}<span>${esc(a.filename)}</span></a>`).join("")
+    : (localFiles ?? []).map(f => `<span class="file-chip">${icon(fileIcon(f.mime), 14)}<span>${esc(f.file.name)}</span></span>`).join("");
+  return `<div class="msg user">${atts ? `<div class="att-row">${atts}</div>` : ""}${m.text ? `<div class="bubble">${esc(m.text)}</div>` : ""}</div>`;
+}
+function botMsg(m?: ChatMessage): string {
+  const tools = m?.tools?.length ? `<div class="tools">${m.tools.map(t => toolChip(t.summary, false, t.name)).join("")}</div>` : `<div class="tools"></div>`;
+  return `<div class="msg bot"><span class="bot-av" aria-hidden="true">X</span><div class="msg-body">${tools}<div class="md">${m ? markdown(m.text) : '<span class="typing"><i></i><i></i><i></i></span>'}</div></div></div>`;
+}
+
+export async function renderChat(view: HTMLElement, ctx: Ctx): Promise<void> {
+  let chatId: string | null = ctx.params[0] || null;
+  let threads: ChatSummary[] = [];
+  let files: Pending[] = [];
+  let seq = 0;
+  let controller: AbortController | null = null;
+  const autonomy = state.me?.workspace.autonomy;
+
+  view.innerHTML = `<div class="chat">
+    <aside class="threads" id="threads">
+      <div class="threads-head"><button class="btn primary sm block" type="button" id="new-chat">${icon("plus", 16, 2.4)}New chat</button></div>
+      <div class="thread-list" id="thread-list">${Array.from({ length: 6 }, () => `<div class="th-sk">${sk("80%", 12)}${sk("40%", 10)}</div>`).join("")}</div>
+    </aside>
+    <div class="threads-scrim" id="threads-scrim"></div>
+    <section class="convo" id="convo">
+      <header class="convo-head">
+        <button class="icon-btn threads-btn" type="button" id="threads-btn" aria-label="Show chats">${icon("chat", 18)}</button>
+        <div class="convo-title"><b id="chat-title">New chat</b><span>AI CFO · Claude</span></div>
+        ${autonomy ? `<a class="pill ${AUTONOMY[autonomy].tone}" href="/app/agent" title="Agent autonomy">${icon("shield", 12, 2.2)}${AUTONOMY[autonomy].name}</a>` : ""}
+      </header>
+      <div class="msgs" id="msgs"><div class="msgs-in" id="msgs-in"></div></div>
+      <form class="composer" id="composer">
+        <div class="att-chips" id="att-chips"></div>
+        <textarea id="input" rows="1" placeholder="Ask about cash, invoices, budgets, or ask it to draft a payment…" aria-label="Message"></textarea>
+        <div class="comp-bar">
+          <button type="button" class="icon-btn" id="attach" aria-label="Attach files" title="Attach files (PDF, images, CSV, text)">${icon("clip", 18)}</button>
+          <input type="file" id="file" multiple accept="${ACCEPT}" hidden>
+          <span class="comp-hint">Shift + Enter for a new line</span>
+          <button type="submit" class="send" id="send" aria-label="Send" disabled>${icon("send", 18, 2.4)}</button>
+        </div>
+      </form>
+      <p class="comp-fine">Claude reads. Code decides. You approve. Payments run on Cardano Preprod (testnet) and the CashXChain sandbox.</p>
+      <div class="drop-over" id="drop-over"><div>${icon("upload", 26)}<b>Drop files to attach</b><span>PDF, images, CSV or text · up to 15 MB each</span></div></div>
+    </section>
+  </div>`;
+
+  const $ = <T extends HTMLElement>(id: string) => view.querySelector<T>(`#${id}`)!;
+  const msgs = $("msgs");
+  const inner = $("msgs-in");
+  const input = $<HTMLTextAreaElement>("input");
+  const send = $<HTMLButtonElement>("send");
+  const listEl = $("thread-list");
+
+  const nearBottom = () => msgs.scrollHeight - msgs.scrollTop - msgs.clientHeight < 120;
+  const toBottom = (force = false) => {
+    if (force || nearBottom()) msgs.scrollTop = msgs.scrollHeight;
+  };
+  const syncSend = () => {
+    if (controller) {
+      send.disabled = false;
+      send.classList.add("stop");
+      send.innerHTML = icon("stop", 16, 2.2);
+      send.setAttribute("aria-label", "Stop");
+      return;
+    }
+    send.classList.remove("stop");
+    send.innerHTML = icon("send", 18, 2.4);
+    send.setAttribute("aria-label", "Send");
+    send.disabled = !input.value.trim() && !files.length;
+  };
+  const grow = () => {
+    input.style.height = "auto";
+    input.style.height = `${Math.min(200, input.scrollHeight)}px`;
+    syncSend();
+  };
+
+  const paintThreads = () => {
+    if (!threads.length) {
+      listEl.innerHTML = `<p class="threads-empty">Your conversations appear here.</p>`;
+      return;
+    }
+    let html = "";
+    let last = "";
+    for (const t of threads) {
+      const g = groupLabel(t.updatedAt);
+      if (g !== last) html += `<div class="th-group">${g}</div>`;
+      last = g;
+      html += `<div class="th${t.id === chatId ? " on" : ""}"><a href="/app/chat/${esc(t.id)}" title="${esc(t.title)}"><span>${esc(t.title || "New chat")}</span><em>${esc(ago(t.updatedAt))}</em></a><button type="button" class="icon-btn th-del" data-del="${esc(t.id)}" aria-label="Delete chat">${icon("trash", 15)}</button></div>`;
+    }
+    listEl.innerHTML = html;
+  };
+  const loadThreads = async () => {
+    threads = await get<ChatSummary[]>("/api/v1/chats", true).catch(() => threads);
+    if (!ctx.alive()) return;
+    threads.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    paintThreads();
+    const t = threads.find(x => x.id === chatId);
+    if (t) $("chat-title").textContent = t.title || "New chat";
+  };
+
+  const emptyState = () => {
+    inner.innerHTML = `<div class="chat-empty">
+      <div class="ce-mark">${icon("sparkle", 26)}</div>
+      <h2>How can I help with your finances?</h2>
+      <p>I can read your documents and connected accounts, plan budgets and draft payments. Code checks every payment against your policy, and you approve what moves.</p>
+      <div class="suggest">${SUGGESTIONS.map(([ic, s]) => `<button type="button" data-suggest="${esc(s)}">${icon(ic, 16)}<span>${esc(s)}</span></button>`).join("")}</div>
+    </div>`;
+  };
+
+  const renderFiles = () => {
+    const box = $("att-chips");
+    box.innerHTML = files
+      .map(
+        f => `<span class="att">${f.url ? `<img src="${f.url}" alt="">` : `<span class="att-ic">${icon(fileIcon(f.mime), 16)}</span>`}<span class="att-t"><b>${esc(f.file.name)}</b><em>${esc(bytes(f.file.size))}</em></span><button type="button" class="att-x" data-rm="${f.id}" aria-label="Remove ${esc(f.file.name)}">${icon("x", 12, 2.6)}</button></span>`,
+      )
+      .join("");
+    box.classList.toggle("has", files.length > 0);
+    syncSend();
+  };
+  const addFiles = (list: FileList | File[]) => {
+    for (const file of Array.from(list)) {
+      const mime = mimeOf(file);
+      if (!ALLOWED.test(mime)) {
+        toast(`${file.name}: only images, PDF, CSV and text files are supported.`, "error");
+        continue;
+      }
+      if (file.size > MAX_FILE) {
+        toast(`${file.name} is larger than 15 MB.`, "error");
+        continue;
+      }
+      files.push({ id: ++seq, file, mime, url: mime.startsWith("image/") ? URL.createObjectURL(file) : undefined });
+    }
+    renderFiles();
+    input.focus();
+  };
+  const clearFiles = (revoke: boolean) => {
+    if (revoke) for (const f of files) if (f.url) URL.revokeObjectURL(f.url);
+    files = [];
+    renderFiles();
+  };
+  ctx.onCleanup(() => {
+    controller?.abort();
+    clearFiles(true);
+  });
+
+  const sendMessage = async (text: string) => {
+    if (controller) return;
+    if (!text && !files.length) return;
+    const sending = files;
+    files = [];
+    renderFiles();
+    input.value = "";
+    grow();
+    inner.querySelector(".chat-empty")?.remove();
+    controller = new AbortController();
+    syncSend();
+    const userEl = document.createElement("div");
+    userEl.innerHTML = userMsg({ text }, sending);
+    inner.append(userEl.firstElementChild!);
+    const botWrap = document.createElement("div");
+    botWrap.innerHTML = botMsg();
+    const bot = botWrap.firstElementChild as HTMLElement;
+    inner.append(bot);
+    bot.classList.add("streaming");
+    toBottom(true);
+    const toolsEl = bot.querySelector<HTMLElement>(".tools")!;
+    const mdEl = bot.querySelector<HTMLElement>(".md")!;
+    let acc = "";
+    let raf = 0;
+    const paintText = () => {
+      raf = 0;
+      mdEl.innerHTML = markdown(acc) + '<span class="caret"></span>';
+      toBottom();
+    };
+    try {
+      if (!chatId) {
+        const chat = await post<ChatSummary>("/api/v1/chats", {});
+        chatId = chat.id;
+        threads.unshift(chat);
+        paintThreads();
+        navigate(`/app/chat/${encodeURIComponent(chat.id)}`, { silent: true });
+      }
+      const attachments: DocumentUpload[] = [];
+      for (const f of sending) attachments.push({ filename: f.file.name, mimeType: f.mime, dataBase64: await fileToBase64(f.file) });
+      for (const f of sending) if (f.url) URL.revokeObjectURL(f.url);
+      const sig = controller.signal;
+      await stream(
+        `/api/v1/chats/${encodeURIComponent(chatId)}/messages`,
+        attachments.length ? { text, attachments } : { text },
+        (e: ChatEvent) => {
+          if (!ctx.alive()) return;
+          switch (e.type) {
+            case "user": {
+              const tmp = document.createElement("div");
+              tmp.innerHTML = userMsg(e.message);
+              const prev = bot.previousElementSibling;
+              if (prev?.classList.contains("user")) prev.replaceWith(tmp.firstElementChild!);
+              break;
+            }
+            case "text":
+              acc += e.delta;
+              if (!raf) raf = requestAnimationFrame(paintText);
+              break;
+            case "tool": {
+              const running = [...toolsEl.querySelectorAll<HTMLElement>(".tool.run")].find(t => t.dataset.tool === e.name);
+              if (e.status === "start") {
+                toolsEl.insertAdjacentHTML("beforeend", toolChip(e.summary, true, e.name));
+              } else if (running) {
+                running.outerHTML = toolChip(e.summary, false, e.name);
+              } else toolsEl.insertAdjacentHTML("beforeend", toolChip(e.summary, false, e.name));
+              if (!acc) mdEl.innerHTML = '<span class="typing"><i></i><i></i><i></i></span>';
+              toBottom();
+              break;
+            }
+            case "done": {
+              if (raf) cancelAnimationFrame(raf);
+              raf = 0;
+              const tmp = document.createElement("div");
+              tmp.innerHTML = botMsg({ ...e.message, text: e.message.text || acc });
+              const done = tmp.firstElementChild as HTMLElement;
+              // Keep the live tool chips when the stored message has none.
+              if (!e.message.tools?.length && toolsEl.children.length) done.querySelector(".tools")!.replaceWith(toolsEl);
+              bot.replaceWith(done);
+              acc = "";
+              break;
+            }
+            case "error":
+              throw new Error(e.message || "The AI CFO could not answer.");
+          }
+        },
+        sig,
+      );
+      if (bot.isConnected) {
+        // Stream closed without a done event.
+        if (raf) cancelAnimationFrame(raf);
+        bot.classList.remove("streaming");
+        mdEl.innerHTML = acc ? markdown(acc) : '<p class="muted">No reply.</p>';
+      }
+    } catch (err) {
+      if (raf) cancelAnimationFrame(raf);
+      bot.classList.remove("streaming");
+      for (const t of toolsEl.querySelectorAll(".tool.run")) t.classList.replace("run", "stopped");
+      if ((err as Error).name === "AbortError") {
+        mdEl.innerHTML = (acc ? markdown(acc) : "") + `<p class="stopped-note">${icon("stop", 12, 2.4)}Stopped</p>`;
+      } else {
+        const msg = (err as Error).message || "Something went wrong.";
+        mdEl.innerHTML = (acc ? markdown(acc) : "") + `<div class="callout bad">${icon("alert", 15)}<span>${esc(msg)}</span></div>`;
+        toast(msg, "error");
+      }
+    } finally {
+      controller = null;
+      syncSend();
+      if (ctx.alive()) {
+        void loadThreads();
+        input.focus();
+      }
+    }
+  };
+
+  /* Events */
+  $<HTMLFormElement>("composer").addEventListener("submit", e => {
+    e.preventDefault();
+    if (controller) {
+      controller.abort();
+      return;
+    }
+    void sendMessage(input.value.trim());
+  });
+  input.addEventListener("input", grow);
+  input.addEventListener("keydown", e => {
+    if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
+      e.preventDefault();
+      if (!controller) void sendMessage(input.value.trim());
+    }
+  });
+  input.addEventListener("paste", e => {
+    const fl = e.clipboardData?.files;
+    if (fl && fl.length) {
+      e.preventDefault();
+      addFiles(fl);
+    }
+  });
+  $("attach").addEventListener("click", () => $<HTMLInputElement>("file").click());
+  $<HTMLInputElement>("file").addEventListener("change", e => {
+    const el = e.target as HTMLInputElement;
+    if (el.files) addFiles(el.files);
+    el.value = "";
+  });
+  $("att-chips").addEventListener("click", e => {
+    const b = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-rm]");
+    if (!b) return;
+    const id = Number(b.dataset.rm);
+    const f = files.find(x => x.id === id);
+    if (f?.url) URL.revokeObjectURL(f.url);
+    files = files.filter(x => x.id !== id);
+    renderFiles();
+  });
+  const convo = $("convo");
+  let dragDepth = 0;
+  convo.addEventListener("dragenter", e => {
+    if (!e.dataTransfer?.types.includes("Files")) return;
+    e.preventDefault();
+    dragDepth++;
+    convo.classList.add("dragging");
+  });
+  convo.addEventListener("dragover", e => {
+    if (e.dataTransfer?.types.includes("Files")) e.preventDefault();
+  });
+  convo.addEventListener("dragleave", () => {
+    dragDepth = Math.max(0, dragDepth - 1);
+    if (!dragDepth) convo.classList.remove("dragging");
+  });
+  convo.addEventListener("drop", e => {
+    e.preventDefault();
+    dragDepth = 0;
+    convo.classList.remove("dragging");
+    if (e.dataTransfer?.files.length) addFiles(e.dataTransfer.files);
+  });
+  inner.addEventListener("click", e => {
+    const b = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-suggest]");
+    if (b) void sendMessage(b.dataset.suggest!);
+  });
+  $("new-chat").addEventListener("click", () => navigate("/app/chat"));
+  const closeThreads = () => view.querySelector(".chat")!.classList.remove("show-threads");
+  $("threads-btn").addEventListener("click", () => view.querySelector(".chat")!.classList.toggle("show-threads"));
+  $("threads-scrim").addEventListener("click", closeThreads);
+  listEl.addEventListener("click", async e => {
+    const b = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-del]");
+    if (!b) return;
+    e.preventDefault();
+    const id = b.dataset.del!;
+    const t = threads.find(x => x.id === id);
+    if (!(await confirmDialog("Delete chat?", `“${t?.title || "This chat"}” and its messages will be deleted. Documents attached in it stay in your library.`, "Delete chat", true))) return;
+    try {
+      await del(`/api/v1/chats/${encodeURIComponent(id)}`);
+    } catch {
+      return;
+    }
+    threads = threads.filter(x => x.id !== id);
+    toast("Chat deleted", "ok");
+    if (id === chatId) navigate("/app/chat", { replace: true });
+    else paintThreads();
+  });
+
+  /* Load */
+  const pendingPrompt = takePendingPrompt();
+  if (chatId) {
+    inner.innerHTML = `<div class="msg bot"><span class="bot-av">X</span><div class="msg-body">${sk("70%", 14)}<div style="height:8px"></div>${sk("50%", 14)}</div></div>`;
+  } else emptyState();
+  void loadThreads();
+  if (chatId) {
+    try {
+      const data = await get<{ chat: ChatSummary; messages: ChatMessage[] }>(`/api/v1/chats/${encodeURIComponent(chatId)}`);
+      if (!ctx.alive()) return;
+      $("chat-title").textContent = data.chat.title || "New chat";
+      inner.innerHTML = data.messages.map(m => (m.role === "user" ? userMsg(m) : botMsg(m))).join("");
+      if (!data.messages.length) emptyState();
+      toBottom(true);
+    } catch {
+      if (!ctx.alive()) return;
+      inner.innerHTML = `<div class="chat-empty"><h2>Chat not found</h2><p>It may have been deleted.</p><a class="btn primary sm" href="/app/chat">Start a new chat</a></div>`;
+      return;
+    }
+  }
+  syncSend();
+  if (pendingPrompt) void sendMessage(pendingPrompt);
+  else if (matchMedia("(min-width: 900px)").matches) input.focus();
+}

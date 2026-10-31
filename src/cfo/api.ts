@@ -274,7 +274,9 @@ export function mountCfo(app: Express, deps: CfoDeps): void {
     const existing = store.payee(ws, req.params.id as string);
     if (!existing) throw new HttpError(404, "payee not found");
     const { id: _id, createdAt: _c, ...current } = existing;
-    const p = store.savePayee(ws, PayeeInput.parse({ ...current, ...(blanksToUndefined(req.body) as object) }), existing.id);
+    // A field sent as "" or null is cleared; a field left out keeps its value.
+    const merged: Record<string, unknown> = { ...current, ...(req.body as object) };
+    const p = store.savePayee(ws, PayeeInput.parse(blanksToUndefined(merged)), existing.id);
     store.log(ws, "user", "updated payee", p.name, { type: "payee", id: p.id });
     res.json(p);
   });
