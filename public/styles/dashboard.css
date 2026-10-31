@@ -296,7 +296,8 @@ a.today-item:hover { background: var(--surface-2); }
 .spark path { fill: none; stroke: var(--accent); stroke-width: 2; }
 
 /* Lists on overview */
-.ap-list, .conn-mini, .due-list, .bud-list, .link-list { list-style: none; margin: 0 -8px; padding: 0; display: grid; gap: 2px; }
+/* minmax(0, 1fr): long rows (many balances, long names) truncate instead of widening the card. */
+.ap-list, .conn-mini, .due-list, .bud-list, .link-list { list-style: none; margin: 0 -8px; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; }
 .ap { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "av who amt" "av act act"; gap: 2px 12px; padding: 10px 8px; border-radius: 14px; align-items: center; transition: opacity .28s, transform .28s var(--ease); }
 .ap:hover { background: var(--surface-2); }
 .ap .av { grid-area: av; align-self: start; }
@@ -393,7 +394,7 @@ a.today-item:hover { background: var(--surface-2); }
 }
 .field textarea { resize: vertical; min-height: 64px; }
 .field input.mono { font-family: var(--mono); font-size: 13px; }
-.field input:focus, .field select:focus, .field textarea:focus { background: var(--surface); border-color: var(--accent-line); box-shadow: 0 0 0 4px var(--accent-soft); }
+.field input:focus, .field select:focus, .field textarea:focus { background-color: var(--surface); border-color: var(--accent-line); box-shadow: 0 0 0 4px var(--accent-soft); }
 .field.invalid input, .field.invalid select, .field.invalid textarea { border-color: var(--danger); box-shadow: 0 0 0 4px var(--danger-soft); }
 .field-err { color: var(--danger); font-size: 12.5px; font-weight: 500; }
 .field .hint { font-size: 12px; color: var(--ink-3); }
@@ -607,6 +608,7 @@ a.today-item:hover { background: var(--surface-2); }
 .month-nav .icon-btn { width: 30px; height: 30px; }
 .month-nav .icon-btn:hover { background: var(--surface); }
 .chart-card { margin-bottom: 20px; }
+.ov-grid > .chart-card { margin-bottom: 0; } /* in the grid: same height as its neighbour */
 .tx-groups { display: grid; gap: 6px; }
 .txg { border-radius: 14px; background: var(--surface-2); }
 :root[data-theme="dark"] .txg { background: rgba(255, 255, 255, .03); }

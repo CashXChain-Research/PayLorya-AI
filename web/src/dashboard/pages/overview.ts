@@ -160,7 +160,7 @@ export async function renderOverview(view: HTMLElement, ctx: Ctx): Promise<void>
     </div>
     <div class="card reveal">
       <div class="card-head"><h2>Cash by connection</h2><a class="link-sm" href="/app/connections">Manage${icon("chevron", 14)}</a></div>
-      ${conns ? `<ul class="conn-mini">${ov.cash.connections.map(c => `<li><span class="cm-ic">${icon("wallet", 16)}</span><div><b>${esc(c.label)}</b><span>${c.balances.map(b => esc(balance(b))).join(" · ") || "No balance"}</span></div><b class="num">${esc(usd(c.usdMinor, { cents: false }))}</b></li>`).join("")}</ul>` : empty({ icon: "link", title: "Connect your first wallet", text: "Your AI CFO needs at least one connection to see your cash.", action: `<a class="btn primary sm" href="/app/connections">${icon("plus", 15, 2.4)}Add connection</a>` })}
+      ${conns ? `<ul class="conn-mini">${ov.cash.connections.map(c => `<li><span class="cm-ic">${icon("wallet", 16)}</span><div><b>${esc(c.label)}</b><span title="${esc(c.balances.map(balance).join(" · "))}">${c.balances.map(b => esc(balance(b))).join(" · ") || "No balance"}</span></div><b class="num">${esc(usd(c.usdMinor, { cents: false }))}</b></li>`).join("")}</ul>` : empty({ icon: "link", title: "Connect your first wallet", text: "Your AI CFO needs at least one connection to see your cash.", action: `<a class="btn primary sm" href="/app/connections">${icon("plus", 15, 2.4)}Add connection</a>` })}
     </div>
   </section>
   ${ov.documents.processing ? `<p class="fine center">${icon("clock", 13)} ${ov.documents.processing} document${ov.documents.processing === 1 ? " is" : "s are"} still being read. Figures update when ${ov.documents.processing === 1 ? "it is" : "they are"} done.</p>` : ""}`;
