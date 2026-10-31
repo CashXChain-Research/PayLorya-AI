@@ -2,33 +2,57 @@
 
 # PayLorya AI
 
-**Pay-per-call payment readiness for autonomous agents.**
+**The AI CFO that checks before it pays.** Claude reads. Code decides. You approve.
 
-An agent sends a supplier invoice to the PayLorya Readiness API and pays for a report with
-x402, using **tADA on Cardano Preprod (testnet)**. The report checks account details, required
-fields and duplicates, and shows **Simulated route/fees**. Our Claude-powered demo customer
-ends with a draft awaiting human approval; no supplier payout is executed.
+PayLorya AI reads every financial document a business receives (invoices, receipts, statements,
+contracts), turns it into a live ledger, plans budgets and cash, and drafts payments. Before the
+agent pays a supplier it **buys a payment-readiness check per request with x402 on Cardano**:
+no subscription, no API key, a capped price in tADA. The payout then runs within limits the owner
+sets, from the customer's own wallet (signed in Lace) or their CashXChain account.
 
-**PayLorya AI** — the AI CFO that checks before it pays. Claude reads. Code decides. You approve. Fiat payouts run on [CashXChain](https://cashxchain.com) rails (sandbox).
-
-**AI CFO product:** the same app now also serves a marketing site at `/`, accounts at `/signup`, and a
-dashboard at `/app`. In the dashboard, users connect wallets and accounts with read or read & write
-access, upload any financial document, chat with the AI CFO, plan budgets and cash, and approve
-payments, all under a deterministic agent permission policy. The hackathon demo moved to `/demo`.
-See [docs/AI-CFO.md](docs/AI-CFO.md).
+**Live:** https://paylorya.valentin.is · Built for the TUM Blockchain & AI Hackathon 2026, Cardano track.
 
 ## Demo and proof
 
-| Resource | Status |
+| | |
 | --- | --- |
-| [Source repository](https://github.com/CashXChain-Research/cxc-agentpay) | Public visibility still needs an unauthenticated check |
-| Live demo | `<LIVE_URL>` — pending workstream C |
-| Demo video | `<VIDEO_URL>` — pending recording on the live deployment |
-| Payment proof | `<TX_LINK>` — pending workstream A's `evidence/milestone1-*.json` and explorer verification |
+| Live product | https://paylorya.valentin.is (sign up with an email code or Google) |
+| Demo video | `<VIDEO_URL>` |
+| Paid x402 request on Cardano Preprod | [`4e959d66…87b2`](https://preprod.cardanoscan.io/transaction/4e959d66ee947505292fbb48c1ec10356ed70b1751dab98b1ad2f37591ea87b2): 2 tADA for one readiness report, settled 30 Oct 2026 23:33 UTC ([evidence](evidence/live-run-2026-10-30T23-32-37-254Z.json)) |
+| Safety run on the live deployment | Duplicate invoice refused before signing; invoice without account details stopped without paying ([evidence](evidence/safety-2026-10-31T00-46-10-335Z.json)) |
 
-These are release placeholders, not evidence of a deployed app or successful settlement.
-The checked-in implementation includes the x402 flow; a live payment has not yet been
-established by evidence in this checkout. See the [submission handoff](docs/SUBMISSION.md).
+## The paid job, end to end
+
+1. **Upload** a supplier invoice (PDF, photo or text) in the dashboard or the chat.
+2. **Claude extracts** payee, amount, due date and payment details into structured data. Instructions
+   hidden in a document are reported, never followed.
+3. **The agent drafts a payment.** The deterministic policy (`src/cfo/policy.ts`) decides: execute on
+   its own (within per-payment and monthly limits, known payees only), wait for approval, or block.
+4. **x402 on Cardano:** the agent calls the readiness API, gets `402 Payment Required`, checks the
+   offer against its allowlist, price cap and budget, signs a tADA payment locally and retries. The
+   facilitator verifies and settles on Preprod; the report comes back only after settlement, with the
+   transaction hash and explorer link.
+5. **Payout:** tADA from the customer's own Cardano wallet (built by the server, signed in Lace via
+   CIP-30, broadcast by the agent) or fiat through the customer's CashXChain sandbox account.
+6. **Audit:** every step, by user, agent or system, lands in the activity log.
+
+## Cardano stack
+
+- **x402** with the official `@x402/*` SDK: scheme `exact`, network `cardano:preprod`, asset lovelace.
+- **Blockfrost** (Preprod) for UTxOs, balances and settlement checks.
+- **Evolution SDK** builds payouts from the customer's UTxOs; **CIP-30** wallets (Lace, Eternl) sign
+  them in the browser. PayLorya AI never holds customer keys.
+- Hosted x402 facilitator, with an in-process fallback (`LOCAL_FACILITATOR=true`).
+
+## Product
+
+- Marketing site, accounts (Better Auth: email code, Google, optional password) and dashboard on one domain.
+- Dashboard: overview, AI CFO chat with files and photos, documents, payments and approvals, budgets,
+  cash forecast, payees, connections (read or read & write), agent autonomy (read-only, guarded,
+  full access), activity log.
+- Runs on Cloudflare: Worker + Container (Node), D1 for data, R2 for documents.
+
+Details: [docs/AI-CFO.md](docs/AI-CFO.md) · Deployment: [docs/DEPLOY.md](docs/DEPLOY.md)
 
 ## How it works in 60 seconds
 
@@ -57,10 +81,9 @@ sequenceDiagram
     C-->>U: Report + tx hash + non-executing draft
 ```
 
-This is the intended deployment flow; Cloudflare deployment is still pending verification.
-The buyer signs locally and does not broadcast. The facilitator holds no funds and broadcasts
+Deployed on Cloudflare (Worker + Container). The buyer signs locally and does not broadcast. The facilitator holds no funds and broadcasts
 the signed transaction. The seller returns the paid report only after successful settlement.
-See [architecture and open verification items](docs/ARCHITECTURE.md).
+See [architecture](docs/ARCHITECTURE.md).
 
 ## Trust boundary
 
@@ -75,20 +98,19 @@ UTxOs. Separate deployments still need separate buyer wallets.
 
 A signed payment with an unclear outcome becomes `SETTLEMENT_UNKNOWN`: its amount stays counted
 and the invoice stays locked. Do not retry it blindly. State is in memory, so these protections
-do not survive a restart. The final draft has `executable: false`; no CashXChain payout endpoint
-is called.
+do not survive a restart. In the AI CFO, a payout runs only after the policy or a human approves it.
 
 ## Real vs simulated
 
 | Part | Implementation and evidence boundary |
 | --- | --- |
 | x402 request/response cycle | Real official `@x402/*` 2.29 SDK integration; chain side is stubbed in integration tests |
-| Buyer → seller payment | Implemented for tADA on Cardano Preprod (testnet); live settlement evidence pending |
-| Transaction hash / explorer link | Stored only from a successful settle response containing a hash; live explorer verification pending |
-| Field extraction | Real Claude API integration for text; JSON skips the model; amounts parsed deterministically; live sample validation pending |
+| Buyer → seller payment | tADA on Cardano Preprod (testnet), settled on the live deployment (see Demo and proof) |
+| Transaction hash / explorer link | Stored only from a successful settle response containing a hash |
+| Field extraction | Claude API (text, PDF, photos); JSON skips the model; amounts parsed deterministically |
 | IBAN / BIC / ABA checks, duplicates | Real deterministic code; BIC is a format/country check, not bank ownership verification |
-| Corridors, rails, fees, FX, ETA | Simulated (`demo-fixture`), labeled **Simulated route/fees** |
-| Supplier payout | Not executed; human approval required for a draft |
+| Corridors, rails, fees, FX, ETA in the readiness report | Simulated (`demo-fixture`), labeled **Simulated route/fees** |
+| Supplier payout | tADA from the customer's own wallet (signed in Lace) or the CashXChain sandbox, after the policy or a human approves |
 | Compliance | Data-quality and routing check; not an AML, sanctions or KYB decision |
 
 ## Quick start
@@ -125,7 +147,7 @@ npm run smoke:x402               # milestone 1: 402 -> preprod payment -> 200 + 
    if the tx is there, the payment happened; if it is still absent after the printed validity
    window, a re-run is safe.
 
-Deployment belongs to workstream C. Follow the [deployment runbook](docs/DEPLOY.md).
+To deploy on Cloudflare, follow the [deployment runbook](docs/DEPLOY.md).
 Current deployment files are [Dockerfile](Dockerfile),
 [Worker](cloudflare/worker.ts) and [Wrangler configuration](wrangler.jsonc).
 Use a separate cloud buyer wallet; keep credentials out of git and screenshots.
@@ -153,24 +175,19 @@ npm test
 middleware, resource server and buyer client with a stub signer and facilitator. It covers
 verify → handler → settle, report withholding on settlement failure, unknown-settlement locks,
 recipient and price rejection, budgets, paid-invoice rejection and concurrent invoice reservations.
-It does **not** prove Cardano settlement, real UTxO concurrency, Claude extraction, prompt-injection
-resistance through the live model, or the Cloudflare path. Those require live checks.
-The other suites cover readiness, spend policy and milestone helpers. Current validation status
-is recorded in [SUBMISSION.md](docs/SUBMISSION.md); commands above are not a claim that CI ran.
+Live Cardano settlement on the deployment is shown under Demo and proof. The other suites cover the
+AI CFO (policy, payments, store, chat tools, auth), readiness, spend policy and the Cloudflare env.
 
 ## Limitations
 
-- tADA on Cardano Preprod (testnet) only; synthetic invoices only.
-- Simulated route/fees, corridors, FX and ETA; no real CashXChain payout integration.
-- No AML, sanctions, KYB or regulatory approval claim.
-- In-memory runs, duplicate detection and spend ledger reset on restart; one container instance.
-- Live settlement, facilitator compatibility, deployment and final demo checks remain release gates.
+- Testnet and sandbox only during early access: tADA on Cardano Preprod, fiat on the CashXChain sandbox. No real funds move.
+- Readiness report routes, fees, FX and ETA are simulated and labeled as such.
+- Not an AML, sanctions or KYB decision.
+- The demo agent's runs and spend ledger are in memory and reset on restart; AI CFO data is durable in D1/R2.
 
 ## Team and license
 
 Valentin Israel (CEO) and Korbinian Weber (CTO), CashXChain.
 Built for the TUM Blockchain & AI Hackathon 2026, Cardano track.
 
-The project currently declares `UNLICENSED`. No open-source license is granted by this README;
-Valentin and Korbi must decide the license before public submission. Public visibility alone
-does not grant reuse rights. See the [license decision checklist](docs/SUBMISSION.md#license-decision).
+© 2026 CashXChain Inc. All rights reserved (`UNLICENSED`).
