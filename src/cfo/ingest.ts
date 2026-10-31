@@ -104,7 +104,7 @@ export function claudeExtractor(model: string): Extractor {
   return async (block, filename) => {
     const response = await client.messages.parse({
       model,
-      max_tokens: 32000,
+      max_tokens: 16000,
       system: SYSTEM,
       messages: [
         {
