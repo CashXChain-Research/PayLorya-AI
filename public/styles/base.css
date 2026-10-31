@@ -249,5 +249,5 @@ footer p { max-width: 820px; margin: 0; }
   [data-reveal] { opacity: 1; transform: none; }
 }
 
-/* The PayFlow AI mark scales with its tile (nav, auth, about, chat avatars). */
+/* The PayLorya AI mark scales with its tile (nav, auth, about, chat avatars). */
 .mark > svg, .bot-av > svg, .side-mark > svg, .bot > svg { width: 58%; height: 58%; }
