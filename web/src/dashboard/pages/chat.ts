@@ -270,7 +270,10 @@ export async function renderChat(view: HTMLElement, ctx: Ctx): Promise<void> {
         // Stream closed without a done event.
         if (raf) cancelAnimationFrame(raf);
         bot.classList.remove("streaming");
-        mdEl.innerHTML = acc ? markdown(acc) : '<p class="muted">No reply.</p>';
+        // The stream ended without "done": the connection dropped (often a server restart mid-answer).
+        mdEl.innerHTML =
+          (acc ? markdown(acc) : "") +
+          `<div class="callout bad">${icon("alert", 15)}<span>The connection closed before the answer was complete, possibly a server restart. Nothing you asked for was lost; send the message again.</span></div>`;
       }
     } catch (err) {
       if (raf) cancelAnimationFrame(raf);
