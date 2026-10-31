@@ -1,4 +1,4 @@
-# CashXChain AI CFO
+# PayFlow AI (AI CFO)
 
 The product built on top of the hackathon payment engine. One app, one domain:
 
