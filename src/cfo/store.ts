@@ -538,6 +538,12 @@ export class Store {
   }
 
   /** Payments in these states across all workspaces: what the sweep after a restart looks at. */
+  /** Documents still marked as being read, in every workspace (the restart sweep resumes them). */
+  async documentsProcessing(): Promise<Array<{ ws: string; id: string; createdAt: string }>> {
+    const rows = await this.all("SELECT id, workspace_id, created_at FROM documents WHERE status = 'processing'");
+    return rows.map(r => ({ ws: String(r.workspace_id), id: String(r.id), createdAt: String(r.created_at) }));
+  }
+
   async paymentsWithStatus(statuses: PaymentStatus[]): Promise<Array<{ ws: string; payment: Payment }>> {
     const rows = await this.all(`SELECT * FROM payments WHERE status IN (${statuses.map(() => "?").join(", ")})`, ...statuses);
     return rows.map(r => ({ ws: String(r.workspace_id), payment: toPayment(r) }));

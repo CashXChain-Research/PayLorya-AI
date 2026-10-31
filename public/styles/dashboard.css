@@ -1072,3 +1072,17 @@ a.file-chip:hover { box-shadow: var(--shadow); }
 .cxc-acc { list-style: none; padding: 0; margin: 8px 0; display: flex; gap: 16px; flex-wrap: wrap; }
 .cxc-acc li { display: flex; gap: 6px; align-items: baseline; }
 .cxc-acc li span { color: var(--ink-3); font-size: 12px; font-weight: 600; }
+
+/* Approval dialog: what will be paid, to which account, before any money moves. */
+.appr-sum { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 10px 16px; margin: 0 0 14px; }
+.appr-sum dt { color: var(--ink-3); font-size: 13px; padding-top: 2px; }
+.appr-sum dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.appr-amt { font-size: 20px; letter-spacing: -.01em; }
+.appr-acct { font-size: 13px; }
+.appr-checks { margin-bottom: 12px; }
+.field.appr-field { display: grid; gap: 6px; margin: 0 0 10px; }
+.field > .appr-tick { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--warn-soft, var(--surface-2)); cursor: pointer; line-height: 1.45; }
+.appr-tick span { flex: 1; min-width: 0; font-size: 14px; font-weight: 500; color: var(--ink); }
+/* A checkbox, not a text field: undo the generic .field input look. */
+.field .appr-tick input[type="checkbox"] { width: 18px; height: 18px; min-height: 0; margin: 2px 0 0; padding: 0; flex: none; border: 0; background: none; box-shadow: none; appearance: auto; accent-color: var(--primary); }
+.field.invalid .appr-tick { border-color: var(--danger); box-shadow: 0 0 0 4px var(--danger-soft); }
