@@ -100,11 +100,11 @@ function stubAgent(): BuyerAgent {
   return {
     async process(run: Run) {
       run.state = "DRAFT_READY";
-      run.draft = { executable: true, route: { rail: "cashxchain" } } as unknown as Run["draft"];
+      run.draft = { executable: true, route: { rail: "cxc_fiat" } } as unknown as Run["draft"];
     },
     approve(run: Run) {
       run.state = "EXECUTED";
-      run.payout = { rail: "cashxchain", status: "confirmed", simulated: false, amountMinor: 1, currency: "EUR", destination: "x", reference: "cxc_po_123", label: "CashXChain sandbox", executedAt: new Date().toISOString() };
+      run.payout = { rail: "cxc_fiat", status: "confirmed", simulated: false, amountMinor: 1, currency: "EUR", destination: "x", reference: "cxc_po_123", label: "CashXChain sandbox", executedAt: new Date().toISOString() };
       return { ok: true, done: Promise.resolve() };
     },
   } as unknown as BuyerAgent;
