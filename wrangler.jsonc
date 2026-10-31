@@ -4,6 +4,16 @@
   // CashXChain account; pinned so a login with several accounts cannot deploy elsewhere.
   "account_id": "755009eab613c24e1d604d857042601c",
   "main": "cloudflare/worker.ts",
+  // Static files (HTML, CSS, JS, fonts, images) are served by Cloudflare's edge, near the visitor,
+  // without waking or waiting for the container. Everything that is not a file in public/ goes to
+  // the Worker and on to the container. The paths below always go to the Worker first: /app needs
+  // the server's login redirect although public/app.html exists; the others are API routes.
+  "assets": {
+    "directory": "./public",
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "none",
+    "run_worker_first": ["/api/*", "/app", "/app/*", "/health", "/v1/*", "/facilitator/*"]
+  },
   "compatibility_date": "2026-10-01",
   "containers": [
     {
