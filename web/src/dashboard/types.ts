@@ -83,6 +83,8 @@ export interface CatalogEntry {
   needsAddress: boolean;
   /** cashxchain: an own API key can be connected. */
   acceptsApiKey?: boolean;
+  /** bank: linked through Stripe Financial Connections (POST /api/v1/connections/bank/session). */
+  viaStripe?: boolean;
   /** cashxchain: the key may be left out; the workspace's linked sub-account is read instead. */
   linkedFallback?: boolean;
 }

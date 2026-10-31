@@ -39,6 +39,8 @@ Cloudflare docs, 2026-10-30). `wrangler deploy --dry-run` passes with this confi
 | `BETTER_AUTH_SECRET` | secret, AI CFO accounts: signs sessions (32+ random characters, `openssl rand -hex 32`). Unset: a random one per start | `npx wrangler secret put` |
 | `GOOGLE_CLIENT_ID` | "Continue with Google" (Google Cloud → OAuth client, Web application; redirect URI `https://paylorya.valentin.is/api/auth/callback/google`). Unset: no Google button | variable |
 | `GOOGLE_CLIENT_SECRET` | secret of that OAuth client | `npx wrangler secret put` |
+| `STRIPE_PUBLISHABLE_KEY` | "Bank account" via Stripe Financial Connections (read-only balances). `pk_test_…` or `pk_live_…`; live needs the Financial Connections registration in the Stripe Dashboard | variable |
+| `STRIPE_SECRET_KEY` | matching `sk_test_…` / `sk_live_…` (or a restricted key with Customers write and Financial Connections write) | `npx wrangler secret put` |
 | `RESEND_API_KEY` | secret, optional: Resend key. Set: sign-up and login use a 6-digit email code, a password is optional. Unset: email + password, as before | `npx wrangler secret put` |
 | `RESEND_FROM` | var, optional: sender, default `PayLorya AI <no-reply@mail.valentin.is>`. Must be on a domain verified in that Resend account, or Resend refuses every send | `vars` in `wrangler.jsonc` |
 | `PUBLIC_BASE_URL` | var | `vars` in `wrangler.jsonc`, after the first deploy |
