@@ -31,8 +31,11 @@ export interface Run {
   draft?: PaymentDraft;
   /** The invoice payout after approval (status unknown: signed, outcome unclear, invoice locked). */
   payout?: PayoutResult;
-  /** Set on SETTLEMENT_UNKNOWN: what to look up on the explorer before anyone pays again. */
-  settlement?: { transactionHash?: string; explorerUrl?: string; reason: string };
+  /**
+   * Set on SETTLEMENT_UNKNOWN: what to look up on the explorer before anyone pays again.
+   * `resolved` once chain evidence decided it: on_chain (paid, locked) or expired (never landed).
+   */
+  settlement?: { transactionHash?: string; explorerUrl?: string; reason: string; resolved?: "on_chain" | "expired" };
   error?: string;
   timeline: Array<{ state: RunState; at: string; note?: string }>;
 }
