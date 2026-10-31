@@ -1,4 +1,4 @@
-# PayFlow AI (AI CFO)
+# PayLorya AI (AI CFO)
 
 The product built on top of the hackathon payment engine. One app, one domain:
 
@@ -15,7 +15,7 @@ The product built on top of the hackathon payment engine. One app, one domain:
 
 ## Sign-up and login: email code first, password optional (Resend)
 
-With `RESEND_API_KEY` set (`src/cfo/auth.ts`, `src/cfo/mail.ts`), PayFlow AI accounts work without a
+With `RESEND_API_KEY` set (`src/cfo/auth.ts`, `src/cfo/mail.ts`), PayLorya AI accounts work without a
 password by default. Codes are mailed through Resend (`POST https://api.resend.com/emails`, sender
 `RESEND_FROM`).
 
