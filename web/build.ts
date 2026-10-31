@@ -20,7 +20,6 @@ export const BUILDS: BuildOptions[] = [
   {
     ...common,
     format: "esm",
-    // esbuild emits a shared chunk only with splitting; each page stays one file instead.
     entryPoints: {
       app: "web/src/app/main.ts",
       about: "web/src/about/main.ts",

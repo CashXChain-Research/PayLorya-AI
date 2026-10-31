@@ -100,7 +100,7 @@ export async function renderOverview(view: HTMLElement, ctx: Ctx): Promise<void>
 
   <section class="ov-grid">
     <div class="card chart-card reveal" style="--d:120ms">
-      <div class="card-head"><div><h2>Cash forecast</h2><p class="muted small">Next ${fc?.days ?? 90} days from balances, due invoices and recurring spend</p></div>
+      <div class="card-head"><div><h2>Cash forecast</h2><p class="muted small">Next ${fc?.days ?? 90} days from connected balances and open invoices</p></div>
         ${fc ? `<div class="fc-legend"><span class="lg-in">Inflow</span><span class="lg-out">Outflow</span></div>` : ""}</div>
       <div class="chart-wrap"><div class="chart" id="fc-chart"></div></div>
       ${fc && fc.events.length ? `<ul class="events">${fc.events.slice(0, 4).map(e => `<li>${e.documentId ? `<a href="/app/documents/${esc(e.documentId)}">` : "<span>"}<em class="${e.usdMinor < 0 ? "out" : "in"}"></em><span class="ev-d">${esc(date(e.date))}</span><span class="ev-l">${esc(e.label)}</span><b>${esc(usd(e.usdMinor, { sign: true, cents: false }))}</b>${e.documentId ? "</a>" : "</span>"}</li>`).join("")}</ul>` : ""}

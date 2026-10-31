@@ -313,7 +313,7 @@ var Gt={"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"},s=e=>String(
 
   <section class="ov-grid">
     <div class="card chart-card reveal" style="--d:120ms">
-      <div class="card-head"><div><h2>Cash forecast</h2><p class="muted small">Next ${i?.days??90} days from balances, due invoices and recurring spend</p></div>
+      <div class="card-head"><div><h2>Cash forecast</h2><p class="muted small">Next ${i?.days??90} days from connected balances and open invoices</p></div>
         ${i?'<div class="fc-legend"><span class="lg-in">Inflow</span><span class="lg-out">Outflow</span></div>':""}</div>
       <div class="chart-wrap"><div class="chart" id="fc-chart"></div></div>
       ${i&&i.events.length?`<ul class="events">${i.events.slice(0,4).map(v=>`<li>${v.documentId?`<a href="/app/documents/${s(v.documentId)}">`:"<span>"}<em class="${v.usdMinor<0?"out":"in"}"></em><span class="ev-d">${s(F(v.date))}</span><span class="ev-l">${s(v.label)}</span><b>${s(T(v.usdMinor,{sign:!0,cents:!1}))}</b>${v.documentId?"</a>":"</span>"}</li>`).join("")}</ul>`:""}
