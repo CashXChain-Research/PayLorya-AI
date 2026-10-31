@@ -33,3 +33,24 @@ describe("static assets on Cloudflare's edge", () => {
     expect(files("public").filter(f => owned.some(p => f.startsWith(p)))).toEqual([]);
   });
 });
+
+describe("self-hosted Manrope", () => {
+  const html = files("public").filter(f => f.endsWith(".html"));
+  const css = readFileSync("public/styles/base.css", "utf8");
+
+  it("no page loads fonts from Google; every page preloads the local Latin file", () => {
+    for (const page of html) {
+      const text = readFileSync(join("public", page), "utf8");
+      expect(text, page).not.toMatch(/fonts\.(googleapis|gstatic)\.com/);
+      expect(text, page).toContain('<link rel="preload" href="/fonts/manrope-latin-v23.woff2" as="font" type="font/woff2" crossorigin>');
+    }
+  });
+
+  it("each @font-face file exists, with its license, and /fonts/* is cached for a year", () => {
+    const urls = [...css.matchAll(/url\("(\/fonts\/[^"]+)"\)/g)].map(m => m[1]!);
+    expect(urls).toEqual(["/fonts/manrope-latin-ext-v23.woff2", "/fonts/manrope-latin-v23.woff2"]);
+    for (const url of urls) expect(statSync(join("public", url)).size).toBeGreaterThan(10_000);
+    expect(readFileSync("public/fonts/OFL.txt", "utf8")).toContain("SIL OPEN FONT LICENSE Version 1.1");
+    expect(readFileSync("public/_headers", "utf8")).toMatch(/^\/fonts\/\*\n\s+Cache-Control: public, max-age=31536000, immutable$/m);
+  });
+});
