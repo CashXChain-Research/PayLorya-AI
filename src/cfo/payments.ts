@@ -1,4 +1,6 @@
 import type { BuyerAgent } from "../agent.js";
+import { decodeCardanoTransaction, type ClientCardanoSignInput, type ClientCardanoSignResult } from "@x402/cardano";
+import { fiatBudgetFor } from "../budget.js";
 import type { WorkspaceAgents } from "./agents.js";
 import { CashXChainPayoutRoute } from "../payout-cashxchain.js";
 import type { FiatPayoutClient } from "../payout.js";
@@ -8,7 +10,7 @@ import type { Run, RunStore } from "../runs.js";
 import type { Invoice } from "../types.js";
 import type { CxcKeys } from "./cxc-keys.js";
 import { bech32FromHex, InsufficientFunds, TX_VALIDITY_MS, type TxKit } from "./wallet-signer.js";
-import { toUsdMinor } from "./fx.js";
+import { exponent, toUsdMinor } from "./fx.js";
 import { decidePayment, type PolicyDecision, type Rail } from "./policy.js";
 import type { CardanoPayout, Destination, Payee, Payment, Store } from "./store.js";
 
@@ -53,7 +55,7 @@ export const NEEDS_OWN_WALLET =
   "tADA payouts leave from your agent wallet (read & write), or from your own Cardano wallet that you sign with (read & write): connect one on the Connections page";
 
 export const INTERRUPTED =
-  "Interrupted by a server restart before it finished. Approve it again to continue: it pays under the same idempotency key, never twice.";
+  "Interrupted by a server restart before it finished. Approve it again to continue: it cannot be paid twice.";
 
 /**
  * How far past a sent transaction's validity the provider's newest indexed block must be before an
@@ -64,7 +66,22 @@ export const EXPIRY_MARGIN_MS = 10 * 60_000;
 export const CHECK_TIMED_OUT =
   "The verification on Cardano did not finish in time, so nothing was paid. Approve it again to retry.";
 
+/** Per-payout limits of the payout engine (config): checked at drafting, not after a paid check. */
+export interface PayoutLimits {
+  tadaMaxLovelace: bigint;
+  fiatMaxMinor?: number;
+  /** Most a verification (x402 report) may cost: the agent wallet must hold it. */
+  feeMaxLovelace: bigint;
+}
+
+// Cardano refuses outputs below about 1 ADA (min-UTxO): the payout engine's floor (routing.ts).
+const TADA_MIN_LOVELACE = 1_000_000n;
+// Headroom for network fees on top of what a payment costs.
+const FEE_MARGIN_LOVELACE = 1_000_000n;
+const tada = (lovelace: bigint | number) => `${(Number(lovelace) / 1e6).toLocaleString("en-US", { maximumFractionDigits: 6 })} tADA`;
+
 export interface PaymentsOptions {
+  limits?: PayoutLimits;
   /** One payout engine per account, signing with its own agent wallet. Without it nothing executes. */
   agents?: Pick<WorkspaceAgents, "for" | "wallet">;
   /** tADA from the owner's wallet: builds and broadcasts; absent without BLOCKFROST_PROJECT_ID (tADA refused). */
@@ -103,6 +120,90 @@ export class Payments {
   private readonly running = new Set<string>();
 
   /** The workspace's own Cardano wallet (read & write): tADA payouts leave from it and nowhere else. */
+  /** Why the payout engine would refuse this amount on this rail, before anything is paid. */
+  private limitProblem(rail: Rail, amountMinor: number, currency: string): string | undefined {
+    const l = this.wallets.limits;
+    if (rail === "cardano_preprod") {
+      const amount = BigInt(amountMinor);
+      if (amount < TADA_MIN_LOVELACE) return `tADA payouts start at 1 tADA, the least Cardano lets a payment send to an address. This one is ${tada(amount)}.`;
+      if (l && amount > l.tadaMaxLovelace) return `tADA payouts are at most ${tada(l.tadaMaxLovelace)} each (the agent's per-payout cap). This one is ${tada(amount)}: split it into smaller payments.`;
+    }
+    if (rail === "cashxchain" && l?.fiatMaxMinor !== undefined && amountMinor > l.fiatMaxMinor) {
+      return `CashXChain payouts are at most ${fmt(l.fiatMaxMinor, currency)} each (the agent's per-payout cap). This one is ${fmt(amountMinor, currency)}: pay it by hand in CashXChain.`;
+    }
+    return undefined;
+  }
+
+  /**
+   * What would stop this payment after its paid check, checked before the check is bought: so a
+   * payment that cannot go out costs no verification fee, and says why.
+   */
+  private async preflight(ws: string, p: Payment, agent: BuyerAgent, route: { fiat?: FiatPayoutClient; agentPaysTada: boolean }): Promise<string | undefined> {
+    const limit = this.limitProblem(p.rail, p.amountMinor, p.currency);
+    if (limit) return limit;
+    const budget = agent.budget;
+    const usage = agent.budgetUsage;
+    if (budget && usage && p.rail === "cardano_preprod") {
+      const used = BigInt(usage.cardanoPaidLovelace);
+      const cap = BigInt(budget.cardanoBudgetLovelace);
+      if (used + BigInt(p.amountMinor) > cap) {
+        return `Your agent has paid out ${tada(used)} of its ${tada(cap)} tADA budget since the server started; this payment would exceed it. Raise the budget or wait for the next session.`;
+      }
+    }
+    if (budget && usage && p.rail === "cashxchain") {
+      if (usage.fiatPayouts >= budget.fiatPayoutsPerSession) {
+        return `Your agent has made ${usage.fiatPayouts} CashXChain payouts since the server started, its limit per session. Raise the limit or wait for the next session.`;
+      }
+      const used = usage.fiatPaidMinor[p.currency] ?? 0;
+      const cap = fiatBudgetFor(budget, p.currency);
+      if (used + p.amountMinor > cap) {
+        return `Your agent has paid out ${fmt(used, p.currency)} of its ${fmt(cap, p.currency)} budget since the server started; this payment would exceed it.`;
+      }
+    }
+    // Balances: read from the chain and from CashXChain. If a provider does not answer, the payment
+    // goes on and the payout itself reports what it finds.
+    const kit = this.wallets.kit;
+    const wallet = await this.wallets.agents?.wallet(ws);
+    if (kit && wallet?.address) {
+      const fee = (this.wallets.limits?.feeMaxLovelace ?? 3_000_000n) + FEE_MARGIN_LOVELACE;
+      const needed = fee + (route.agentPaysTada ? BigInt(p.amountMinor) : 0n);
+      const held = await kit.balance(wallet.address).catch(() => undefined);
+      if (held !== undefined && held < needed) {
+        return route.agentPaysTada
+          ? `Your agent wallet holds ${tada(held)}; this payment needs ${tada(p.amountMinor)} plus up to ${tada(fee)} for the verification on Cardano and fees. Top it up from the Preprod faucet.`
+          : `Your agent wallet holds ${tada(held)}; the verification on Cardano needs up to ${tada(fee)} with fees. Top it up from the Preprod faucet.`;
+      }
+    }
+    if (route.fiat?.sourceAccount) {
+      const account = await route.fiat.sourceAccount(p.currency).catch(() => null);
+      if (account === undefined) return `Your CashXChain account has no active ${p.currency} account to pay from. Open one in CashXChain.`;
+      if (account?.available !== undefined && Number(account.available) * 10 ** exponent(p.currency) < p.amountMinor) {
+        return `Your CashXChain ${p.currency} account holds ${account.available} ${p.currency}; this payout needs ${fmt(p.amountMinor, p.currency)}. Top it up in CashXChain.`;
+      }
+    }
+    return undefined;
+  }
+
+  /** Stops a payment before anything was paid: blocked with its reason, which the activity shows. */
+  private async block(ws: string, p: Payment, reason: string): Promise<void> {
+    await this.store.updatePayment(ws, p.id, { status: "blocked", error: `${reason} Nothing was paid.`, cardano: null });
+    await this.store.log(ws, "system", "payment blocked", `${p.payeeName}: ${reason}`, { type: "payment", id: p.id });
+  }
+
+  /**
+   * The agent wallet signed a tADA payout: stored on its payment before the agent sends it, so a
+   * restart in between is settled from the chain (in a block, or expired) and never paid twice.
+   */
+  async recordAgentPayout(ws: string, input: ClientCardanoSignInput, signed: ClientCardanoSignResult): Promise<void> {
+    const open = (await this.store.payments(ws)).find(
+      x => x.status === "executing" && x.cardano?.byAgent && !x.cardano.submitted && x.cardano.payTo === input.payTo && x.cardano.lovelace === input.amount,
+    );
+    if (!open?.cardano) return;
+    const txHash = decodeCardanoTransaction(signed.transaction).txHash;
+    const submitted = { txHash, at: new Date().toISOString(), validUntil: new Date(Date.now() + input.maxTimeoutSeconds * 1000).toISOString() };
+    await this.store.updatePayment(ws, open.id, { cardano: { ...open.cardano, submitted } });
+  }
+
   private async agentWalletState(ws: string): Promise<"ready" | "missing" | "read_only"> {
     const wallet = await this.wallets.agents?.wallet(ws);
     return !wallet ? "missing" : wallet.access === "read_write" ? "ready" : "read_only";
@@ -274,14 +375,20 @@ export class Payments {
           // Never included only once the provider's own chain view is well past its validity: a block
           // can land just before the deadline and be indexed minutes later. Until then, wait.
           else if (now > Date.parse(sent.validUntil) + EXPIRY_MARGIN_MS && (await kit.tipTime()) > Date.parse(sent.validUntil) + EXPIRY_MARGIN_MS && !(await kit.confirmed(sent.txHash))) {
-            if (await this.store.claimPayment(ws, p.id, ["executing"], "awaiting_signature")) {
-              await this.store.updatePayment(ws, p.id, { cardano: { ...p.cardano!, submitted: undefined }, error: "The transaction expired before it reached a block: nothing was sent. Sign again." });
+            // The agent wallet's payout goes back to approval; one the owner signs goes back to signing.
+            const byAgent = Boolean(p.cardano?.byAgent);
+            if (await this.store.claimPayment(ws, p.id, ["executing"], byAgent ? "pending_approval" : "awaiting_signature")) {
+              await this.store.updatePayment(ws, p.id, {
+                cardano: byAgent ? null : { ...p.cardano!, submitted: undefined },
+                error: `The transaction expired before it reached a block: nothing was sent. ${byAgent ? "Approve it again." : "Sign again."}`,
+              });
               await this.store.log(ws, "system", "payment not sent", `${p.payeeName}: the transaction expired unconfirmed`, { type: "payment", id: p.id });
             }
           }
         } else if (p.status === "executing") {
           if (await this.store.claimPayment(ws, p.id, ["executing"], "pending_approval")) {
-            await this.store.updatePayment(ws, p.id, { error: INTERRUPTED });
+            // Nothing was signed (a signed payout would carry its transaction): nothing to follow.
+            await this.store.updatePayment(ws, p.id, { error: INTERRUPTED, ...(p.cardano?.byAgent ? { cardano: null } : {}) });
             await this.store.log(ws, "system", "payment interrupted", `${p.payeeName}: back to approval after a restart`, { type: "payment", id: p.id });
           }
         } else if (sent && !p.cardano?.confirmedAt && kit && now - Date.parse(p.executedAt ?? p.createdAt) < 24 * 3_600_000) {
@@ -318,11 +425,22 @@ export class Payments {
 
   async evaluate(
     ws: string,
-    p: { requestedBy: "agent" | "user"; rail: Rail; usdMinor: number; payeeKnown: boolean; hasAccount: boolean; accountMismatch?: boolean },
+    p: {
+      requestedBy: "agent" | "user";
+      rail: Rail;
+      amountMinor: number;
+      currency: string;
+      usdMinor: number;
+      payeeKnown: boolean;
+      hasAccount: boolean;
+      accountMismatch?: boolean;
+    },
   ): Promise<PolicyDecision> {
     const workspace = (await this.store.workspace(ws))!;
+    const limitProblem = this.limitProblem(p.rail, p.amountMinor, p.currency);
     return decidePayment(workspace.autonomy, workspace.limits, {
       ...p,
+      ...(limitProblem ? { limitProblem } : {}),
       railWritable: await this.railWritable(ws, p.rail),
       agentWallet: await this.agentWalletState(ws),
       agentExecutedThisMonthUsdMinor: await this.store.agentExecutedSince(ws, monthStart()),
@@ -376,7 +494,16 @@ export class Payments {
     const rail = railFor(input.currency);
     const usdMinor = toUsdMinor(input.amountMinor, input.currency);
     const { destination, accountMismatch } = await this.destinationFor(ws, payee, input.destination, input.documentId);
-    const policy = await this.evaluate(ws, { requestedBy: input.requestedBy, rail, usdMinor, payeeKnown: Boolean(payee), hasAccount: hasAccount(destination, rail), accountMismatch });
+    const policy = await this.evaluate(ws, {
+      requestedBy: input.requestedBy,
+      rail,
+      amountMinor: input.amountMinor,
+      currency: input.currency,
+      usdMinor,
+      payeeKnown: Boolean(payee),
+      hasAccount: hasAccount(destination, rail),
+      accountMismatch,
+    });
     const status = policy.decision === "blocked" ? "blocked" : policy.decision === "auto" ? "executing" : "pending_approval";
     const payment = await this.store.addPayment(ws, {
       payeeId: payee?.id,
@@ -410,17 +537,28 @@ export class Payments {
     }
     const payee = p.payeeId ? await this.store.payee(ws, p.payeeId) : undefined;
     const destination = payee ? (clean(payee) ?? {}) : (p.destination ?? {});
-    const policy = await this.evaluate(ws, { requestedBy: "user", rail: p.rail, usdMinor: p.usdMinor, payeeKnown: Boolean(payee), hasAccount: hasAccount(destination, p.rail) });
+    const policy = await this.evaluate(ws, {
+      requestedBy: "user",
+      rail: p.rail,
+      amountMinor: p.amountMinor,
+      currency: p.currency,
+      usdMinor: p.usdMinor,
+      payeeKnown: Boolean(payee),
+      hasAccount: hasAccount(destination, p.rail),
+    });
     if (policy.decision === "blocked" || !hasAccount(destination, p.rail)) {
-      await this.store.updatePayment(ws, id, { status: policy.decision === "blocked" ? "blocked" : p.status, policy });
-      return { ok: false, error: policy.checks.find(c => c.status === "fail")?.message ?? "blocked by policy" };
+      const reason = policy.checks.find(c => c.status === "fail")?.message ?? "Blocked by your policy";
+      await this.store.updatePayment(ws, id, { status: policy.decision === "blocked" ? "blocked" : p.status, policy, error: `${reason}. Nothing was paid.`.replace(/\.\. /, ". ") });
+      await this.store.log(ws, "system", "payment blocked", `${p.payeeName}: ${reason}`, { type: "payment", id });
+      return { ok: false, error: reason };
     }
     // Atomic claim: of two approvals at once, only one starts the payment.
     if (!(await this.store.claimPayment(ws, id, ["pending_approval", "blocked"], "executing", new Date().toISOString()))) {
       return { ok: false, error: "payment was already decided" };
     }
-    const payment = await this.store.updatePayment(ws, id, { policy });
-    await this.store.log(ws, "user", "approved payment", `${p.payeeName}: ${fmt(p.amountMinor, p.currency)}`, { type: "payment", id });
+    // A note from an earlier attempt (a restart, a timeout, a block) no longer applies.
+    const payment = await this.store.updatePayment(ws, id, { policy, error: undefined });
+    await this.store.log(ws, "user", p.error ? "approved payment again" : "approved payment", `${p.payeeName}: ${fmt(p.amountMinor, p.currency)}`, { type: "payment", id });
     void this.execute(ws, id);
     return { ok: true, payment };
   }
@@ -478,15 +616,20 @@ export class Payments {
     if (!hasAccount(payee, p.rail)) return fail("No account details to pay to");
     let fiat: FiatPayoutClient | undefined;
     let from: string | undefined;
+    let agentPaysTada = false;
     try {
       if (p.rail === "cashxchain") fiat = await this.ownFiatRoute(ws);
       if (p.rail === "cardano_preprod") {
         const source = await this.tadaSource(ws);
-        if (!source.agent) from = source.from;
+        if (source.agent) agentPaysTada = true;
+        else from = source.from;
       }
     } catch (error) {
       return fail(error instanceof Error ? error.message : String(error));
     }
+    // Everything that would stop it after the paid check, before the check is bought.
+    const stop = await this.preflight(ws, p, agent, { ...(fiat ? { fiat } : {}), agentPaysTada });
+    if (stop) return this.block(ws, p, stop);
 
     const invoice = invoiceFor(p, payee, saved?.country ?? p.destination?.country);
     // The idempotency key of the first attempt holds: a resumed payment must pay the very same.
@@ -497,7 +640,13 @@ export class Payments {
     const run = this.engine.runs.create(JSON.stringify(invoice));
     run.payees = [payee];
     if (fiat) agent.useFiatRoute(run, fiat);
-    await this.store.updatePayment(ws, id, { runId: run.id, payoutKey: key });
+    // A tADA payout the agent wallet makes is marked as such before anything is signed: its
+    // transaction is recorded on signing (recordAgentPayout) and a restart is settled from the chain.
+    const agentCardano: CardanoPayout | undefined =
+      agentPaysTada && payee.cardanoAddress
+        ? { from: (await this.wallets.agents?.wallet(ws))?.address ?? "", payTo: payee.cardanoAddress, lovelace: String(p.amountMinor), byAgent: true }
+        : undefined;
+    await this.store.updatePayment(ws, id, { runId: run.id, payoutKey: key, ...(agentCardano ? { cardano: agentCardano } : {}) });
     try {
       // The paid check runs before any payout; if it hangs (a facilitator or chain provider that does
       // not answer), the payment goes back to approval instead of staying "executing".
@@ -515,7 +664,7 @@ export class Payments {
         const verification = { txHash: run.payment.transactionHash, explorerUrl: run.payment.explorerUrl, payer: run.payment.buyerAddress, ...(run.report?.verdict ? { verdict: run.report.verdict } : {}) };
         await this.store.updatePayment(ws, id, { verification });
       }
-      if (run.state !== "DRAFT_READY" || !run.draft?.executable) return fail(reasonOf(run));
+      if (run.state !== "DRAFT_READY" || !run.draft?.executable) return fail(explain(run));
       if (from) {
         const route = run.draft.route;
         if (route.rail !== "cardano_preprod" || !route.destination) return fail("No Cardano route to the payee");
@@ -529,15 +678,24 @@ export class Payments {
         return;
       }
       const approved = agent.approve(run);
-      if (!approved.ok) return fail(approved.reason);
+      if (!approved.ok) return fail(`${approved.reason}. Nothing was paid.`.replace(/\.\. /, ". "));
       await approved.done;
     } catch (error) {
       return fail(error instanceof Error ? error.message : String(error));
     }
     // Re-read: approve() moved the run on after the DRAFT_READY check above.
     const final = stateOf(run);
+    if (final === "PAYOUT_UNKNOWN" && agentCardano && (await this.store.payment(ws, id))?.cardano?.submitted) {
+      // Sent by the agent wallet, outcome unclear: stays "executing"; the sweep settles it from the chain.
+      await this.store.updatePayment(ws, id, { error: "Sent; waiting for the Cardano network to confirm it." });
+      return;
+    }
     if (final !== "EXECUTED" || !run.payout) {
-      return fail(final === "PAYOUT_UNKNOWN" ? `Outcome unclear, payment locked until reconciled: ${run.error ?? ""}` : reasonOf(run));
+      return fail(
+        final === "PAYOUT_UNKNOWN"
+          ? `The payout was sent, but its outcome is not confirmed yet: check your account before paying again. ${run.error ?? ""}`.trim()
+          : explain(run),
+      );
     }
     const payout = run.payout;
     const onChain = payout.rail === "cardano_preprod";
@@ -559,8 +717,24 @@ export class Payments {
 
 const stateOf = (run: Run): Run["state"] => run.state;
 
-function reasonOf(run: Run): string {
-  return run.error ?? run.route?.reason ?? run.draft?.route.reason ?? run.timeline.at(-1)?.note ?? `stopped at ${run.state}`;
+/**
+ * Why a run stopped, in words a person can act on: the verification report's failing checks, the
+ * route's reason, or the error. Never a bare state name.
+ */
+export function explain(run: Run): string {
+  if (run.error) return run.error;
+  const report = run.report;
+  if (report && report.verdict !== "ready_for_review") {
+    const fails = report.checks.filter(c => c.status === "fail").map(c => c.message);
+    const issues = fails.length ? fails : report.checks.filter(c => c.status !== "pass").map(c => c.message);
+    const what = report.verdict === "needs_info" ? "needs more information" : "did not clear this payment";
+    return `The verification on Cardano ${what}${issues.length ? `: ${issues.join("; ")}` : ""}. Nothing was paid.`;
+  }
+  const route = run.route ?? run.draft?.route;
+  if (route && route.status !== "selected") return `${route.reason}. Nothing was paid.`;
+  const note = run.timeline.at(-1)?.note;
+  if (note && !/^(blocked|needs_info|ready_for_review)$/.test(note)) return `${note}. Nothing was paid.`.replace(/\.\. /, ". ");
+  return `The payment stopped (${run.state.toLowerCase().replace(/_/g, " ")}). Nothing was paid.`;
 }
 
 export function findPayeeByName(payees: Payee[], name?: string): Payee | undefined {
