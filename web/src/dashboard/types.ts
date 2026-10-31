@@ -164,6 +164,15 @@ export interface BudgetInput {
   limitUsdMinor: number;
 }
 
+/** A tADA payout waiting for the owner's wallet signature (CIP-30 signTx). */
+export interface SignRequest {
+  txCbor: string;
+  txHash: string;
+  /** The connected wallet address it spends from. */
+  address: string;
+  expiresAt: string;
+}
+
 export type PaymentStatus = "pending_approval" | "approved" | "executing" | "executed" | "rejected" | "failed" | "blocked";
 export type Rail = "cardano_preprod" | "cashxchain" | "manual";
 
@@ -197,6 +206,8 @@ export interface Payment {
   createdAt: string;
   decidedAt?: string;
   executedAt?: string;
+  /** Set while a tADA payout waits for your wallet's signature. */
+  signRequest?: SignRequest;
 }
 
 /** POST /api/v1/payments (user-drafted). Agent drafts arrive through the chat. */

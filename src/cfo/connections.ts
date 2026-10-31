@@ -31,9 +31,9 @@ export function catalog(env: ConnectionEnv): CatalogEntry[] {
   return [
     {
       kind: "cardano_agent_wallet",
-      name: "CashXChain agent wallet (Cardano Preprod)",
-      description: "The wallet the AI CFO pays from: x402 verification fees and approved tADA payouts. Shared testnet wallet.",
-      supports: { read: true, write: true },
+      name: "PayLorya AI agent wallet (Cardano Preprod)",
+      description: "Pays the x402 verification fees before a payout. Read-only: your payouts leave from your own wallet, never from this one.",
+      supports: { read: true, write: false },
       available: Boolean(env.agentWalletAddress && env.blockfrost),
       needsAddress: false,
     },
@@ -51,9 +51,9 @@ export function catalog(env: ConnectionEnv): CatalogEntry[] {
     },
     {
       kind: "cardano_wallet",
-      name: "Cardano wallet (watch-only)",
-      description: "Track any Cardano Preprod address. Read-only: the CFO sees balances, it cannot move funds.",
-      supports: { read: true, write: false },
+      name: "Your Cardano wallet (Preprod)",
+      description: "Lace, Eternl or any Cardano wallet. Read-only: balances. Read & write: the AI CFO prepares tADA payouts and you sign each one in your wallet; no keys are stored.",
+      supports: { read: true, write: true },
       available: Boolean(env.blockfrost),
       needsAddress: true,
     },
@@ -77,7 +77,8 @@ export function catalog(env: ConnectionEnv): CatalogEntry[] {
 }
 
 export function supportsWrite(kind: ConnectionKind): boolean {
-  return kind === "cardano_agent_wallet" || kind === "cashxchain";
+  // A Cardano wallet "writes" only through its owner's signature on each payout (CIP-30).
+  return kind === "cardano_wallet" || kind === "cashxchain";
 }
 
 export function networkOf(kind: ConnectionKind): string {

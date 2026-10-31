@@ -1,6 +1,6 @@
 // Cloudflare Worker that fronts the Node app running in a Cloudflare Container.
 // Single named instance: run state is in memory, so all traffic must hit the same container.
-import { Container, ContainerProxy, getContainer } from "@cloudflare/containers";
+import { Container, ContainerProxy } from "@cloudflare/containers";
 import { CFO_DATA_HOST, handleCfoData } from "./cfo-proxy.js";
 import { containerEnv, type ForwardedKey } from "./env.js";
 
@@ -32,6 +32,10 @@ AgentPayContainer.outboundByHost = {
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    return getContainer(env.AGENTPAY, "main").fetch(request);
+    // A Durable Object stays where it was first created; the hint places it in Western Europe,
+    // next to the container (constraints in wrangler.jsonc) and D1. New name: the old "main"
+    // object may live elsewhere. It holds no data (accounts and records are in D1/R2).
+    const id = env.AGENTPAY.idFromName("main-weur");
+    return env.AGENTPAY.get(id, { locationHint: "weur" }).fetch(request);
   },
 };

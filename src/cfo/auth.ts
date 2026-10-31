@@ -26,7 +26,14 @@ export const CODE_MINUTES = 10;
  * confirms its email with a code first (/api/auth/email-otp/verify-email), and a code-only account
  * can add one later (setPassword). Without a mailer: email + password only, as before.
  */
-export function createAuth(sql: Sql, opts: { baseUrl: string; trustedOrigins?: string[]; secret?: string; mailer?: Mailer }) {
+export function createAuth(sql: Sql, opts: {
+  baseUrl: string;
+  trustedOrigins?: string[];
+  secret?: string;
+  mailer?: Mailer;
+  /** Google OAuth client; redirect URI {baseUrl}/api/auth/callback/google. */
+  google?: { clientId: string; clientSecret: string };
+}) {
   const mailer = opts.mailer;
   const secret = opts.secret ?? randomBytes(32).toString("hex");
   if (!opts.secret) console.warn("BETTER_AUTH_SECRET not set: using a random secret, sessions end on restart");
@@ -37,6 +44,8 @@ export function createAuth(sql: Sql, opts: { baseUrl: string; trustedOrigins?: s
     trustedOrigins: [opts.baseUrl, ...(opts.trustedOrigins ?? [])],
     // Better Auth skips the Origin check when NODE_ENV is "test"; keep it on so tests see production.
     advanced: { disableOriginCheck: false },
+    // Google accounts with a verified email are linked to an existing account with the same email.
+    ...(opts.google ? { socialProviders: { google: { ...opts.google, prompt: "select_account" as const } } } : {}),
     emailAndPassword: { enabled: true, minPasswordLength: 8, autoSignIn: true, requireEmailVerification: Boolean(mailer) },
     emailVerification: { sendOnSignUp: Boolean(mailer), sendOnSignIn: Boolean(mailer), autoSignInAfterVerification: true },
     plugins: [
@@ -67,6 +76,8 @@ export function createAuth(sql: Sql, opts: { baseUrl: string; trustedOrigins?: s
     auth,
     /** Whether email codes can be delivered (sign-in by code is offered). */
     codes: Boolean(mailer),
+    /** "Continue with Google": the origin it works on (its redirect URI and state cookie live there). */
+    googleOrigin: opts.google ? new URL(opts.baseUrl).origin : undefined,
     async hasPassword(headers: IncomingHttpHeaders): Promise<boolean> {
       const accounts = await auth.api.listUserAccounts({ headers: fromNodeHeaders(headers) });
       return accounts.some(a => a.providerId === "credential");

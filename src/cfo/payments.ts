@@ -1,3 +1,4 @@
+import type { ClientCardanoSigner } from "@x402/cardano";
 import type { BuyerAgent } from "../agent.js";
 import { CashXChainPayoutRoute } from "../payout-cashxchain.js";
 import type { FiatPayoutClient } from "../payout.js";
@@ -6,6 +7,8 @@ import type { VerifiedPayee } from "../routing.js";
 import type { Run, RunStore } from "../runs.js";
 import type { Invoice } from "../types.js";
 import type { CxcKeys } from "./cxc-keys.js";
+import { SignatureDesk } from "./signatures.js";
+import { walletSigner, type TxKit, type UnsignedTx } from "./wallet-signer.js";
 import { toUsdMinor } from "./fx.js";
 import { decidePayment, type PolicyDecision, type Rail } from "./policy.js";
 import type { Destination, Payee, Payment, Store } from "./store.js";
@@ -35,6 +38,19 @@ export interface PaymentEngine {
   runs: RunStore;
 }
 
+export const NEEDS_OWN_WALLET = "tADA payouts leave from your own wallet: connect your Cardano wallet with read & write on the Connections page";
+
+/** How long a tADA payout waits for the owner's signature: inside the agent's 10-minute transaction validity. */
+export const SIGN_MINUTES = 9;
+
+/** tADA payouts from the workspace's own wallet: the transaction builder and the signatures waited for. */
+export interface WalletPayouts {
+  /** Absent without BLOCKFROST_PROJECT_ID: tADA payouts are then refused. */
+  kit?: TxKit;
+  desk: SignatureDesk;
+  signMs?: number;
+}
+
 export const NEEDS_OWN_KEY = "CashXChain payouts leave from your own account: connect CashXChain with your API key on the Connections page";
 
 const monthStart = () => `${new Date().toISOString().slice(0, 7)}-01T00:00:00.000Z`;
@@ -45,7 +61,43 @@ export class Payments {
     private readonly store: Store,
     private readonly engine: PaymentEngine,
     private readonly keys?: CxcKeys,
+    private readonly wallets: WalletPayouts = { desk: new SignatureDesk() },
   ) {}
+
+  /**
+   * The signer for a tADA payout: the workspace's own Cardano wallet (read & write), whose owner
+   * signs the transaction in the browser. PayLorya AI's agent wallet never pays a workspace's
+   * payout; it pays the x402 verification fees only. Throws with the reason shown on the payment.
+   */
+  private async ownWalletSigner(ws: string, p: Payment): Promise<ClientCardanoSigner> {
+    const c = (await this.store.connections(ws)).find(x => x.kind === "cardano_wallet" && x.access === "read_write" && x.address);
+    if (!c?.address) throw new Error(NEEDS_OWN_WALLET);
+    if (!this.wallets.kit) throw new Error("tADA payouts are not configured on this server (BLOCKFROST_PROJECT_ID)");
+    const address = c.address;
+    return walletSigner({ address, kit: this.wallets.kit, sign: tx => this.awaitSignature(ws, p, address, tx) });
+  }
+
+  /** Shows the transaction on the payment and waits for the owner's wallet to sign it. */
+  private async awaitSignature(ws: string, p: Payment, address: string, tx: UnsignedTx): Promise<string> {
+    const ms = this.wallets.signMs ?? SIGN_MINUTES * 60_000;
+    await this.store.updatePayment(ws, p.id, { signRequest: { txCbor: tx.cborHex, txHash: tx.txHash, address, expiresAt: new Date(Date.now() + ms).toISOString() } });
+    await this.store.log(ws, "system", "payment awaiting signature", `${p.payeeName}: ${fmt(p.amountMinor, p.currency)}, sign it in your wallet`, { type: "payment", id: p.id });
+    try {
+      return await this.wallets.desk.wait(`${ws}:${p.id}`, tx.txHash, ms);
+    } finally {
+      await this.store.updatePayment(ws, p.id, { signRequest: null }).catch(() => undefined);
+    }
+  }
+
+  /** The owner's wallet signed (or declined) the payout transaction shown on the payment. */
+  async signature(ws: string, id: string, input: { txHash: string; witnessSet: string } | { declined: true }): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
+    if (!(await this.store.payment(ws, id))) return { ok: false, status: 404, error: "payment not found" };
+    const key = `${ws}:${id}`;
+    if ("declined" in input) return this.wallets.desk.decline(key) ? { ok: true } : { ok: false, status: 409, error: "This payment is not waiting for a signature" };
+    const result = this.wallets.desk.deliver(key, input.txHash, input.witnessSet);
+    if (result === "delivered") return { ok: true };
+    return { ok: false, status: 409, error: result === "other_tx" ? "That signature is for another transaction: reload the payment" : "This payment is not waiting for a signature" };
+  }
 
   /**
    * The fiat route of a workspace: its own CashXChain account, connected by API key. Its payouts
@@ -62,7 +114,8 @@ export class Payments {
   }
 
   private async railWritable(ws: string, rail: Rail): Promise<boolean> {
-    const kind = rail === "cardano_preprod" ? "cardano_agent_wallet" : rail === "cashxchain" ? "cashxchain" : undefined;
+    // tADA: the workspace's own wallet, never the agent wallet. Fiat: its own CashXChain account.
+    const kind = rail === "cardano_preprod" ? "cardano_wallet" : rail === "cashxchain" ? "cashxchain" : undefined;
     return (await this.store.connections(ws)).some(c => c.kind === kind && c.access === "read_write");
   }
 
@@ -200,17 +253,18 @@ export class Payments {
     const payee = verifiedPayee({ name: saved?.name ?? p.payeeName, ...(saved ? clean(saved) : p.destination) });
     if (!hasAccount(payee, p.rail)) return fail("No account details to pay to");
     let fiat: FiatPayoutClient | undefined;
-    if (p.rail === "cashxchain") {
-      try {
-        fiat = await this.ownFiatRoute(ws);
-      } catch (error) {
-        return fail(error instanceof Error ? error.message : String(error));
-      }
+    let wallet: ClientCardanoSigner | undefined;
+    try {
+      if (p.rail === "cashxchain") fiat = await this.ownFiatRoute(ws);
+      if (p.rail === "cardano_preprod") wallet = await this.ownWalletSigner(ws, p);
+    } catch (error) {
+      return fail(error instanceof Error ? error.message : String(error));
     }
 
     const run = this.engine.runs.create(JSON.stringify(invoiceFor(p, payee, saved?.country ?? p.destination?.country)));
     run.payees = [payee];
     if (fiat) agent.useFiatRoute(run, fiat);
+    if (wallet) agent.useCardanoSigner(run, wallet);
     await this.store.updatePayment(ws, id, { runId: run.id });
     try {
       await agent.process(run);

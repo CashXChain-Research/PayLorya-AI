@@ -1,8 +1,9 @@
 // Payments: approvals queue, full history with policy checks, new payment dialog.
 import { esc, short, shortHash } from "../../shared/dom.js";
-import { get, post } from "../api.js";
+import { ApiError, get, post } from "../api.js";
 import { type Ctx, refreshBadges } from "../state.js";
 import type { Payee, PayeeInput, Payment, PaymentCreate } from "../types.js";
+import { cardanoWallets, signCardano } from "../wallets.js";
 import {
   amount,
   avatar,
@@ -31,7 +32,9 @@ export async function decide(id: string, action: "approve" | "reject"): Promise<
         ? `Approved and paid ${p.payeeName}`
         : p.status === "failed" || p.status === "blocked"
           ? `Approved, but the payment ${p.status === "failed" ? "failed" : "was blocked"}`
-          : `Approved. Paying ${p.payeeName}…`
+          : p.currency === "ADA"
+            ? `Approved. Sign the payment to ${p.payeeName} in your wallet in a moment.`
+            : `Approved. Paying ${p.payeeName}…`
       : `Rejected payment to ${p.payeeName}`,
     action === "approve" && (p.status === "failed" || p.status === "blocked") ? "error" : "ok",
   );
@@ -72,10 +75,32 @@ function checkSummary(p: Payment): string {
 }
 
 /** Inline approve/reject buttons; the containing element needs data-pid. */
+// Payments whose wallet popup is open: a refresh of the list must not offer to sign them twice.
+const signing = new Set<string>();
+
+/** "Sign with Lace" (one per wallet in this browser) and Cancel, while a tADA payout waits. */
+function signButtons(p: Payment): string {
+  const r = p.signRequest!;
+  const busy = signing.has(p.id);
+  const wallets = cardanoWallets();
+  const data = `data-pid="${esc(p.id)}" data-tx="${esc(r.txHash)}" data-cbor="${esc(r.txCbor)}" data-addr="${esc(r.address)}"`;
+  const sign = wallets.length
+    ? wallets
+        .map(w => `<button type="button" class="btn primary xs${busy ? " loading" : ""}" data-act="sign" data-wallet="${esc(w.id)}" ${data} ${busy ? "disabled" : ""}>${icon("wallet", 14)}Sign with ${esc(w.name)}</button>`)
+        .join("")
+    : `<span class="muted small">Install Lace or Eternl to sign</span>`;
+  return `<span class="decide"><button type="button" class="btn ghost xs" data-act="decline" ${data} ${busy ? "disabled" : ""}>Cancel</button>${sign}</span>`;
+}
+
+/** A payment that waits for its owner: an approval, or a wallet signature. */
+export const needsYou = (p: Payment): boolean => p.status === "pending_approval" || (p.status === "executing" && Boolean(p.signRequest));
+
 export const decisionButtons = (p: Payment): string =>
   p.status === "pending_approval"
     ? `<span class="decide"><button type="button" class="btn ghost xs" data-act="reject" data-pid="${esc(p.id)}">Reject</button><button type="button" class="btn primary xs" data-act="approve" data-pid="${esc(p.id)}">${icon("check", 14, 2.6)}Approve</button></span>`
-    : "";
+    : p.status === "executing" && p.signRequest
+      ? signButtons(p)
+      : "";
 
 export function paymentRow(p: Payment, open = false): string {
   const isAda = p.currency === "ADA";
@@ -86,13 +111,14 @@ export function paymentRow(p: Payment, open = false): string {
       <div class="pay-rail">${railChip(p.rail)}</div>
       <div class="pay-by"><span class="by by-${p.requestedBy}">${icon(p.requestedBy === "agent" ? "bot" : "user", 13, 2)}${p.requestedBy === "agent" ? "Agent" : "You"}</span><em>${esc(date(p.createdAt))}</em></div>
       <div class="pay-amt"><b>${esc(amount(p.amountMinor, p.currency))}</b>${isAda || p.currency !== "USD" ? `<span>≈ ${esc(usd(p.usdMinor))}</span>` : ""}</div>
-      <div class="pay-status">${statusPill(p.status)}${checkSummary(p)}</div>
+      <div class="pay-status">${p.signRequest ? `<span class="pill t-warn">${icon("wallet", 12)}Sign in wallet</span>` : statusPill(p.status)}${checkSummary(p)}</div>
       <div class="pay-act">${decisionButtons(p)}<span class="chev">${icon("chevronDown", 16)}</span></div>
     </div>
     <div class="pay-detail"><div class="pay-detail-in">
       <div class="pd-col">
         <div class="pd-h">Policy checks <span class="pill ${DECISION[p.policy.decision][1]}">${DECISION[p.policy.decision][0]}</span></div>
         ${checksList(p)}
+        ${p.signRequest ? `<div class="callout info">${icon("wallet", 15)}<span>Waiting for your signature until ${esc(dateTime(p.signRequest.expiresAt))}. Your wallet shows payee, amount and fee before you confirm; nothing is sent without it.</span></div>` : ""}
         ${p.error ? `<div class="callout bad">${icon("alert", 15)}<span>${esc(p.error)}</span></div>` : ""}
       </div>
       <dl class="pd-col kv">
@@ -116,6 +142,30 @@ export function wirePaymentList(root: HTMLElement, onChange: (p: Payment) => voi
   root.addEventListener("click", async e => {
     const t = e.target as HTMLElement;
     const act = t.closest<HTMLButtonElement>("[data-act]");
+    if (act && (act.dataset.act === "sign" || act.dataset.act === "decline")) {
+      e.stopPropagation();
+      const id = act.dataset.pid!;
+      const group = act.closest(".decide");
+      for (const b of group?.querySelectorAll("button") ?? []) (b as HTMLButtonElement).disabled = true;
+      act.classList.add("loading");
+      signing.add(id);
+      try {
+        const body =
+          act.dataset.act === "sign"
+            ? { txHash: act.dataset.tx!, witnessSet: await signCardano(act.dataset.wallet!, { txCbor: act.dataset.cbor!, address: act.dataset.addr! }) }
+            : { declined: true };
+        await post(`/api/v1/payments/${encodeURIComponent(id)}/signature`, body);
+        toast(act.dataset.act === "sign" ? "Signed. Sending the payment…" : "Payment cancelled: nothing was sent", "ok");
+      } catch (error) {
+        // API errors are toasted by the API layer; wallet errors are not.
+        if (error instanceof Error && !(error instanceof ApiError)) toast(error.message, "error");
+      } finally {
+        signing.delete(id);
+        const fresh = (await get<Payment[]>("/api/v1/payments").catch(() => [] as Payment[])).find(x => x.id === id);
+        if (fresh) onChange(fresh);
+      }
+      return;
+    }
     if (act) {
       e.stopPropagation();
       const id = act.dataset.pid!;
@@ -274,7 +324,8 @@ export async function renderPayments(view: HTMLElement, ctx: Ctx): Promise<void>
   const paint = () => {
     for (const b of view.querySelectorAll<HTMLButtonElement>("[data-tab]")) b.setAttribute("aria-selected", String(b.dataset.tab === tab));
     view.querySelector<HTMLElement>("#pay-filter")!.hidden = tab !== "all";
-    const pending = payments.filter(p => p.status === "pending_approval");
+    // Waiting for you: an approval, or a tADA payout your wallet still has to sign.
+    const pending = payments.filter(needsYou);
     view.querySelector("#n-appr")!.textContent = String(pending.length);
     view.querySelector("#n-all")!.textContent = String(payments.length);
     const groups: Record<string, Payment["status"][]> = {
@@ -295,7 +346,7 @@ export async function renderPayments(view: HTMLElement, ctx: Ctx): Promise<void>
     const paid = payments.filter(p => p.status === "executed" && (p.executedAt ?? p.createdAt).startsWith(month));
     const blocked = payments.filter(p => p.status === "blocked" || p.status === "failed");
     view.querySelector("#pay-stats")!.innerHTML = `
-      <div class="stat-card"><span class="label">Waiting for approval</span><b>${esc(usd(sum(pending)))}</b><span class="sub">${pending.length} payment${pending.length === 1 ? "" : "s"}</span></div>
+      <div class="stat-card"><span class="label">Waiting for you</span><b>${esc(usd(sum(pending)))}</b><span class="sub">${pending.length} payment${pending.length === 1 ? "" : "s"}</span></div>
       <div class="stat-card"><span class="label">Paid this month</span><b>${esc(usd(sum(paid)))}</b><span class="sub">${paid.length} payment${paid.length === 1 ? "" : "s"} · testnet &amp; sandbox</span></div>
       <div class="stat-card"><span class="label">Stopped by policy or errors</span><b>${blocked.length}</b><span class="sub">blocked or failed</span></div>`;
     if (focus) document.getElementById(`pay-${focus}`)?.scrollIntoView({ block: "center" });
@@ -338,7 +389,8 @@ export async function renderPayments(view: HTMLElement, ctx: Ctx): Promise<void>
     const i = payments.findIndex(x => x.id === p.id);
     if (i >= 0) payments[i] = p;
     const row = list.querySelector(`[data-row="${CSS.escape(p.id)}"]`);
-    if (tab === "approvals" && p.status !== "pending_approval" && row) {
+    // An approved tADA payout comes back to this tab once its transaction waits for your signature.
+    if (tab === "approvals" && !needsYou(p) && row) {
       row.classList.add("leaving");
       window.setTimeout(paint, 280);
     } else paint();

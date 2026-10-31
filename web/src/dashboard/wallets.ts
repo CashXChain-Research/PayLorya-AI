@@ -6,6 +6,7 @@ interface Cip30Api {
   getNetworkId(): Promise<number>;
   getChangeAddress(): Promise<string>;
   getUsedAddresses(): Promise<string[]>;
+  signTx(txCbor: string, partialSign: boolean): Promise<string>;
 }
 interface Cip30Wallet {
   name?: unknown;
@@ -42,8 +43,8 @@ export function cardanoWallets(): BrowserWallet[] {
 
 export const hasEvmWallet = (): boolean => typeof injected().ethereum?.request === "function";
 
-/** Opens the wallet's popup and returns its Preprod receive address (addr_test1…). */
-export async function connectCardano(id: string): Promise<string> {
+/** The wallet's permission popup; refuses a wallet on mainnet (PayLorya AI pays on Cardano Preprod). */
+async function enableCardano(id: string): Promise<Cip30Api> {
   const wallet = injected().cardano?.[id];
   if (!wallet?.enable) throw new Error("That wallet is no longer available in this browser.");
   let api: Cip30Api;
@@ -53,10 +54,39 @@ export async function connectCardano(id: string): Promise<string> {
     throw new Error("The wallet did not allow the connection.");
   }
   if ((await api.getNetworkId()) !== 0) throw new Error("The wallet is on mainnet. Switch it to Preprod (testnet) and try again.");
+  return api;
+}
+
+/** Opens the wallet's popup and returns its Preprod receive address (addr_test1…). */
+export async function connectCardano(id: string): Promise<string> {
+  const api = await enableCardano(id);
   const used = await api.getUsedAddresses().catch(() => [] as string[]);
   const address = cardanoAddressFromHex(used[0] ?? (await api.getChangeAddress()));
   if (!address.startsWith("addr_test1")) throw new Error("The wallet returned no payment address.");
   return address;
+}
+
+/**
+ * Signs a payout transaction the server built from `address`: the wallet shows it (payee, amount,
+ * fee) before its owner confirms. Returns the witness set (CIP-30 signTx, partial). Refuses a wallet
+ * that does not hold the address, so the owner is not asked to sign with the wrong one.
+ */
+export async function signCardano(id: string, req: { txCbor: string; address: string }): Promise<string> {
+  const api = await enableCardano(id);
+  const hex = [...(await api.getUsedAddresses().catch(() => [] as string[])), await api.getChangeAddress().catch(() => "")];
+  const held = hex.map(h => {
+    try {
+      return cardanoAddressFromHex(h);
+    } catch {
+      return "";
+    }
+  });
+  if (!held.includes(req.address)) throw new Error(`This wallet does not hold ${req.address.slice(0, 18)}…. Open the wallet you connected.`);
+  try {
+    return await api.signTx(req.txCbor, true);
+  } catch {
+    throw new Error("Not signed in the wallet. Sign again before the request expires, or cancel the payment.");
+  }
 }
 
 /** Opens the wallet's popup and returns the selected account (0x…). */

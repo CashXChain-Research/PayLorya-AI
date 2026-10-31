@@ -162,6 +162,8 @@ const MIGRATIONS: string[][] = [
   // A connection's own credential (a workspace's CashXChain API key), sealed by src/cfo/vault.ts.
   // The hint is the key's prefix and last four characters, for display.
   [`ALTER TABLE connections ADD COLUMN secret_enc TEXT`, `ALTER TABLE connections ADD COLUMN secret_hint TEXT`],
+  // A tADA payout waiting for the workspace owner's wallet signature (src/cfo/signatures.ts).
+  [`ALTER TABLE payments ADD COLUMN sign_request_json TEXT`],
 ];
 
 export async function migrate(sql: Sql): Promise<void> {
