@@ -22,6 +22,11 @@ interface Failure {
   message: string;
   /** Record the payout before answering (a 5xx after the work was done, or insufficient_balance). */
   record?: CxcPayoutStatus;
+  /**
+   * Answer before the replay lookup, like the checks CashXChain re-runs on every attempt
+   * (verification, account hold, beneficiary/account ownership, payee name).
+   */
+  beforeReplay?: boolean;
 }
 
 const envelope = (res: Response, status: number, error: string, message: string, details?: unknown) =>
@@ -129,6 +134,11 @@ export function createFakeCxc() {
     const key = req.header("idempotency-key");
     if (!key) return envelope(res, 400, "bad_request", "Idempotency-Key header is required on write endpoints");
     const hash = createHash("sha256").update(JSON.stringify(req.body)).digest("hex");
+    if (state.failNextCreate?.beforeReplay) {
+      const { status, error, message } = state.failNextCreate;
+      state.failNextCreate = undefined;
+      return envelope(res, status, error, message);
+    }
     const prior = state.payouts.get(key);
     if (prior) {
       if (prior.hash !== hash) return envelope(res, 409, "idempotency_key_reuse", "this Idempotency-Key was used for a different request");
