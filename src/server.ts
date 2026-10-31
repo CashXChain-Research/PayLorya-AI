@@ -10,7 +10,11 @@ const config = loadConfig();
 const runs = new RunStore(config.MAX_RUNS);
 // AI CFO payments get their own store: they never show up in the public demo inbox.
 const engine: PaymentEngine = { runs: new RunStore(config.MAX_RUNS) };
-const cfo = await createCfo(config, engine);
+// The public demo keeps working when the AI CFO's database is unreachable at start.
+const cfo = await createCfo(config, engine).catch(error => {
+  console.error("AI CFO disabled: could not open its database", error);
+  return undefined;
+});
 // Real CashXChain sandbox payouts when the key is set; otherwise the agent's simulated stand-in.
 const fiat = config.CASHXCHAIN_API_KEY ? new CashXChainPayoutRoute(new CashXChainClient({ apiKey: config.CASHXCHAIN_API_KEY })) : undefined;
 const agent = config.x402Ready ? new BuyerAgent(config, runs, undefined, fiat ? { fiat } : {}) : undefined;

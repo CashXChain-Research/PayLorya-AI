@@ -1,9 +1,11 @@
 import type { Server } from "node:http";
 import type Anthropic from "@anthropic-ai/sdk";
+import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import express from "express";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { BuyerAgent } from "../src/agent.js";
 import type { CashXChainClient } from "../src/cashxchain.js";
+import { handleCfoData, type D1Like, type D1StatementLike, type R2Like } from "../cloudflare/cfo-proxy.js";
 import { createCfo, mountCfo, type PaymentEngine } from "../src/cfo/index.js";
 import type { Extraction } from "../src/cfo/ingest.js";
 import { decidePayment, type AgentLimits } from "../src/cfo/policy.js";
@@ -117,6 +119,68 @@ afterEach(() => {
   for (const s of servers.splice(0)) s.close();
 });
 
+type Value = string | number | null;
+
+/** D1 and R2 bindings, backed by node:sqlite and a Map, with the same call shapes as Cloudflare's. */
+function fakeBindings(): { db: D1Like; files: R2Like } {
+  const sqlite = new DatabaseSync(":memory:");
+  sqlite.exec("PRAGMA foreign_keys = ON;");
+  const exec = (sql: string, params: Value[]) => {
+    const stmt = sqlite.prepare(sql);
+    if (stmt.columns().length === 0) return { results: [], meta: { changes: Number(stmt.run(...(params as SQLInputValue[])).changes) } };
+    return { results: stmt.all(...(params as SQLInputValue[])) as Record<string, Value>[], meta: { changes: 0 } };
+  };
+  type Bound = D1StatementLike & { sql: string; params: Value[] };
+  const db: D1Like = {
+    prepare: sql => ({ bind: (...params: Value[]): Bound => ({ sql, params, all: async () => exec(sql, params) }) }),
+    async batch(stmts) {
+      sqlite.exec("BEGIN");
+      try {
+        for (const s of stmts as Bound[]) exec(s.sql, s.params);
+        sqlite.exec("COMMIT");
+      } catch (error) {
+        sqlite.exec("ROLLBACK");
+        throw error;
+      }
+      return [];
+    },
+  };
+  const objects = new Map<string, { data: ArrayBuffer; type: string }>();
+  const files: R2Like = {
+    async put(key, value, options) {
+      objects.set(key, { data: value, type: options.httpMetadata.contentType });
+    },
+    async get(key) {
+      const o = objects.get(key);
+      return o ? { arrayBuffer: async () => o.data, httpMetadata: { contentType: o.type } } : null;
+    },
+    async delete(key) {
+      objects.delete(key);
+    },
+  };
+  return { db, files };
+}
+
+/** The Worker's outbound handler (cloudflare/cfo-proxy.ts) served over HTTP, as the container sees it. */
+async function startDataProxy(): Promise<string> {
+  const { db, files } = fakeBindings();
+  const app = express();
+  app.use(express.raw({ type: "*/*", limit: "64mb" }));
+  app.all("/*splat", async (req, res) => {
+    const body = ["GET", "HEAD", "DELETE"].includes(req.method) ? undefined : new Uint8Array(req.body as Buffer);
+    const r = await handleCfoData(new Request(`http://cfo-data.internal${req.originalUrl}`, { method: req.method, headers: req.headers as Record<string, string>, body }), db, files);
+    res.status(r.status).set("content-type", r.headers.get("content-type") ?? "application/octet-stream").send(Buffer.from(await r.arrayBuffer()));
+  });
+  const server = await new Promise<Server>(resolve => {
+    const s = app.listen(0, "127.0.0.1", () => resolve(s));
+  });
+  servers.push(server);
+  const address = server.address();
+  return `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
+}
+
+let backend: "local" | "cloudflare" = "local";
+
 async function start(script: ScriptStep[] = [], agent?: BuyerAgent) {
   const app = express();
   const server = await new Promise<Server>(resolve => {
@@ -125,9 +189,10 @@ async function start(script: ScriptStep[] = [], agent?: BuyerAgent) {
   servers.push(server);
   const address = server.address();
   const base = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
-  const config = loadConfig({ PUBLIC_BASE_URL: base, BETTER_AUTH_SECRET: "t".repeat(40), ANTHROPIC_API_KEY: "test" });
+  const dataUrl = backend === "cloudflare" ? await startDataProxy() : undefined;
+  const config = loadConfig({ PUBLIC_BASE_URL: base, BETTER_AUTH_SECRET: "t".repeat(40), ANTHROPIC_API_KEY: "test", ...(dataUrl ? { CFO_DATA_URL: dataUrl } : {}) });
   const engine: PaymentEngine = { runs: new RunStore(), ...(agent ? { agent } : {}) };
-  const deps = await createCfo(config, engine, { dbPath: ":memory:" });
+  const deps = await createCfo(config, engine, { memory: true });
   deps.extract = async () => statement;
   deps.connections = { cashxchain: fakeCxc as unknown as CashXChainClient };
   deps.chatClient = fakeClaude(script);
@@ -169,7 +234,11 @@ const settle = async (check: () => Promise<boolean>) => {
   throw new Error("condition not reached");
 };
 
-describe("AI CFO API", () => {
+describe.each(["local", "cloudflare"] as const)("AI CFO API on %s storage", storage => {
+  beforeEach(() => {
+    backend = storage;
+  });
+
   it("requires a session and isolates workspaces", async () => {
     const { base, user } = await start();
     expect((await fetch(`${base}/api/v1/me`)).status).toBe(401);

@@ -105,13 +105,25 @@ other than a `cxc_sk_sandbox_` / `cxc_rk_sandbox_` key.
 ## Lifecycle limits (known limitation)
 
 - One instance (`max_instances: 1`, name `"main"`). Demo runs and spend ledgers are in memory.
-- AI CFO accounts and workspace data live in SQLite at `DATA_DIR/cfo.db` inside the container.
-  Cloudflare Containers have **no persistent disk**: a redeploy or a sleep **deletes all accounts,
-  documents and chats**. Fine for a demo; before real customers, move the store to Postgres or D1
-  (Better Auth supports both; `src/cfo/store.ts` is the only data-access layer to port).
-- `sleepAfter = "24h"`: after 24 h without requests the container stops, with the effect above.
-  A running `basic` instance costs about $0.01 per hour beyond the plan's included usage.
+- AI CFO data is durable: accounts and records in **D1** (`cxc-ai-cfo`), uploaded files in **R2**
+  (`cxc-ai-cfo-documents`). Both survive redeploys and sleeps. The container reaches them through the
+  Worker's outbound handler at `http://cfo-data.internal` (`cloudflare/cfo-proxy.ts`); that host is not
+  reachable from the internet. Schema migrations run on container start (`src/cfo/db.ts`).
+- `sleepAfter = "24h"`: after 24 h without requests the container stops; demo runs (in memory) reset,
+  AI CFO data does not. A running `basic` instance costs about $0.01 per hour beyond included usage.
 - Before judging: one warm-up request to `/api/health`, then no redeploys and no secret changes.
+
+## AI CFO data (D1 + R2)
+
+Created once in the CashXChain account and bound in `wrangler.jsonc` as `CFO_DB` and `CFO_FILES`:
+
+```bash
+npx wrangler d1 create cxc-ai-cfo
+npx wrangler r2 bucket create cxc-ai-cfo-documents
+```
+
+Inspect data: `npx wrangler d1 execute cxc-ai-cfo --remote --command "SELECT email, createdAt FROM user"`.
+Locally (no `CFO_DATA_URL`) the app uses SQLite and a folder under `DATA_DIR` instead.
 
 ## Troubleshooting
 
