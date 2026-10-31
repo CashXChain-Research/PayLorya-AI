@@ -39,7 +39,7 @@ export async function createCfo(
   const store = new Store(sql, files);
   const mailer =
     opts.mailer ??
-    (config.RESEND_API_KEY ? resendMailer({ apiKey: config.RESEND_API_KEY, from: config.RESEND_FROM, expiresMinutes: CODE_MINUTES }) : undefined);
+    (config.RESEND_API_KEY ? resendMailer({ apiKey: config.RESEND_API_KEY, from: config.RESEND_FROM, expiresMinutes: CODE_MINUTES, baseUrl: config.baseUrl }) : undefined);
   const auth = createAuth(sql, { baseUrl: config.baseUrl, secret: config.BETTER_AUTH_SECRET, mailer });
   // A workspace's own CashXChain account, connected with its API key (sealed with BETTER_AUTH_SECRET).
   const keys = new CxcKeys(store, config.BETTER_AUTH_SECRET, apiKey =>
