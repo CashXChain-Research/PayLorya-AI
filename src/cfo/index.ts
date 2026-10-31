@@ -136,6 +136,7 @@ export async function createCfo(
       ...(config.STRIPE_SECRET_KEY && config.STRIPE_PUBLISHABLE_KEY ? { stripe: new StripeFc(config.STRIPE_SECRET_KEY) } : {}),
     },
     stripePublishableKey: config.STRIPE_SECRET_KEY ? config.STRIPE_PUBLISHABLE_KEY : undefined,
+    baseUrl: config.baseUrl,
     extract: claudeExtractor(config.CLAUDE_MODEL),
     model: config.CLAUDE_MODEL,
     aiReady: config.aiReady,

@@ -25,7 +25,8 @@ const mode = form?.dataset.auth as Mode | undefined;
 /** Only same-site dashboard paths are honoured as a post-auth target. */
 function nextTarget(): string {
   const next = new URLSearchParams(location.search).get("next") ?? "";
-  return /^\/app(?:[/?#]|$)/.test(next) ? next : "/app";
+  // The dashboard, or the page where a person allows an MCP client (src/cfo/oauth.ts).
+  return /^\/(?:app|oauth\/consent)(?:[/?#]|$)/.test(next) ? next : "/app";
 }
 
 // Carry ?next across the login <-> signup switch link.
