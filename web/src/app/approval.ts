@@ -67,13 +67,23 @@ export async function decideRun(id: string, decision: Decision, opts: { interact
   const interactive = opts.interactive ?? true;
   if (approvalsDisabled()) return { ok: false, error: "Approvals are switched off on this server", status: 503 };
   let token = storedToken();
+  let asked = false;
   if (tokenRequired() && !token) {
     if (!interactive) return { ok: false, error: "operator token needed", status: 401 };
     token = await askOperatorToken();
+    asked = true;
     if (!token) return { ok: false, error: "Cancelled. Nothing was approved.", status: 0 };
     storeToken(token);
   }
-  const result = await decide(id, decision, token);
+  let result = await decide(id, decision, token);
+  // Health may be stale: a 401 without a token yet asks once and retries.
+  if (!result.ok && result.status === 401 && interactive && !token && !asked) {
+    token = await askOperatorToken();
+    if (!token) return { ok: false, error: "Cancelled. Nothing was approved.", status: 0 };
+    storeToken(token);
+    asked = true;
+    result = await decide(id, decision, token);
+  }
   if (!result.ok && result.status === 401) {
     storeToken(undefined);
     if (interactive) toast(`Wrong operator token. Nothing was ${decision === "approve" ? "approved" : "rejected"}; try again.`);
