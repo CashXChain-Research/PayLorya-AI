@@ -125,6 +125,14 @@ are not offered.
 Payout safety mirrors the report payment:
 
 - `approve()` switches to `EXECUTING` synchronously; a second click gets 409.
+- **Who may decide:** with `APPROVE_TOKEN` set, `POST /api/runs/:id/approve|reject` needs
+  `Authorization: Bearer <token>` (or `X-Approve-Token`), compared in constant time; 401 otherwise.
+  `/api/health` reports `approvalTokenRequired` so the UI knows to ask. Unset: open (demo default).
+- **Fiat caps:** fiat payouts hold no lovelace, so they are capped separately:
+  `FIAT_PAYOUT_MAX_MINOR` per payout (above it the route is `unavailable` and the draft stays for
+  manual handling; not `blocked`, which is reserved for fraud signals) and `FIAT_PAYOUTS_PER_SESSION`
+  (payouts sent or possibly sent; a definitive refusal frees its slot). Defaults 1,000.00 and 5 keep
+  the public demo under the CashXChain sandbox day limit (USD 5,000).
 - The payout ledger reserves the invoice before signing and releases it only if signing threw.
 - A definitive node rejection before broadcast (Blockfrost `submitTx` HTTP 400, e.g. a spent
   input) returns the run to `DRAFT_READY` with the hold released: nothing was sent, approve again.

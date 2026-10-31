@@ -44,6 +44,16 @@ describe("route decision", () => {
     expect(r.destination).toBeUndefined();
   });
 
+  it("fiat: above the per-payout cap the draft stays for manual handling (unavailable, not blocked)", () => {
+    const capped = { ...limits, fiatMaxMinor: 100_000 };
+    expect(decideRoute({ ...sepa, amountMinor: 100_000 }, directory, capped)).toMatchObject({ status: "selected" });
+    const over = decideRoute({ ...sepa, amountMinor: 100_001 }, directory, capped);
+    expect(over).toMatchObject({ status: "unavailable", rail: "cxc_fiat", reason: "Amount above the fiat payout cap of 1000.00 EUR: pay by hand" });
+    expect(over.destination).toBeUndefined();
+    // Bank-detail mismatches stay blocked even above the cap: fraud signals win.
+    expect(decideRoute({ ...sepa, amountMinor: 100_001, iban: "GB82WEST12345698765432" }, directory, capped).status).toBe("blocked");
+  });
+
   it("fiat: US payee needs routing and account to match", () => {
     const us: Invoice = { id: "A-5531", supplier: "Lakeside Robotics Inc.", destinationCountry: "US", currency: "USD", amountMinor: 425_000, routingNumber: "021000021", accountNumber: "000123456789" };
     expect(decideRoute(us, directory, limits)).toMatchObject({ status: "selected", destination: "ABA 021000021 / 000123456789" });
