@@ -84,6 +84,11 @@ executable. `PAID -> BLOCKED` also covers a payout route the policy blocks.
   pass verify and the second broadcast would fail after signing. Runs wait in `PRECHECKED` for
   their turn. Settle waits for confirmation, so the next payment sees the updated UTxO set. Use a
   separate buyer wallet per deployment (laptop vs cloud) for the same reason.
+- **Wallet sync:** before the next wallet tx (report payment or invoice payout), the queue waits
+  until Blockfrost has indexed the previous one (`GET /txs/{hash}`, up to 90 s), plus 30 s after it
+  settled for other indexers such as the hosted facilitator's. A7 (2026-10-30) showed why: a payment
+  built ~27 s after the previous block was rejected at verify. Only txs that were (or may have been)
+  broadcast are waited for; a verify rejection is not.
 - **SETTLEMENT_UNKNOWN:** if anything fails after the buyer signed a transaction, the tx may
   already be on-chain. The run moves to `SETTLEMENT_UNKNOWN`, the amount counts against the
   budget, and the invoice is locked against re-payment until resolved. This includes verify
@@ -118,10 +123,19 @@ Payout safety mirrors the report payment:
 
 - `approve()` switches to `EXECUTING` synchronously; a second click gets 409.
 - The payout ledger reserves the invoice before signing and releases it only if signing threw.
-- Any error after signing: `PAYOUT_UNKNOWN`, amount counted, invoice locked, `run.payout`
+- A definitive node rejection before broadcast (Blockfrost `submitTx` HTTP 400, e.g. a spent
+  input) returns the run to `DRAFT_READY` with the hold released: nothing was sent, approve again.
+  The SDK's reference signer does not implement `isDefinitiveSubmissionRejection`, so the classifier
+  is ours and deliberately narrow (to be confirmed live).
+- Any other error after signing: `PAYOUT_UNKNOWN`, amount counted, invoice locked, `run.payout`
   carries the signed tx hash for the explorer. Same for an error from a fiat client, which may have
   accepted the payout before failing.
 - A Blockfrost wait timeout after broadcast is `EXECUTED` with `payout.status: "submitted"`.
+- Fiat payouts are keyed per invoice (`Idempotency-Key: payout-<fingerprint>`), so a retry or a
+  new run after a restart replays instead of paying again. The client gets the verified payee
+  record (name, IBAN/BIC or routing/account/type), never text from the invoice. A client that
+  proves nothing was sent (`isDefinitiveRejection`) returns the run to `DRAFT_READY`; any other
+  error stays `PAYOUT_UNKNOWN`.
 - Payouts go through the same wallet queue as report payments (one tx in flight per wallet).
 
 ## Readiness checks
