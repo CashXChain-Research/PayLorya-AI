@@ -182,8 +182,10 @@ A workspace uses its own accounts (Connections page). PayLorya AI's shared sandb
      - Refused by the node (400): nothing was sent; back to `awaiting_signature`, sign again.
      - No answer: stays `executing` with the transaction recorded; the sweep settles it.
   5. **Followed to its block.** `Payments.sweep()` (at start and every minute) marks a sent payout
-     `confirmedAt` once Blockfrost has it in a block, and puts one that expired unconfirmed back to
-     signing (nothing was sent).
+     `confirmedAt` once Blockfrost has it in a block. One it never sees goes back to signing only
+     when Blockfrost's newest indexed block (`/blocks/latest`) is more than 10 minutes past the
+     transaction's validity: a block that landed just before the deadline and is indexed late is
+     still found, never paid twice.
   - `{declined: true}` (Cancel): `rejected`, nothing sent.
 - **Payments cut off by a restart** (any rail): one in `executing` that no execution in this
   process owns goes back to `pending_approval` with a note (`INTERRUPTED`). A verification that

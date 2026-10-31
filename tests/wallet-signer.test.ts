@@ -27,6 +27,7 @@ async function fakeBlockfrost() {
       max_tx_ex_mem: "14000000", max_tx_ex_steps: "10000000000", min_fee_ref_script_cost_per_byte: "15",
     }),
   );
+  app.get("/blocks/latest", (_req, res) => void res.json({ time: 1_793_000_000, slot: 106_000_000, height: 4_000_000 }));
   app.get("/txs/:hash", (req, res) => void (req.params.hash === "a".repeat(64) ? res.json({ hash: req.params.hash, block: "b" }) : res.status(404).json({ status_code: 404 })));
   app.use((req, res) => void res.status(404).json({ status_code: 404, error: "Not Found", message: req.path }));
   const server = app.listen(0, "127.0.0.1");
@@ -88,6 +89,7 @@ describe("tADA payout from the owner's own wallet (CIP-30)", () => {
     expect(bf.seen).toEqual([]);
     expect(await kit.confirmed("a".repeat(64))).toBe(true);
     expect(await kit.confirmed("c".repeat(64))).toBe(false);
+    expect(await kit.tipTime()).toBe(1_793_000_000_000);
   });
 
   it("a malformed witness set or unreadable funds are refused", () => {
