@@ -210,7 +210,26 @@ for (const button of document.querySelectorAll<HTMLButtonElement>("[data-reveal-
 }
 
 // ── /verify ──────────────────────────────────────────────────────────────────────────────
-const pending: Pending | undefined = mode === "verify" ? readPending() : undefined;
+/**
+ * The button in the code email opens /verify#email=…&code=…&type=… and signs in with one click.
+ * The fragment never reaches the server; it is dropped from the address bar and history at once.
+ */
+function linkFromMail(): (Pending & { code: string }) | undefined {
+  if (mode !== "verify" || location.hash.length < 2) return undefined;
+  const h = new URLSearchParams(location.hash.slice(1));
+  history.replaceState(null, "", location.pathname + location.search);
+  const email = (h.get("email") ?? "").trim();
+  const code = h.get("code") ?? "";
+  const type = h.get("type") ?? "sign-in";
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !/^\d{6}$/.test(code) || (type !== "sign-in" && type !== "email-verification")) return undefined;
+  // Same tab as the sign-up: keep the name it was started with.
+  const stored = readPending();
+  return { email, code, purpose: type, ...(stored?.email === email && stored.name ? { name: stored.name } : {}) };
+}
+const fromMail = linkFromMail();
+/** True until the first submit: errors then speak of the link, not of a typed code. */
+let viaLink = Boolean(fromMail);
+const pending: Pending | undefined = mode === "verify" ? (fromMail ?? readPending()) : undefined;
 if (mode === "verify") {
   const emailInput = field("email");
   if (pending && emailInput) {
@@ -223,6 +242,17 @@ if (mode === "verify") {
       const b = document.createElement("b");
       b.textContent = pending.email;
       sub.append(b, ". It expires in 10 minutes.");
+    }
+  }
+  if (fromMail) {
+    const c = field("code");
+    if (c) c.value = fromMail.code;
+    const sub = document.getElementById("verify-sub");
+    if (sub) {
+      sub.textContent = fromMail.purpose === "sign-in" ? "Signing you in as " : "Confirming ";
+      const b = document.createElement("b");
+      b.textContent = fromMail.email;
+      sub.append(b, "…");
     }
   }
   const code = field("code");
@@ -321,14 +351,20 @@ form?.addEventListener("submit", async event => {
       (err.code && FRIENDLY[err.code]) ||
       err.message ||
       (res.status === 429 ? "Too many attempts. Wait a moment and try again." : "Something went wrong. Please try again.");
-    if (mode === "verify" && err.code !== "INVALID_EMAIL") setFieldError("code", message);
+    if (viaLink && (err.code === "INVALID_OTP" || err.code === "OTP_EXPIRED"))
+      setFieldError("code", "This link was already used or has expired. Send a new code below.");
+    else if (mode === "verify" && err.code !== "INVALID_EMAIL") setFieldError("code", message);
     else if (err.code === "PASSWORD_TOO_SHORT") setFieldError("password", message);
     else if (err.code === "INVALID_EMAIL") setFieldError("email", message);
     else setFormError(message);
   } catch {
     setFormError("Could not reach the server. Check your connection and try again.");
   } finally {
+    viaLink = false;
     if (!leaving) submit?.classList.remove("loading");
     if (submit && !leaving) submit.disabled = false;
   }
 });
+
+// Opened from the email button: submit the code right away (errors show as for a typed code).
+if (fromMail) form?.requestSubmit();

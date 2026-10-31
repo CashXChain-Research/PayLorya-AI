@@ -2,7 +2,7 @@ import type { Server } from "node:http";
 import express from "express";
 import { afterEach, describe, expect, it } from "vitest";
 import { createCfo, mountCfo } from "../src/cfo/index.js";
-import { codeEmail, resendMailer, type CodePurpose, type Mailer } from "../src/cfo/mail.js";
+import { codeEmail, codeLink, resendMailer, type CodePurpose, type Mailer } from "../src/cfo/mail.js";
 import { loadConfig } from "../src/config.js";
 import { RunStore } from "../src/runs.js";
 
@@ -234,6 +234,55 @@ describe("Resend mailer", () => {
       fetch: (async () => new Response('{"message":"domain is not verified"}', { status: 403 })) as unknown as typeof fetch,
     });
     await expect(mailer.sendCode("a@b.co", "1", "sign-in")).rejects.toThrow(/Resend answered 403: .*domain is not verified/);
+  });
+
+  it("with the public URL: posts the logo and the one-click link", async () => {
+    const calls: { init: RequestInit }[] = [];
+    const mailer = resendMailer({
+      apiKey: "re_test_key",
+      from: "PayLorya AI <no-reply@mail.valentin.is>",
+      expiresMinutes: 10,
+      baseUrl: "https://app.example/",
+      fetch: (async (_url: string, init: RequestInit) => {
+        calls.push({ init });
+        return new Response("{}", { status: 200 });
+      }) as typeof fetch,
+    });
+    await mailer.sendCode("ada@example.com", "123456", "sign-in");
+    const body = JSON.parse(String(calls[0]!.init.body));
+    const link = "https://app.example/verify#email=ada%40example.com&code=123456&type=sign-in";
+    expect(body.text).toContain(link);
+    expect(body.text).toContain("Or enter this code: 123456");
+    expect(body.html).toContain(`href="${link.replace(/&/g, "&amp;")}"`);
+    expect(body.html).toContain('<img src="https://app.example/apple-touch-icon.png?v=3"');
+    expect(body.html).toContain("Sign in to PayLorya AI");
+    expect(body.html).toContain("123456");
+  });
+
+  it("links only sign-in and email confirmation; reset and email change keep the plain code", () => {
+    expect(codeLink("https://a.example", "a@b.co", "123456", "email-verification")).toBe("https://a.example/verify#email=a%40b.co&code=123456&type=email-verification");
+    expect(codeLink("https://a.example", "a@b.co", "123456", "forget-password")).toBeUndefined();
+    const reset = codeEmail("654321", "forget-password", 10, { baseUrl: "https://a.example", to: "a@b.co" });
+    expect(reset.html).not.toContain("/verify#");
+    expect(reset.html).toContain("https://a.example/apple-touch-icon.png");
+    expect(reset.text).not.toContain("http");
+    // Markup in the address cannot break out of the link.
+    const odd = codeEmail("123456", "sign-in", 10, { baseUrl: "https://a.example", to: '"><script>@x.co' });
+    expect(odd.html).not.toContain("<script>");
+  });
+
+  it("the link's email, code and type sign in through the same API the /verify page calls", async () => {
+    const mail = fakeMailer();
+    const s = await start(mail);
+    await s.post("/api/auth/email-otp/send-verification-otp", { email: "lin@example.com", type: "sign-in" });
+    const link = new URL(codeLink(s.base, "lin@example.com", mail.sent[0]!.code, "sign-in")!);
+    expect(link.pathname).toBe("/verify");
+    expect(link.search).toBe(""); // all in the fragment: nothing reaches server logs
+    const h = new URLSearchParams(link.hash.slice(1));
+    expect(h.get("type")).toBe("sign-in");
+    const res = await s.post("/api/auth/sign-in/email-otp", { email: h.get("email"), otp: h.get("code") });
+    expect(res.status).toBe(200);
+    expect(await s.me(res.cookie)).toBe(200);
   });
 
   it("names the product and nothing user-supplied in the mail", () => {

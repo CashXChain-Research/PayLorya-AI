@@ -6,7 +6,7 @@ The product built on top of the hackathon payment engine. One app, one domain:
 | --- | --- |
 | `/` | Marketing site |
 | `/signup`, `/login` | Accounts (Better Auth): email code by default, password optional |
-| `/verify` | Enter the 6-digit email code (sign-up, login, email confirmation; only with `RESEND_API_KEY`) |
+| `/verify` | Enter the 6-digit email code, or open it from the email button (sign-up, login, email confirmation; only with `RESEND_API_KEY`) |
 | `/app/*` | Dashboard: overview, AI CFO chat, documents, payments, budgets, payees, connections, agent access, activity, settings |
 | `/demo`, `/about.html` | The hackathon demo of the invoice agent, unchanged |
 | `/api/auth/*` | Better Auth |
@@ -34,6 +34,10 @@ password by default. Codes are mailed through Resend (`POST https://api.resend.c
 - Codes: 6 digits, valid 10 minutes, at most 5 wrong tries, stored hashed; a new code voids the
   old one; Better Auth limits the code endpoints to 3 per minute.
 - A Resend error is logged and does not fail the request; the user asks for a new code.
+- The mail shows the app icon (`PUBLIC_BASE_URL` + `/apple-touch-icon.png`) and, for sign-in and email
+  confirmation, a button to `/verify#email=…&code=…&type=…`. The page reads the fragment (never sent
+  to the server), drops it from the address bar and submits the code: one click signs in. The code is
+  still in the mail for typing. Password reset and email change have no link.
 
 ## What a customer can do
 

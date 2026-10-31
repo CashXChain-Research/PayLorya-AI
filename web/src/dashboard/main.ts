@@ -39,30 +39,23 @@ const ROUTES: Route[] = [
   { re: /^\/app\/settings\/?$/, title: "Settings", nav: "settings", render: renderSettings },
 ];
 
-const NAV: Array<{ group?: string; items: Array<[string, string, string, string]> }> = [
-  {
-    items: [
-      ["overview", "/app", "home", "Overview"],
-      ["chat", "/app/chat", "sparkle", "AI CFO chat"],
-    ],
-  },
-  {
-    group: "Finance",
-    items: [
-      ["documents", "/app/documents", "doc", "Documents"],
-      ["payments", "/app/payments", "pay", "Payments"],
-      ["budgets", "/app/budgets", "budget", "Budgets & planning"],
-      ["payees", "/app/payees", "payees", "Payees"],
-    ],
-  },
-  {
-    group: "Control",
-    items: [
-      ["connections", "/app/connections", "link", "Connections"],
-      ["agent", "/app/agent", "shield", "Agent access"],
-      ["activity", "/app/activity", "activity", "Activity"],
-    ],
-  },
+// One flat list. Connections and Activity live under "Agent & access" as sub-tabs.
+const NAV: Array<[string, string, string, string]> = [
+  ["overview", "/app", "home", "Overview"],
+  ["chat", "/app/chat", "sparkle", "AI CFO chat"],
+  ["documents", "/app/documents", "doc", "Documents"],
+  ["payments", "/app/payments", "pay", "Payments"],
+  ["budgets", "/app/budgets", "budget", "Planning"],
+  ["payees", "/app/payees", "payees", "Payees"],
+  ["agent", "/app/agent", "shield", "Agent & access"],
+];
+
+/** Routes shown as sub-tabs of one sidebar item: route nav key -> sidebar key. */
+const SUB: Record<string, string> = { agent: "agent", connections: "agent", activity: "agent" };
+const SUB_TABS: Array<[string, string, string]> = [
+  ["agent", "/app/agent", "Agent"],
+  ["connections", "/app/connections", "Connections"],
+  ["activity", "/app/activity", "Activity"],
 ];
 
 const themeBtn = (extra = "") =>
@@ -78,16 +71,9 @@ function shell(): string {
     <div class="side-top">${logo}<button class="icon-btn side-close" type="button" id="side-close" aria-label="Close menu">${icon("x")}</button></div>
     <a class="ws" href="/app/agent" id="ws"><span class="ws-mark" id="ws-mark"></span><span class="ws-text"><b id="ws-name"><span class="sk" style="width:110px;height:12px"></span></b><span id="ws-auto" class="ws-auto"></span></span>${icon("chevron", 15)}</a>
     <nav class="side-nav">${NAV.map(
-      g =>
-        `${g.group ? `<div class="side-group">${g.group}</div>` : ""}${g.items
-          .map(([key, href, ic, label]) => `<a href="${href}" data-nav="${key}">${icon(ic, 18)}<span>${label}</span>${key === "payments" ? '<em class="badge" id="badge-approvals" hidden></em>' : ""}</a>`)
-          .join("")}`,
+      ([key, href, ic, label]) =>
+        `<a href="${href}" data-nav="${key}">${icon(ic, 18)}<span>${label}</span>${key === "payments" ? '<em class="badge" id="badge-approvals" hidden></em>' : ""}</a>`,
     ).join("")}</nav>
-    <div class="side-trust">
-      <div class="trust-row">${icon("eye", 14, 2)}<span><b>Claude reads.</b></span></div>
-      <div class="trust-row">${icon("shield", 14, 2)}<span><b>Code decides.</b></span></div>
-      <div class="trust-row">${icon("check", 14, 2.4)}<span><b>You approve.</b></span></div>
-    </div>
     <div class="side-foot">
       <a href="/app/settings" data-nav="settings" class="side-settings">${icon("settings", 18)}<span>Settings</span></a>
       <div class="user-row">
@@ -95,7 +81,7 @@ function shell(): string {
         ${themeBtn()}
         <div class="menu" id="user-menu" role="menu" hidden>
           <a href="/app/settings" role="menuitem">${icon("settings", 16)}Settings</a>
-          <a href="/app/agent" role="menuitem">${icon("shield", 16)}Agent access</a>
+          <a href="/app/agent" role="menuitem">${icon("shield", 16)}Agent & access</a>
           <button type="button" role="menuitem" data-signout>${icon("logout", 16)}Sign out</button>
         </div>
       </div>
@@ -104,6 +90,10 @@ function shell(): string {
   <div class="scrim" id="scrim"></div>
   <div class="main-wrap">
     <header class="topbar"><button class="icon-btn" type="button" id="menu-btn" aria-label="Open menu" aria-controls="side">${icon("menu", 20)}</button>${logo}<span class="topbar-right"><a class="icon-btn" href="/app/chat" aria-label="AI CFO chat">${icon("sparkle", 19)}</a>${themeBtn()}</span></header>
+    <nav class="subnav" id="subnav" aria-label="Agent and access" hidden>
+      <div class="tabs">${SUB_TABS.map(([key, href, label]) => `<a href="${href}" data-sub="${key}">${label}</a>`).join("")}</div>
+      <p class="sub-trust"><span>${icon("eye", 14, 2)}Claude reads.</span><span>${icon("shield", 14, 2)}Code decides.</span><span>${icon("check", 14, 2.4)}You approve.</span></p>
+    </nav>
     <main class="main" id="view" tabindex="-1"></main>
   </div>
 </div>
@@ -148,8 +138,18 @@ function route(): void {
   let match: RegExpExecArray | null = null;
   const r = ROUTES.find(x => (match = x.re.exec(path === "/app" ? "/app" : path)));
   document.body.classList.toggle("full", !!r?.full);
+  const sideKey = r ? (SUB[r.nav] ?? r.nav) : "";
   for (const a of document.querySelectorAll<HTMLAnchorElement>("[data-nav]")) {
-    if (r && a.dataset.nav === r.nav) a.setAttribute("aria-current", "page");
+    if (a.dataset.nav === sideKey) a.setAttribute("aria-current", "page");
+    else a.removeAttribute("aria-current");
+  }
+  const sub = !!r && r.nav in SUB;
+  const subnav = document.getElementById("subnav")!;
+  subnav.hidden = !sub;
+  subnav.dataset.on = sub ? r.nav : "";
+  document.body.classList.toggle("has-sub", sub);
+  for (const a of document.querySelectorAll<HTMLAnchorElement>("[data-sub]")) {
+    if (sub && a.dataset.sub === r?.nav) a.setAttribute("aria-current", "page");
     else a.removeAttribute("aria-current");
   }
   closeDrawer();
