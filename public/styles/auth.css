@@ -15,6 +15,13 @@ body.auth::before {
 .auth-card h1 { margin: 0; font-size: 28px; line-height: 1.15; letter-spacing: -.035em; font-weight: 700; }
 .auth-card .sub { margin: 8px 0 0; color: var(--ink-2); font-size: 15px; }
 
+/* "Continue with Google", shown when the server has a Google client. */
+.oauth { margin-top: 28px; }
+.oauth[hidden] { display: none; }
+.oauth .google { gap: 10px; padding: 14px 22px; }
+.oauth .or { display: flex; align-items: center; gap: 12px; margin: 20px 0 0; color: var(--ink-2); font-size: 13px; }
+.oauth .or::before, .oauth .or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.oauth:not([hidden]) + form[data-auth] { margin-top: 20px; }
 form[data-auth] { display: grid; gap: 16px; margin-top: 28px; }
 form[data-auth] .btn { margin-top: 6px; padding: 15px 22px; }
 /* /verify: the emailed 6-digit code. */
