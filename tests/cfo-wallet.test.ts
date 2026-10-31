@@ -6,7 +6,7 @@ import express, { type Express } from "express";
 import { afterEach, describe, expect, it } from "vitest";
 import type { BuyerAgent } from "../src/agent.js";
 import { createCfo, mountCfo, type PaymentEngine } from "../src/cfo/index.js";
-import { INTERRUPTED, NEEDS_OWN_WALLET } from "../src/cfo/payments.js";
+import { CHECK_TIMED_OUT, INTERRUPTED, NEEDS_OWN_WALLET } from "../src/cfo/payments.js";
 import { InsufficientFunds, type TxKit } from "../src/cfo/wallet-signer.js";
 import { loadConfig } from "../src/config.js";
 import { RunStore, type Run } from "../src/runs.js";
@@ -32,13 +32,14 @@ async function listen(app: Express): Promise<string> {
 }
 
 /** Payout engine stub: the paid x402 check on Cardano passes and routes to the verified payee. */
-function checkingAgent() {
+function checkingAgent(opts: { hang?: boolean } = {}) {
   const processed: string[] = [];
   const agent = {
     useFiatRoute() {},
     async process(run: Run) {
       const invoice = JSON.parse(run.input) as Invoice;
       processed.push(invoice.id);
+      if (opts.hang) await new Promise(() => undefined); // a facilitator that never answers
       run.state = "DRAFT_READY";
       run.report = { verdict: "ready_for_review" } as Run["report"];
       run.payment = { transactionHash: FEE_TX, explorerUrl: `https://preprod.cardanoscan.io/transaction/${FEE_TX}` } as Run["payment"];
@@ -79,14 +80,14 @@ function stubKit() {
   return { kit, state };
 }
 
-async function start() {
+async function start(opts: { hang?: boolean; checkTimeoutMs?: number } = {}) {
   const app = express();
   const base = await listen(app);
   const config = loadConfig({ PUBLIC_BASE_URL: base, BETTER_AUTH_SECRET: "w".repeat(40), BLOCKFROST_PROJECT_ID: "preprodTest", BLOCKFROST_PREPROD_URL: "http://127.0.0.1:9" });
   const { kit, state } = stubKit();
-  const { agent, processed } = checkingAgent();
+  const { agent, processed } = checkingAgent(opts);
   const engine: PaymentEngine = { runs: new RunStore(), agent };
-  const deps = await createCfo(config, engine, { memory: true, walletKit: kit, noSweep: true });
+  const deps = await createCfo(config, engine, { memory: true, walletKit: kit, noSweep: true, ...(opts.checkTimeoutMs ? { checkTimeoutMs: opts.checkTimeoutMs } : {}) });
   mountCfo(app, deps);
 
   async function user(email: string) {
@@ -232,6 +233,18 @@ describe("tADA payouts from the workspace's own wallet: stored at every step, si
     expect(await payment(me, draft.id)).toMatchObject({ status: "pending_approval", error: INTERRUPTED });
     expect((await me("POST", `/api/v1/payments/${draft.id}/approve`)).status).toBe(200);
     await settle(async () => (await payment(me, draft.id)).status === "awaiting_signature");
+  });
+
+  it("a verification that never finishes sends the payment back to approval, nothing paid", async () => {
+    const s = await start({ hang: true, checkTimeoutMs: 200 });
+    const me = await s.user("owner@nordwind.example");
+    await me("POST", "/api/v1/connections", { kind: "cardano_wallet", address: WALLET, access: "read_write" });
+    const payee = (await me("POST", "/api/v1/payees", { name: "Nordwind Node Services", cardanoAddress: PAYEE })).json;
+    const draft = (await me("POST", "/api/v1/payments", { payeeId: payee.id, amountMinor: 2_000_000, currency: "ADA", reason: "Node hosting" })).json;
+    if (draft.status === "pending_approval") await me("POST", `/api/v1/payments/${draft.id}/approve`);
+    await settle(async () => (await payment(me, draft.id)).status === "pending_approval" && Boolean((await payment(me, draft.id)).error));
+    expect((await payment(me, draft.id)).error).toBe(CHECK_TIMED_OUT);
+    expect(s.state.built).toEqual([]);
   });
 
   it("the agent wallet never pays a workspace's payout, not even an old read & write connection to it", async () => {

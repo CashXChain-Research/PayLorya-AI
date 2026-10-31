@@ -42,6 +42,8 @@ export async function createCfo(
     walletKit?: TxKit;
     /** Tests: no background sweep (they call payments.sweep() themselves). */
     noSweep?: boolean;
+    /** Tests: a shorter limit for the paid verification step. */
+    checkTimeoutMs?: number;
   } = {},
 ): Promise<CfoDeps> {
   const { sql, files } = storage(config, opts);
@@ -65,6 +67,7 @@ export async function createCfo(
   const payments = new Payments(store, engine, keys, {
     ...(opts.walletKit ? { kit: opts.walletKit } : config.BLOCKFROST_PROJECT_ID ? { kit: evolutionKit(blockfrostProvider(config).blockfrost) } : {}),
     explorerTxUrl: config.EXPLORER_TX_URL,
+    ...(opts.checkTimeoutMs ? { checkTimeoutMs: opts.checkTimeoutMs } : {}),
   });
   if (!opts.noSweep) {
     // Settles what a restart left behind, then follows sent tADA payouts to their block.

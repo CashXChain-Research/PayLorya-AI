@@ -41,12 +41,16 @@ export const NEEDS_OWN_WALLET = "tADA payouts leave from your own wallet: connec
 export const INTERRUPTED =
   "Interrupted by a server restart before it finished. Approve it again to continue: it pays under the same idempotency key, never twice.";
 
-/** tADA payouts from the workspace's own wallet. */
-export interface WalletPayouts {
-  /** Builds and broadcasts; absent without BLOCKFROST_PROJECT_ID, and tADA payouts are then refused. */
+export const CHECK_TIMED_OUT =
+  "The verification on Cardano did not finish in time, so nothing was paid. Approve it again to retry.";
+
+export interface PaymentsOptions {
+  /** tADA from the owner's wallet: builds and broadcasts; absent without BLOCKFROST_PROJECT_ID (tADA refused). */
   kit?: TxKit;
   /** Explorer prefix for a transaction hash (EXPLORER_TX_URL). */
   explorerTxUrl?: string;
+  /** How long the paid verification (x402 on Cardano) may take before the payment goes back to approval. */
+  checkTimeoutMs?: number;
 }
 
 /** What the owner's wallet reports when asked to pay (CIP-30): hex, as the wallet gives it. */
@@ -70,7 +74,7 @@ export class Payments {
     private readonly store: Store,
     private readonly engine: PaymentEngine,
     private readonly keys?: CxcKeys,
-    private readonly wallets: WalletPayouts = {},
+    private readonly wallets: PaymentsOptions = {},
   ) {}
 
   // Payments executing in this process. One in "executing" that is not here was cut off by a restart.
@@ -415,7 +419,18 @@ export class Payments {
     if (fiat) agent.useFiatRoute(run, fiat);
     await this.store.updatePayment(ws, id, { runId: run.id, payoutKey: key });
     try {
-      await agent.process(run);
+      // The paid check runs before any payout; if it hangs (a facilitator or chain provider that does
+      // not answer), the payment goes back to approval instead of staying "executing".
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const late = new Promise<"late">(resolve => (timer = setTimeout(() => resolve("late"), this.wallets.checkTimeoutMs ?? 5 * 60_000)));
+      const checked = await Promise.race([agent.process(run).then(() => "done" as const), late]).finally(() => clearTimeout(timer));
+      if (checked === "late") {
+        if (await this.store.claimPayment(ws, id, ["executing"], "pending_approval")) {
+          await this.store.updatePayment(ws, id, { error: CHECK_TIMED_OUT });
+          await this.store.log(ws, "system", "payment check timed out", `${p.payeeName}: back to approval, nothing paid`, { type: "payment", id });
+        }
+        return;
+      }
       if (run.state !== "DRAFT_READY" || !run.draft?.executable) return fail(reasonOf(run));
       if (from) {
         const route = run.draft.route;

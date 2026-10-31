@@ -184,7 +184,9 @@ A workspace uses its own accounts (Connections page). PayLorya AI's shared sandb
      signing (nothing was sent).
   - `{declined: true}` (Cancel): `rejected`, nothing sent.
 - **Payments cut off by a restart** (any rail): one in `executing` that no execution in this
-  process owns goes back to `pending_approval` with a note (`INTERRUPTED`). Approving it again
+  process owns goes back to `pending_approval` with a note (`INTERRUPTED`). A verification that
+  does not finish within 5 minutes goes back the same way (`CHECK_TIMED_OUT`); nothing is paid
+  before it. Approving it again
   continues it under the same idempotency key, fixed at the first attempt (`payments.payout_key`):
   CashXChain replays the payout instead of paying twice, and a changed payee or amount is refused.
 - **Not possible today:** a "Sign in with CashXChain" popup (the CashXChain auth portal is an OAuth
