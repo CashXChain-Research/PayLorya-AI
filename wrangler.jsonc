@@ -21,7 +21,11 @@
       "image": "./Dockerfile",
       // Default is "lite" (256 MiB). The app idles at ~165 MiB before a payment, so use 1 GiB.
       "instance_type": "basic",
-      "max_instances": 1
+      "max_instances": 1,
+      // Run next to D1 (primary Western Europe) and the users. Without this the container starts
+      // wherever the first request after a deploy comes from (e.g. the US) and every page and every
+      // database query crosses the Atlantic.
+      "constraints": { "regions": ["WEUR"] }
     }
   ],
   "durable_objects": {
