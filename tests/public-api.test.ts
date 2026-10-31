@@ -1,6 +1,7 @@
 import { once } from "node:events";
 import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
+import type Anthropic from "@anthropic-ai/sdk";
 import express from "express";
 import { afterEach, describe, expect, it } from "vitest";
 import type { BuyerAgent } from "../src/agent.js";
@@ -16,15 +17,46 @@ afterEach(async () => {
 
 type Call = (method: string, path: string, body?: unknown, headers?: Record<string, string>) => Promise<{ status: number; json: any; headers: Headers }>;
 
-async function start() {
+type ScriptStep = { text?: string; tool?: { name: string; input: unknown } };
+
+/** Stand-in for client.messages.stream: replays scripted assistant turns and records each request. */
+function fakeClaude(script: ScriptStep[], calls: Array<{ tools: Array<{ name: string }>; system: string }>): Pick<Anthropic, "messages"> {
+  let i = 0;
+  const messages = {
+    stream(params: { tools: Array<{ name: string }>; system: string }) {
+      calls.push(params);
+      const step = script[i++] ?? { text: "Done." };
+      let onText: ((d: string) => void) | undefined;
+      const stream = {
+        on(event: string, cb: (d: string) => void) {
+          if (event === "text") onText = cb;
+          return stream;
+        },
+        async finalMessage() {
+          if (step.text) onText?.(step.text);
+          const content: unknown[] = [];
+          if (step.text) content.push({ type: "text", text: step.text });
+          if (step.tool) content.push({ type: "tool_use", id: `tu_${i}`, name: step.tool.name, input: step.tool.input });
+          return { content, stop_reason: step.tool ? "tool_use" : "end_turn" };
+        },
+      };
+      return stream;
+    },
+  };
+  return { messages } as unknown as Pick<Anthropic, "messages">;
+}
+
+async function start(script: ScriptStep[] = []) {
   const app = express();
   const server = app.listen(0, "127.0.0.1");
   servers.push(server);
   await once(server, "listening");
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
-  const config = loadConfig({ PUBLIC_BASE_URL: base, BETTER_AUTH_SECRET: "s".repeat(40) });
+  const config = loadConfig({ PUBLIC_BASE_URL: base, BETTER_AUTH_SECRET: "s".repeat(40), ANTHROPIC_API_KEY: "test" });
   const engine: PaymentEngine = { runs: new RunStore(), agent: {} as BuyerAgent };
   const deps = await createCfo(config, engine, { memory: true, noSweep: true, agentFor: () => ({}) as BuyerAgent });
+  const aiCalls: Array<{ tools: Array<{ name: string }>; system: string }> = [];
+  deps.chatClient = fakeClaude(script, aiCalls);
   mountCfo(app, deps);
 
   const call = (auth: Record<string, string>): Call => async (method, path, body, headers = {}) => {
@@ -34,7 +66,8 @@ async function start() {
       body: body === undefined ? undefined : JSON.stringify(body),
     });
     const text = await r.text();
-    return { status: r.status, json: text ? JSON.parse(text) : undefined, headers: r.headers };
+    const json = r.headers.get("content-type")?.includes("json") && text ? JSON.parse(text) : text || undefined;
+    return { status: r.status, json, headers: r.headers };
   };
   async function user(email: string): Promise<Call> {
     const res = await fetch(`${base}/api/auth/sign-up/email`, {
@@ -46,7 +79,7 @@ async function start() {
     return call({ cookie: res.headers.get("set-cookie")!.split(";")[0]! });
   }
   const withKey = (key: string) => call({ authorization: `Bearer ${key}` });
-  return { user, withKey };
+  return { user, withKey, aiCalls };
 }
 
 describe("public API keys", () => {
@@ -146,6 +179,37 @@ describe("public API keys", () => {
     const changed = await api("POST", "/api/v1/payments", { ...body, amountMinor: 13_000 }, { "idempotency-key": "inv-api-1" });
     expect(changed.status).toBe(422);
     expect(changed.json.code).toBe("idempotency_mismatch");
+  });
+});
+
+describe("the AI CFO asked with an API key", () => {
+  it("cannot change budgets, and its drafts wait for a person", async () => {
+    const { user, withKey, aiCalls } = await start([
+      { tool: { name: "set_budget", input: { name: "Travel", category: "travel", monthlyLimitUsd: 99_999 } } },
+      { tool: { name: "draft_payment", input: { payeeName: "Brenner GmbH", amount: 120, currency: "EUR", reason: "INV-CHAT-1" } } },
+      { text: "Drafted." },
+    ]);
+    const me = await user("owner@example.com");
+    await me("POST", "/api/v1/payees", { name: "Brenner GmbH", country: "DE", iban: "DE89 3704 0044 0532 0130 00" });
+    const api = withKey((await me("POST", "/api/v1/api-keys", { name: "mcp", scopes: ["read", "write"] })).json.key);
+    const chat = (await api("POST", "/api/v1/chats", {})).json;
+    expect((await api("POST", `/api/v1/chats/${chat.id}/messages`, { text: "Raise travel and pay Brenner" })).status).toBe(200);
+
+    expect(aiCalls[0]!.tools.map(t => t.name)).not.toContain("set_budget");
+    expect(aiCalls[0]!.system).toMatch(/through the API/);
+    expect((await me("GET", "/api/v1/budgets")).json).toEqual([]);
+    const [payment] = (await me("GET", "/api/v1/payments")).json;
+    expect(payment).toMatchObject({ payeeName: "Brenner GmbH", requestedBy: "user" });
+    expect(payment.status).not.toBe("executing");
+  });
+
+  it("keeps every tool in the dashboard", async () => {
+    const { user, aiCalls } = await start([{ text: "Hi." }]);
+    const me = await user("owner@example.com");
+    const chat = (await me("POST", "/api/v1/chats", {})).json;
+    await me("POST", `/api/v1/chats/${chat.id}/messages`, { text: "Hello" });
+    expect(aiCalls[0]!.tools.map(t => t.name)).toContain("set_budget");
+    expect(aiCalls[0]!.system).not.toMatch(/through the API/);
   });
 });
 

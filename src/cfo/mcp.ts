@@ -249,7 +249,7 @@ function mcpServer(rest: Rest): McpServer {
     {
       title: "Ask the AI CFO",
       description:
-        "Ask PayLorya AI, the business's AI CFO, in plain language and get its written answer. It works on the account's real data (documents, ledger, payments, budgets, forecast), can research companies on the web, calculate, and create files (Excel, PDF, CSV) that are saved as documents. Use it for analysis the other tools do not answer directly. It can draft payments itself, under the autonomy rules the owner set in the dashboard; to prepare a payment for a person's approval, use draft_payment instead. Takes seconds to a few minutes and counts against the account's daily AI limit. Returns the answer and a chatId: pass it back to continue the same conversation. Needs an API key with the write scope.",
+        "Ask PayLorya AI, the business's AI CFO, in plain language and get its written answer. It works on the account's real data (documents, ledger, payments, budgets, forecast), can research companies on the web, calculate, and create files (Excel, PDF, CSV) that are saved as documents. Use it for analysis the other tools do not answer directly. It can draft payments too; every payment drafted this way waits for a person to approve it in the dashboard, and it cannot change budgets. Takes seconds to a few minutes and counts against the account's daily AI limit. Returns the answer and a chatId: pass it back to continue the same conversation. Needs an API key with the write scope.",
       inputSchema: {
         question: z.string().min(1).max(20_000).describe("The question or request, in plain language."),
         chatId: Id("chat").optional().describe("Continue this conversation (the chatId of an earlier answer). Omit to start a new one."),

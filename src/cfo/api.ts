@@ -684,7 +684,8 @@ export function mountCfo(app: Express, deps: CfoDeps): void {
     const keepAlive = setInterval(() => res.write(": keep-alive\n\n"), 15_000);
     busy.add(chat.id);
     try {
-      await runChatTurn({ store, payments: deps.payments, extract: deps.extract, model: deps.model, client: deps.chatClient }, ws, chat.id, body.text, files, emit);
+      const viaApiKey = Boolean(ctx(res).apiKey);
+      await runChatTurn({ store, payments: deps.payments, extract: deps.extract, model: deps.model, client: deps.chatClient, viaApiKey }, ws, chat.id, body.text, files, emit);
     } catch (error) {
       console.error("chat turn failed", error);
       emit({ type: "error", message: "The AI CFO could not answer. Please try again." });
