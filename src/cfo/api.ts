@@ -103,6 +103,7 @@ export function mountCfo(app: Express, deps: CfoDeps): void {
   });
   app.get("/login", async (_req, res) => res.sendFile("login.html", { root: "public" }));
   app.get("/signup", async (_req, res) => res.sendFile("signup.html", { root: "public" }));
+  app.get("/verify", async (_req, res) => res.sendFile("verify.html", { root: "public" }));
   app.get("/demo", async (_req, res) => res.sendFile("demo.html", { root: "public" }));
 
   const api = express.Router();

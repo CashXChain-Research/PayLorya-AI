@@ -17,6 +17,9 @@ body.auth::before {
 
 form[data-auth] { display: grid; gap: 16px; margin-top: 28px; }
 form[data-auth] .btn { margin-top: 6px; padding: 15px 22px; }
+/* /verify: the emailed 6-digit code. */
+form[data-auth] .field[hidden] { display: none; }
+form[data-auth] input[name="code"] { font-size: 22px; letter-spacing: 8px; text-align: center; font-variant-numeric: tabular-nums; }
 
 .field label { display: block; font-size: 13.5px; font-weight: 600; margin-bottom: 7px; }
 .input { position: relative; }

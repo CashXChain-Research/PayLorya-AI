@@ -74,6 +74,10 @@ const EnvSchema = z.object({
 
   // AI CFO product (accounts, dashboard). SQLite file under DATA_DIR; the secret signs sessions.
   BETTER_AUTH_SECRET: optional.refine(v => v === undefined || v.length >= 32, "at least 32 characters"),
+  // Resend: with a key, new accounts confirm their email with a 6-digit code before they can sign in.
+  RESEND_API_KEY: optional,
+  // Must be on a domain verified in that Resend account, or Resend refuses the send.
+  RESEND_FROM: z.string().trim().min(3).default("PayFlow AI <no-reply@cashxchain.com>"),
   DATA_DIR: z.string().default("data"),
   // Cloudflare: the Worker's D1/R2 proxy (http://cfo-data.internal). Unset: SQLite and files under DATA_DIR.
   CFO_DATA_URL: optional,
