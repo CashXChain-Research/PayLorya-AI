@@ -365,10 +365,11 @@ function renderDetail(run) {
   if (run.report) {
     const r = run.report;
     const vcls = r.verdict === "ready_for_review" ? "ok" : r.verdict === "blocked" ? "bad" : "warn";
-    const q = r.routeQuote;
+    const q = r.routeQuote, cq = r.cxcQuote;
     steps.push(step(vcls === "ok" ? "done" : vcls === "bad" ? "bad" : "warn", 5, "Verification report", "CxC API", `
       <ul class="checks">${r.checks.map(c => `<li><span class="ic ${esc(c.status)}">${c.status === "pass" ? "✓" : c.status === "fail" ? "✕" : c.status === "warn" ? "!" : "·"}</span><span>${esc(c.message)}</span><span class="src">${esc(c.source)}</span></li>`).join("")}</ul>
-      ${q ? `<div class="note">${esc(q.label)}: ${esc(q.rail)} · fee USD ${esc(q.feeUsd)} · ${esc(q.fxRate)} · ETA ${esc(q.etaHours)} h</div>` : ""}`));
+      ${cq ? `<div class="note">${esc(cq.label)}: ${esc(cq.rails.join(" / "))} · pays ${esc(cq.payoutCurrency)} ${esc(cq.payoutAmount)} for ${esc(cq.sourceCurrency)} ${esc(cq.sourceAmount)} (fee ${esc(cq.fee)}${cq.sourceCurrency !== cq.payoutCurrency ? `, rate ${esc(cq.rate)}` : ""})</div>`
+        : q ? `<div class="note">${esc(q.label)}: ${esc(q.rail)} · fee USD ${esc(q.feeUsd)} · ${esc(q.fxRate)} · ETA ${esc(q.etaHours)} h</div>` : ""}`));
   } else {
     steps.push(step("pending", 5, "Verification report", "CxC API", ""));
   }
@@ -383,6 +384,7 @@ function renderDetail(run) {
         <b>From</b><span class="mono">${esc(plan.sourceAccountId)}</span>
         <b>Payee check</b><span>${esc(plan.payeeCheck.outcome)}${plan.payeeCheck.check ? ` (${esc(plan.payeeCheck.check)})` : ""}</span>
         <b>You send</b><span>${esc(q.sourceCurrency)} ${esc(q.sourceAmount)} · fee ${esc(q.fee)}${q.simulated ? " (sandbox price)" : ""}</span>
+        ${plan.crossCurrency ? `<b>Conversion</b><span>${esc(q.sourceCurrency)} to ${esc(plan.currency)} at ${esc(q.rate)} (sandbox rate)</span>` : ""}
         ${plan.available !== undefined ? `<b>Available</b><span>${esc(q.sourceCurrency)} ${esc(plan.available)}</span>` : ""}
       </div>
       ${plan.sufficientFunds === false ? `<div class="note warn">Not enough test funds. Top up at app.sandbox.cashxchain.com, Accounts, Get test funds, then approve.</div>` : ""}`
