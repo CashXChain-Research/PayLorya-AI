@@ -10,6 +10,8 @@ export const CURRENCY_EXPONENT: Record<string, number> = {
   PLN: 2,
   SEK: 2,
   JPY: 0,
+  // Crypto invoices paid on Cardano Preprod: minor unit is lovelace (testnet ADA).
+  ADA: 6,
 };
 
 export const InvoiceSchema = z.object({
@@ -23,6 +25,8 @@ export const InvoiceSchema = z.object({
   bic: z.string().max(11).optional(),
   routingNumber: z.string().max(9).optional(),
   accountNumber: z.string().max(34).optional(),
+  // Checked and compared against vendor master data; never used as the payout destination.
+  cardanoAddress: z.string().max(128).optional(),
 });
 export type Invoice = z.infer<typeof InvoiceSchema>;
 

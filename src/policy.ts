@@ -82,8 +82,8 @@ export class SpendLedger {
 
 /** Cheap local checks before spending anything on the paid report. */
 export function precheck(invoice: Invoice): { ok: true } | { ok: false; reason: string } {
-  if (!invoice.iban && !invoice.routingNumber) {
-    return { ok: false, reason: "no account identifier (IBAN or routing number) extracted" };
+  if (!invoice.iban && !invoice.routingNumber && !invoice.cardanoAddress) {
+    return { ok: false, reason: "no account identifier (IBAN, routing number or Cardano address) extracted" };
   }
   return { ok: true };
 }
