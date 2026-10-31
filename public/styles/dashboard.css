@@ -617,6 +617,9 @@ a.stat-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-lift);
 .addr-row { display: flex; align-items: center; gap: 6px; background: var(--surface-2); border-radius: 10px; padding: 4px 4px 4px 10px; color: var(--ink-2); }
 :root[data-theme="dark"] .addr-row { background: var(--field); }
 .addr-row .mono { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.addr-row.owner { padding: 6px 10px; }
+.wallet-pick { display: flex; flex-wrap: wrap; gap: 8px; }
+.wallet-pick img { border-radius: 4px; flex: none; }
 .conn-bal { display: grid; gap: 2px; }
 .conn-total { font-size: 26px; font-weight: 700; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
 .conn-bal ul { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; }

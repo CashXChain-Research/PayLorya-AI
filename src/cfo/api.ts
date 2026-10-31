@@ -5,6 +5,7 @@ import { budgetsWithSpend, forecast, overview } from "./analytics.js";
 import type { Auth, SessionUser } from "./auth.js";
 import { runChatTurn, toPublic, type Attachment, type ChatDeps, type ChatEvent } from "./chat.js";
 import { catalog, fetchBalances, prepareConnection, supportsWrite, type ConnectionEnv } from "./connections.js";
+import { KeyRefused, type CxcKeys } from "./cxc-keys.js";
 import { CXC_SANDBOX_SIGNUP, type CxcLinker } from "./cxc-link.js";
 import { SUPPORTED_CURRENCIES } from "./fx.js";
 import { ingestDocument, type Extractor } from "./ingest.js";
@@ -24,6 +25,8 @@ export interface CfoDeps {
   chatClient?: ChatDeps["client"];
   /** CashXChain sandbox sub-account per workspace (platform master key); absent without one. */
   cxc?: CxcLinker;
+  /** A workspace's own CashXChain account by API key; absent in tests that do not need it. */
+  keys?: CxcKeys;
 }
 
 const MAX_FILE_BYTES = 15 * 1024 * 1024;
@@ -204,6 +207,7 @@ export function mountCfo(app: Express, deps: CfoDeps): void {
     network: c.network,
     ...(c.address ? { address: c.address } : {}),
     access: c.access,
+    ...(c.credentialHint ? { keyHint: c.credentialHint } : {}),
     supports: { read: true, write: supportsWrite(c.kind) },
     status: c.error ? "error" : c.kind === "bank" ? "coming_soon" : "active",
     balances: c.balances,
@@ -217,9 +221,15 @@ export function mountCfo(app: Express, deps: CfoDeps): void {
     const sub = workspace && deps.cxc?.clientFor(workspace);
     return sub ? { ...deps.connections, cashxchain: sub } : deps.connections;
   };
+  // A connection with its own key reads that account; the others read what envFor gives.
+  const envForConnection = async (ws: string, c: ConnectionRow): Promise<ConnectionEnv> => {
+    if (!c.credentialHint) return envFor(ws);
+    if (!deps.keys) throw new Error("This server cannot use stored API keys");
+    return { ...deps.connections, cashxchain: await deps.keys.client(ws, c) };
+  };
   const refresh = async (ws: string, c: ConnectionRow) => {
     try {
-      await store.updateConnection(ws, c.id, { balances: await fetchBalances(await envFor(ws), c), error: null });
+      await store.updateConnection(ws, c.id, { balances: await fetchBalances(await envForConnection(ws, c), c), error: null });
     } catch (error) {
       await store.updateConnection(ws, c.id, { error: error instanceof Error ? error.message : String(error) });
     }
@@ -286,11 +296,24 @@ export function mountCfo(app: Express, deps: CfoDeps): void {
   });
   api.post("/connections", json, async (req, res) => {
     const ws = ctx(res).ws.id;
-    const prepared = prepareConnection(await envFor(ws), req.body ?? {});
-    if ("error" in prepared) throw new HttpError(400, prepared.error);
+    const checked = prepareConnection(await envFor(ws), req.body ?? {});
+    if ("error" in checked) throw new HttpError(400, checked.error);
+    const { apiKey, ...prepared } = checked;
     const duplicate = (await store.connections(ws)).find(c => c.kind === prepared.kind && c.address === prepared.address);
-    if (duplicate) throw new HttpError(409, `${duplicate.label} is already connected`);
-    const created = await store.addConnection(ws, prepared);
+    if (duplicate) {
+      throw new HttpError(409, prepared.kind === "cashxchain" ? `${duplicate.label} is already connected: remove it first to connect another account` : `${duplicate.label} is already connected`);
+    }
+    let secret: { sealed: string; hint: string } | undefined;
+    if (apiKey) {
+      if (!deps.keys) throw new HttpError(400, "This server cannot store API keys");
+      try {
+        secret = await deps.keys.admit(ws, apiKey);
+      } catch (error) {
+        if (error instanceof KeyRefused) throw new HttpError(error.status, error.message);
+        throw error;
+      }
+    }
+    const created = await store.addConnection(ws, { ...prepared, ...(secret ? { secret } : {}) });
     await store.log(ws, "user", "added connection", `${created.label} (${created.access === "read_write" ? "read & write" : "read-only"})`, { type: "connection", id: created.id });
     res.status(201).json(publicConnection(await refresh(ws, created)));
   });

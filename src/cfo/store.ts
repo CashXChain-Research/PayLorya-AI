@@ -38,6 +38,8 @@ export interface ConnectionRow {
   error?: string;
   refreshedAt?: string;
   createdAt: string;
+  /** Set when the connection carries its own credential (the sealed value is never read into a row). */
+  credentialHint?: string;
 }
 
 export interface DocumentRow {
@@ -256,10 +258,13 @@ export class Store {
     return row ? toConnection(row) : undefined;
   }
 
-  async addConnection(ws: string, c: { kind: ConnectionKind; label: string; network: string; address?: string; access: Access }): Promise<ConnectionRow> {
+  async addConnection(
+    ws: string,
+    c: { kind: ConnectionKind; label: string; network: string; address?: string; access: Access; secret?: { sealed: string; hint: string } },
+  ): Promise<ConnectionRow> {
     const id = randomUUID();
     await this.run(
-      "INSERT INTO connections (id, workspace_id, kind, label, network, address, access, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO connections (id, workspace_id, kind, label, network, address, access, secret_enc, secret_hint, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       id,
       ws,
       c.kind,
@@ -267,6 +272,8 @@ export class Store {
       c.network,
       c.address ?? null,
       c.access,
+      c.secret?.sealed ?? null,
+      c.secret?.hint ?? null,
       now(),
     );
     return (await this.connection(ws, id))!;
@@ -286,6 +293,12 @@ export class Store {
       ws,
       id,
     );
+  }
+
+  /** The sealed credential of a connection, if it has one. Kept out of ConnectionRow on purpose. */
+  async connectionSecret(ws: string, id: string): Promise<string | undefined> {
+    const row = await this.get("SELECT secret_enc FROM connections WHERE workspace_id = ? AND id = ?", ws, id);
+    return opt((row?.secret_enc as string | null | undefined) ?? null);
   }
 
   async deleteConnection(ws: string, id: string): Promise<boolean> {
@@ -691,6 +704,7 @@ function toConnection(r: Row): ConnectionRow {
     error: opt(r.error as string | null),
     refreshedAt: opt(r.refreshed_at as string | null),
     createdAt: String(r.created_at),
+    credentialHint: opt((r.secret_hint as string | null | undefined) ?? null),
   };
 }
 

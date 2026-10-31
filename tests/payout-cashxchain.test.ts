@@ -361,6 +361,25 @@ describe("wired into the agent's approval flow", () => {
     expect(s.fake.payoutCreates()[0]?.idempotencyKey).toBe(`payout-${payoutKey(BRENNER, sepa)}`);
   });
 
+  it("a run given its own route (a workspace's own CashXChain key) pays over it; other runs keep the default", async () => {
+    const s = await setup();
+    const runs = new RunStore();
+    // Default route: the simulated stand-in. The first run carries the CashXChain route instead.
+    const agent = new BuyerAgent(loadConfig({ SELLER_ADDRESS: SELLER }), runs, signer, {});
+    const own = draftReady(runs, sepa);
+    agent.useFiatRoute(own, s.route);
+    const preview = await agent.preview(own, "disabled");
+    expect(preview.railLabel).toBe("CashXChain sandbox payout (test ledger, no real money)");
+    expect(preview.from).toMatchObject({ kind: "cxc_account", currency: "EUR" });
+    await approve(agent, own);
+    expect(own.payout).toMatchObject({ status: "submitted", simulated: false, reference: [...s.fake.state.payouts.values()][0]?.payout.id });
+
+    const other = draftReady(runs, us);
+    await approve(agent, other);
+    expect(other.payout).toMatchObject({ status: "simulated", simulated: true });
+    expect(s.fake.payoutCreates()).toHaveLength(1);
+  });
+
   it("a refusal hands the draft back, and approving again pays under the same key", async () => {
     const s = await setup();
     s.fake.state.failNextCreate = { status: 422, error: "plan_limit_exceeded", message: "above the $2500 single-payment limit" };

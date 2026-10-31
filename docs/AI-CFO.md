@@ -127,3 +127,28 @@ account gets a CashXChain sub-account: a [Platform managed account](https://docs
   (`can_delegate_money`, staff-only) and grant scopes beyond the default; until then payouts keep
   using the platform's own sandbox account (`CASHXCHAIN_API_KEY`).
 - Sandbox only: live keys are dropped at startup (`/api/health` → `cashxchain.refused`).
+
+## Your own CashXChain account and wallets
+
+A workspace can bring its own accounts instead of PayFlow AI's shared ones (Connections page).
+
+- **CashXChain by API key.** Adding the CashXChain connection takes the workspace's own sandbox
+  key (`cxc_sk_sandbox_…`, or `cxc_rk_sandbox_…` with `accounts:read`; to pay, also
+  `payments:read`, `payments:write` and `beneficiaries:write`). The server checks it against
+  CashXChain (`GET /v1/banking/accounts`) before storing it. Live keys are refused.
+- **Stored sealed.** AES-256-GCM, key derived from `BETTER_AUTH_SECRET` by HKDF, bound to the
+  workspace (`src/cfo/vault.ts`, `src/cfo/cxc-keys.ts`). The API returns only a hint
+  (`cxc_sk_sandbox_…LzQb`). Rotating `BETTER_AUTH_SECRET` makes stored keys unreadable: the
+  connection shows an error and the owner connects the key again. Without `BETTER_AUTH_SECRET`
+  own keys are refused.
+- **Balances and payouts use that key.** An approved fiat payment of a workspace whose read & write
+  CashXChain connection carries a key leaves from that account (`BuyerAgent.useFiatRoute`). If the
+  key cannot be opened, the payment fails; it never falls back to the shared account. Without a
+  key the connection is PayFlow AI's shared sandbox account (`CASHXCHAIN_API_KEY`), as before.
+- **Wallets by browser popup.** The Cardano and EVM watch-only connections offer "Connect Lace /
+  Eternl / …" (CIP-30) and "Connect browser wallet" (EIP-1193, MetaMask). The wallet's permission
+  popup hands over an address only; Cardano must be on a testnet (network id 0). The AI CFO reads
+  balances and never signs from these wallets.
+- **Not possible today:** a "Sign in with CashXChain" popup (the CashXChain auth portal is an OAuth
+  client for Google/Apple/Microsoft, not an OAuth provider), and a platform creating CashXChain
+  accounts for customers (attach-only by design, see above).

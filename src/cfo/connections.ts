@@ -1,4 +1,4 @@
-import type { CashXChainClient } from "../cashxchain.js";
+import { CXC_SANDBOX_KEY, type CashXChainClient } from "../cashxchain.js";
 import { majorToMinor, toUsdMinor } from "./fx.js";
 import type { Access, Balance, ConnectionKind, ConnectionRow } from "./store.js";
 
@@ -9,6 +9,10 @@ export interface CatalogEntry {
   supports: { read: boolean; write: boolean };
   available: boolean;
   needsAddress: boolean;
+  /** CashXChain: the workspace may connect its own account with an API key. */
+  acceptsApiKey?: boolean;
+  /** CashXChain: without a key, PayFlow AI's shared sandbox account is used. */
+  sharedFallback?: boolean;
 }
 
 export interface ConnectionEnv {
@@ -16,6 +20,8 @@ export interface ConnectionEnv {
   /** The platform's Preprod agent wallet, when x402 is configured. */
   agentWalletAddress?: string;
   cashxchain?: CashXChainClient;
+  /** True when this server can seal a workspace's own CashXChain API key (BETTER_AUTH_SECRET is set). */
+  acceptsApiKey?: boolean;
   fetch?: typeof fetch;
 }
 
@@ -32,10 +38,14 @@ export function catalog(env: ConnectionEnv): CatalogEntry[] {
     {
       kind: "cashxchain",
       name: "CashXChain account (sandbox)",
-      description: "Fiat balances and payouts over CashXChain rails: SEPA, ACH and more. Sandbox: test money only.",
+      description: env.acceptsApiKey
+        ? "Your CashXChain account by API key: fiat balances and payouts over SEPA, ACH and more. Sandbox: test money only."
+        : "Fiat balances and payouts over CashXChain rails: SEPA, ACH and more. Sandbox: test money only.",
       supports: { read: true, write: true },
-      available: Boolean(env.cashxchain),
+      available: Boolean(env.cashxchain || env.acceptsApiKey),
       needsAddress: false,
+      ...(env.acceptsApiKey ? { acceptsApiKey: true } : {}),
+      ...(env.cashxchain ? { sharedFallback: true } : {}),
     },
     {
       kind: "cardano_wallet",
@@ -85,8 +95,8 @@ export function networkOf(kind: ConnectionKind): string {
 /** Validates a new connection request. Returns an error message, or the values to store. */
 export function prepareConnection(
   env: ConnectionEnv,
-  input: { kind?: unknown; label?: unknown; address?: unknown; access?: unknown },
-): { error: string } | { kind: ConnectionKind; label: string; network: string; address?: string; access: Access } {
+  input: { kind?: unknown; label?: unknown; address?: unknown; access?: unknown; apiKey?: unknown },
+): { error: string } | { kind: ConnectionKind; label: string; network: string; address?: string; access: Access; apiKey?: string } {
   const entry = catalog(env).find(c => c.kind === input.kind);
   if (!entry) return { error: "unknown connection kind" };
   if (!entry.available) return { error: `${entry.name} is not available yet` };
@@ -101,10 +111,19 @@ export function prepareConnection(
     address = typeof input.address === "string" ? input.address.trim() : "";
     if (!/^0x[0-9a-fA-F]{40}$/.test(address)) return { error: "Enter an EVM address (0x followed by 40 hex characters)" };
   }
+  let apiKey: string | undefined;
+  if (input.apiKey !== undefined && input.apiKey !== null && input.apiKey !== "") {
+    if (kind !== "cashxchain") return { error: `${entry.name} does not take an API key` };
+    if (!env.acceptsApiKey) return { error: "This server cannot store API keys (BETTER_AUTH_SECRET is not set)" };
+    apiKey = typeof input.apiKey === "string" ? input.apiKey.trim() : "";
+    if (!CXC_SANDBOX_KEY.test(apiKey)) return { error: "Paste a CashXChain sandbox API key (cxc_sk_sandbox_… or cxc_rk_sandbox_…). Live keys are not accepted." };
+  } else if (kind === "cashxchain" && !env.cashxchain) {
+    return { error: "Paste your CashXChain sandbox API key" };
+  }
   const wantsWrite = input.access === "read_write";
   const access: Access = wantsWrite && supportsWrite(kind) ? "read_write" : "read";
   const label = typeof input.label === "string" && input.label.trim() ? input.label.trim().slice(0, 80) : entry.name;
-  return { kind, label, network: networkOf(kind), ...(address ? { address } : {}), access };
+  return { kind, label, network: networkOf(kind), ...(address ? { address } : {}), access, ...(apiKey ? { apiKey } : {}) };
 }
 
 const EVM_NETWORKS = [
