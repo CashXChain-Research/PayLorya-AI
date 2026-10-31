@@ -1,6 +1,6 @@
 import type { Server } from "node:http";
 import express from "express";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createCfo, mountCfo } from "../src/cfo/index.js";
 import { codeEmail, codeLink, resendMailer, type CodePurpose, type Mailer } from "../src/cfo/mail.js";
 import { loadConfig } from "../src/config.js";
@@ -28,7 +28,7 @@ function fakeMailer(fail = false): Mailer & { sent: Sent[] } {
   };
 }
 
-async function start(mailer?: Mailer) {
+async function start(mailer?: Mailer, env: Record<string, string> = {}) {
   const app = express();
   const server = await new Promise<Server>(resolve => {
     const s = app.listen(0, "127.0.0.1", () => resolve(s));
@@ -36,7 +36,7 @@ async function start(mailer?: Mailer) {
   servers.push(server);
   const address = server.address();
   const base = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
-  const config = loadConfig({ PUBLIC_BASE_URL: base, BETTER_AUTH_SECRET: "t".repeat(40) });
+  const config = loadConfig({ PUBLIC_BASE_URL: base, BETTER_AUTH_SECRET: "t".repeat(40), ...env });
   mountCfo(app, await createCfo(config, { runs: new RunStore() }, { memory: true, ...(mailer ? { mailer } : {}) }));
   const post = async (path: string, body: unknown, cookie?: string) => {
     const res = await fetch(`${base}${path}`, {
@@ -198,6 +198,58 @@ describe("without Resend nothing changes", () => {
   });
 });
 
+describe("sign-in origins (custom domain)", () => {
+  // A browser with any cookie gets its Origin checked by Better Auth; a wrong password then answers 401.
+  const signInFrom = async (base: string, origin: string) => {
+    const res = await fetch(`${base}/api/auth/sign-in/email`, {
+      method: "POST",
+      headers: { "content-type": "application/json", origin, cookie: "theme=dark" },
+      body: JSON.stringify({ email: "nobody@example.com", password: "wrong-password-1" }),
+    });
+    return { status: res.status, code: ((await res.json().catch(() => ({}))) as { code?: string }).code };
+  };
+
+  it("PUBLIC_BASE_URL on paylorya.valentin.is plus AUTH_TRUSTED_ORIGINS: both hosts sign in, others are refused", async () => {
+    const s = await start(undefined, {
+      PUBLIC_BASE_URL: "https://paylorya.valentin.is",
+      AUTH_TRUSTED_ORIGINS: "https://cxc-agentpay.cashxchain.workers.dev/",
+    });
+    expect(await signInFrom(s.base, "https://paylorya.valentin.is")).toMatchObject({ status: 401 });
+    expect(await signInFrom(s.base, "https://cxc-agentpay.cashxchain.workers.dev")).toMatchObject({ status: 401 });
+    expect(await signInFrom(s.base, "https://evil.example")).toEqual({ status: 403, code: "INVALID_ORIGIN" });
+  });
+
+  it("the code mail sent through Resend links and loads the logo from PUBLIC_BASE_URL", async () => {
+    const sent: Array<{ html: string; text: string }> = [];
+    const realFetch = globalThis.fetch;
+    vi.stubGlobal("fetch", (async (url: string | URL | Request, init?: RequestInit) => {
+      if (String(url) !== "https://api.resend.com/emails") return realFetch(url, init);
+      sent.push(JSON.parse(String(init?.body)));
+      return new Response("{}", { status: 200 });
+    }) as typeof fetch);
+    try {
+      const s = await start(undefined, { PUBLIC_BASE_URL: "https://paylorya.valentin.is", RESEND_API_KEY: "re_test_key" });
+      const res = await realFetch(`${s.base}/api/auth/email-otp/send-verification-otp`, {
+        method: "POST",
+        headers: { "content-type": "application/json", origin: "https://paylorya.valentin.is" },
+        body: JSON.stringify({ email: "lin@example.com", type: "sign-in" }),
+      });
+      expect(res.status).toBe(200);
+      expect(sent).toHaveLength(1);
+      expect(sent[0]!.html).toContain('href="https://paylorya.valentin.is/verify#email=lin%40example.com&amp;code=');
+      expect(sent[0]!.html).toContain('<img src="https://paylorya.valentin.is/apple-touch-icon.png?v=3"');
+      expect(sent[0]!.text).toMatch(/^https:\/\/paylorya\.valentin\.is\/verify#email=lin%40example\.com&code=\d{6}&type=sign-in$/m);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("without it (the config before #46) paylorya.valentin.is gets INVALID_ORIGIN", async () => {
+    const s = await start(undefined, { PUBLIC_BASE_URL: "https://cxc-agentpay.cashxchain.workers.dev" });
+    expect(await signInFrom(s.base, "https://paylorya.valentin.is")).toEqual({ status: 403, code: "INVALID_ORIGIN" });
+  });
+});
+
 describe("Resend mailer", () => {
   it("posts the documented request: bearer key, idempotency key, from/to/subject/text/html", async () => {
     const calls: { url: string; init: RequestInit }[] = [];
@@ -257,6 +309,11 @@ describe("Resend mailer", () => {
     expect(body.html).toContain('<img src="https://app.example/apple-touch-icon.png?v=3"');
     expect(body.html).toContain("Sign in to PayLorya AI");
     expect(body.html).toContain("123456");
+    // Footer: our website.
+    expect(body.html).toContain('<a href="https://paylorya.valentin.is/"');
+    expect(body.html).toContain(">paylorya.valentin.is</a>");
+    expect(body.html).not.toContain("cashxchain.com");
+    expect(body.text).toContain("PayLorya AI · https://paylorya.valentin.is/");
   });
 
   it("links only sign-in and email confirmation; reset and email change keep the plain code", () => {
@@ -265,7 +322,7 @@ describe("Resend mailer", () => {
     const reset = codeEmail("654321", "forget-password", 10, { baseUrl: "https://a.example", to: "a@b.co" });
     expect(reset.html).not.toContain("/verify#");
     expect(reset.html).toContain("https://a.example/apple-touch-icon.png");
-    expect(reset.text).not.toContain("http");
+    expect(reset.text).not.toContain("/verify");
     // Markup in the address cannot break out of the link.
     const odd = codeEmail("123456", "sign-in", 10, { baseUrl: "https://a.example", to: '"><script>@x.co' });
     expect(odd.html).not.toContain("<script>");

@@ -256,7 +256,7 @@ export async function newPaymentDialog(prefill: Partial<PaymentCreate> & { count
         <div class="sub-card">
           <div class="field"><label for="np-name">Payee name</label><input id="np-name" name="newName" autocomplete="off" value="${esc(match ? "" : (prefill.counterparty ?? ""))}" placeholder="Acme GmbH"></div>
           <div class="grid2">
-            <div class="field"><label for="np-iban">IBAN <span class="opt-l">optional</span></label><input id="np-iban" name="newIban" autocomplete="off" placeholder="DE89 3704 0044 0532 0130 00"></div>
+            <div class="field"><label for="np-iban">IBAN <span class="opt-l">optional</span></label><input id="np-iban" name="newIban" autocomplete="off" placeholder="DE89 3704 0044 …"></div>
             <div class="field"><label for="np-country">Country <span class="opt-l">optional</span></label><input id="np-country" name="newCountry" maxlength="2" placeholder="DE"></div>
           </div>
           <div class="field"><label for="np-ada">Cardano address <span class="opt-l">optional, Preprod</span></label><input id="np-ada" name="newAda" class="mono" autocomplete="off" placeholder="addr_test1…"></div>
