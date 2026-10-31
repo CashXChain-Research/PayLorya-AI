@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { addressCredentials } from "@x402/cardano";
-import { findCorridor, simulatedQuote } from "./fixtures.js";
+import { CORRIDORS, findCorridor, simulatedQuote } from "./fixtures.js";
 import type { Invoice, ReadinessCheck, ReadinessReport, Verdict } from "./types.js";
 
 // IBAN lengths per country (ISO 13616 registry) for the countries we accept.
@@ -82,6 +82,12 @@ export class ReadinessLedger {
   }
 }
 
+export class IdempotencyConflictError extends Error {
+  constructor() {
+    super("Idempotency-Key already used for a different invoice");
+  }
+}
+
 export interface ReadinessOptions {
   amountCeilingMinor: number;
 }
@@ -92,17 +98,21 @@ export function buildReadinessReport(
   ledger: ReadinessLedger,
   opts: ReadinessOptions,
 ): ReadinessReport {
-  const cached = ledger.cached(idempotencyKey);
-  if (cached) return cached;
-
   const fingerprint = invoiceFingerprint(invoice);
+  const cached = ledger.cached(idempotencyKey);
+  if (cached) {
+    // A key reused for another invoice must not hand out that invoice's report (no settle on 409).
+    if (cached.invoiceFingerprint !== fingerprint) throw new IdempotencyConflictError();
+    return cached;
+  }
+
   const checks: ReadinessCheck[] = [];
   const corridor = findCorridor(invoice.destinationCountry, invoice.currency);
 
   checks.push(
     corridor
       ? { id: "corridor", status: "pass", message: `${invoice.destinationCountry}/${invoice.currency} via ${corridor.rail}`, source: "demo-fixture" }
-      : { id: "corridor", status: "fail", message: `No demo corridor for ${invoice.destinationCountry}/${invoice.currency}`, source: "demo-fixture" },
+      : { id: "corridor", status: "fail", message: noCorridorMessage(invoice), source: "demo-fixture" },
   );
 
   const missing = (corridor?.requiredFields ?? []).filter(f => !invoice[f]);
@@ -115,6 +125,14 @@ export function buildReadinessReport(
   );
 
   checks.push(accountCheck(invoice));
+
+  // Informational only: a warn would turn reference-less invoices (the remote:run default) into needs_info.
+  checks.push({
+    id: "reference",
+    status: "pass",
+    message: invoice.reference?.trim() ? "Payment reference present" : "No separate payment reference: reconcile by invoice id",
+    source: "deterministic",
+  });
 
   const firstKey = ledger.firstKeyFor(fingerprint);
   checks.push(
@@ -143,6 +161,13 @@ export function buildReadinessReport(
   };
   ledger.record(idempotencyKey, report);
   return report;
+}
+
+/** Tells a currency mismatch on a served country apart from an unserved country. */
+function noCorridorMessage(inv: Invoice): string {
+  const message = `No demo corridor for ${inv.destinationCountry}/${inv.currency}`;
+  const served = CORRIDORS.filter(c => c.country === inv.destinationCountry).map(c => c.currency);
+  return served.length ? `${message}: currency mismatch, the ${inv.destinationCountry} corridor pays ${served.join(", ")}` : message;
 }
 
 function accountCheck(inv: Invoice): ReadinessCheck {

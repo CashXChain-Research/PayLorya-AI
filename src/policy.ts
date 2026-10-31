@@ -32,7 +32,8 @@ export function filterOffers(reqs: PaymentRequirements[], policy: SpendPolicy): 
 export class SpendLedger {
   private spent = 0n;
   private paidFingerprints = new Set<string>();
-  private unknownFingerprints = new Set<string>();
+  // Signed, outcome unclear: locks the invoice; the amount is counted in `spent`.
+  private unknown = new Map<string, bigint>();
   // Payment being signed or in flight: locks the invoice and holds budget until marked.
   private pending = new Map<string, bigint>();
 
@@ -43,7 +44,7 @@ export class SpendLedger {
   ) {}
 
   canPay(fingerprint: string, amount: bigint): { ok: true } | { ok: false; reason: string } {
-    if (this.unknownFingerprints.has(fingerprint)) {
+    if (this.unknown.has(fingerprint)) {
       return { ok: false, reason: "previous payment for this invoice has unknown settlement; resolve before paying again" };
     }
     if (this.paidFingerprints.has(fingerprint)) return { ok: false, reason: `${this.what} for this invoice already paid` };
@@ -68,7 +69,7 @@ export class SpendLedger {
   markPaid(fingerprint: string, amount: bigint): void {
     this.pending.delete(fingerprint);
     this.spent += amount;
-    this.unknownFingerprints.delete(fingerprint);
+    this.unknown.delete(fingerprint);
     this.paidFingerprints.add(fingerprint);
   }
 
@@ -76,7 +77,20 @@ export class SpendLedger {
     // Count it against the budget until proven otherwise.
     this.pending.delete(fingerprint);
     this.spent += amount;
-    this.unknownFingerprints.add(fingerprint);
+    this.unknown.set(fingerprint, amount);
+  }
+
+  /**
+   * Settles an unknown payment from chain evidence. markUnknown already counted it, so "paid" keeps
+   * the spend as is (counted once) and locks the invoice as paid; "expired" (proven never to land)
+   * refunds it and unlocks the invoice.
+   */
+  resolveUnknown(fingerprint: string, outcome: "paid" | "expired"): void {
+    const amount = this.unknown.get(fingerprint);
+    if (amount === undefined) return;
+    this.unknown.delete(fingerprint);
+    if (outcome === "paid") this.paidFingerprints.add(fingerprint);
+    else this.spent -= amount;
   }
 
   get spentLovelace(): bigint {
