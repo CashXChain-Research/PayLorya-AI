@@ -234,7 +234,12 @@ footer p { max-width: 820px; margin: 0; }
   .wrap { padding: 0 16px; }
   .logo .tag { display: none; }
   .nav-in { gap: 6px; }
-  .nav-links { gap: 0; margin-left: 0; }
+  .nav-links { gap: 0; margin-left: 0; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+  .nav-links::-webkit-scrollbar { display: none; }
+  .nav-right { flex-shrink: 0; }
+  .nav-right .btn { white-space: nowrap; }
+  /* The logo already links home; three links and a button overflow narrow screens (/hackathon). */
+  .nav-links a[href="/"] { display: none; }
   .status > span { display: none; }
   .status { padding: 14px; }
   .card { padding: 20px; border-radius: 24px; }
