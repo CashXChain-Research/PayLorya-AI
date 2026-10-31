@@ -9,7 +9,6 @@ import { ExactCardanoScheme } from "@x402/cardano/exact/client";
 import type { PaymentPayload, PaymentRequirements } from "@x402/core/types";
 import { decodePaymentResponseHeader, wrapFetchWithPayment, x402Client } from "@x402/fetch";
 import { BuyerAgent } from "../src/agent.js";
-import { PayoutRefusedError, PayoutUnknownError, type PayoutRequest, type PayoutResult, type PayoutRoute, type PayoutRouteKind } from "../src/payout.js";
 import { CARDANO_NETWORK, loadConfig } from "../src/config.js";
 import { RunStore, type Run } from "../src/runs.js";
 import { mountSeller, READINESS_PATH } from "../src/seller.js";
@@ -178,29 +177,7 @@ const env = (facilitatorUrl: string, overrides: Env = {}): Env => ({
 /** Replaces the seller's report on its way out; `send` is the original res.json. */
 type Tamper = (res: Response, send: (body: unknown) => Response) => Response;
 
-type Outcome = (req: PayoutRequest) => PayoutResult | Promise<PayoutResult>;
-interface StubRoute extends PayoutRoute {
-  calls: PayoutRequest[];
-  /** Consumed one per pay() call; when empty, the payout settles. */
-  outcomes: Outcome[];
-}
-
-function stubRoute(kind: PayoutRouteKind, ...outcomes: Outcome[]): StubRoute {
-  const route: StubRoute = {
-    kind,
-    calls: [],
-    outcomes,
-    async pay(req) {
-      route.calls.push(req);
-      const next = route.outcomes.shift();
-      if (next) return next(req);
-      return { route: kind, status: "settled", reference: `po_${route.calls.length}`, simulated: kind === "cashxchain", completedAt: "2026-10-31T00:00:00.000Z" };
-    },
-  };
-  return route;
-}
-
-async function startStack(opts: { seller?: Env; buyer?: Env; tamperReport?: Tamper; routes?: Partial<Record<PayoutRouteKind, PayoutRoute>> } = {}) {
+async function startStack(opts: { seller?: Env; buyer?: Env; tamperReport?: Tamper } = {}) {
   const events: string[] = [];
   const handled: ReadinessReport[] = [];
   const fac = await startFacilitator(events);
@@ -226,7 +203,7 @@ async function startStack(opts: { seller?: Env; buyer?: Env; tamperReport?: Tamp
   const config = loadConfig(env(fac.url, { PUBLIC_BASE_URL: sellerUrl, ...opts.buyer }));
   const runs = new RunStore();
   const signer = stubSigner();
-  const agent = new BuyerAgent(config, runs, signer, { routes: opts.routes });
+  const agent = new BuyerAgent(config, runs, signer);
   const run = async (inv: Invoice = invoice): Promise<Run> => {
     const r = runs.create(JSON.stringify(inv));
     await agent.process(r);
@@ -542,126 +519,6 @@ describe("buyer agent over real x402 (stub signer + stub facilitator)", () => {
     expect(duplicateCheck(run.report)).toBe("fail");
     expect(run.draft).toBeUndefined();
     expect(other.spentLovelace).toBe(PRICE);
-  });
-});
-
-describe("approval pays the invoice (decision A)", () => {
-  const approveAndWait = async (s: Awaited<ReturnType<typeof startStack>>, run: Run) => {
-    const approval = s.agent.approve(run);
-    if (!approval.ok) throw new Error(`approve refused: ${approval.reason}`);
-    await approval.done;
-  };
-
-  it("pays a registered vendor once, to master data, via its route", async () => {
-    const route = stubRoute("cashxchain");
-    const s = await startStack({ routes: { cashxchain: route } });
-    const run = await s.run();
-
-    expect(run.state).toBe("DRAFT_READY");
-    expect(run.draft).toMatchObject({ executable: true, payout: { route: "cashxchain", vendorId: "brenner", payee: "IBAN DE89 …3000" } });
-    expect(route.calls).toHaveLength(0); // nothing before approval
-
-    await approveAndWait(s, run);
-    expect(states(run).slice(-2)).toEqual(["PAYING_OUT", "PAID_OUT"]);
-    expect(run.payout).toMatchObject({ route: "cashxchain", status: "settled", vendorId: "brenner", reference: "po_1", simulated: true, amountMinor: 1_248_000, currency: "EUR" });
-    expect(route.calls).toHaveLength(1);
-    expect(route.calls[0]).toMatchObject({ idempotencyKey: `payout-${run.fingerprint}`, amountMinor: 1_248_000, currency: "EUR", vendor: { id: "brenner" } });
-
-    expect(s.agent.approve(run)).toMatchObject({ ok: false });
-    expect(route.calls).toHaveLength(1);
-  });
-
-  it("a double click pays once", async () => {
-    const route = stubRoute("cashxchain");
-    const s = await startStack({ routes: { cashxchain: route } });
-    const run = await s.run();
-
-    const first = s.agent.approve(run);
-    const second = s.agent.approve(run);
-    expect(first.ok).toBe(true);
-    expect(second).toMatchObject({ ok: false, reason: expect.stringContaining("PAYING_OUT") });
-    if (first.ok) await first.done;
-    expect(route.calls).toHaveLength(1);
-    expect(run.state).toBe("PAID_OUT");
-  });
-
-  it.each([
-    { name: "an unknown supplier", inv: { ...invoice, supplier: "Unbekannt Handels GmbH" }, reason: "not in the vendor registry" },
-    { name: "changed bank details", inv: { ...invoice, iban: "DE02120300000000202051" }, reason: "possible invoice fraud" },
-  ])("$name: the draft is not payable and Approve pays nothing", async ({ inv, reason }) => {
-    const route = stubRoute("cashxchain");
-    const s = await startStack({ routes: { cashxchain: route } });
-    const run = await s.run(inv);
-
-    expect(run.state).toBe("DRAFT_READY");
-    expect(run.draft).toMatchObject({ executable: false, blockedReason: expect.stringContaining(reason) });
-    expect(s.agent.approve(run)).toMatchObject({ ok: false, reason: expect.stringContaining(reason) });
-    expect(route.calls).toHaveLength(0);
-  });
-
-  it("no configured route: the draft says so and Approve pays nothing", async () => {
-    const s = await startStack();
-    const run = await s.run();
-
-    expect(run.draft).toMatchObject({ executable: false, payout: { route: "cashxchain" }, blockedReason: "the cashxchain payout route is not configured" });
-    expect(s.agent.approve(run)).toMatchObject({ ok: false, reason: "the cashxchain payout route is not configured" });
-  });
-
-  it("only a ready draft can be approved", async () => {
-    const route = stubRoute("cashxchain");
-    const s = await startStack({ routes: { cashxchain: route } });
-    const { iban: _iban, ...noAccount } = invoice;
-    const run = await s.run({ ...noAccount, bic: undefined });
-
-    expect(run.state).toBe("NEEDS_INFO");
-    expect(s.agent.approve(run)).toMatchObject({ ok: false, reason: expect.stringContaining("NEEDS_INFO") });
-    expect(route.calls).toHaveLength(0);
-  });
-
-  it("refused by the rail: nothing sent, PAYOUT_FAILED, and it can be approved again", async () => {
-    const route = stubRoute("cashxchain", () => {
-      throw new PayoutRefusedError("insufficient_balance");
-    });
-    const s = await startStack({ routes: { cashxchain: route } });
-    const run = await s.run();
-
-    await approveAndWait(s, run);
-    expect(run.state).toBe("PAYOUT_FAILED");
-    expect(run.payout).toMatchObject({ status: "refused", reason: "insufficient_balance" });
-    expect(lastNote(run)).toBe("nothing sent: insufficient_balance");
-
-    await approveAndWait(s, run);
-    expect(run.state).toBe("PAID_OUT");
-    expect(route.calls).toHaveLength(2);
-    expect(route.calls[1]?.idempotencyKey).toBe(route.calls[0]?.idempotencyKey);
-  });
-
-  it.each([
-    { name: "unknown with a reference", error: new PayoutUnknownError("timeout after submit", "po_77"), reference: "po_77" },
-    { name: "a plain error", error: new Error("socket hang up"), reference: undefined },
-  ])("outcome $name: PAYOUT_UNKNOWN, reference kept, invoice locked", async ({ error, reference }) => {
-    const route = stubRoute("cashxchain", () => {
-      throw error;
-    });
-    const s = await startStack({ routes: { cashxchain: route } });
-    const run = await s.run();
-
-    await approveAndWait(s, run);
-    expect(run.state).toBe("PAYOUT_UNKNOWN");
-    expect(run.payout).toMatchObject({ status: "unknown", reason: error.message });
-    expect(run.payout?.reference).toBe(reference);
-    expect(s.agent.approve(run)).toMatchObject({ ok: false });
-    expect(route.calls).toHaveLength(1);
-  });
-
-  it("a result without a reference is treated as unknown, not paid", async () => {
-    const route = stubRoute("cashxchain", () => ({ route: "cashxchain", status: "settled", reference: "", simulated: true, completedAt: "2026-10-31T00:00:00.000Z" }));
-    const s = await startStack({ routes: { cashxchain: route } });
-    const run = await s.run();
-
-    await approveAndWait(s, run);
-    expect(run.state).toBe("PAYOUT_UNKNOWN");
-    expect(run.payout?.status).toBe("unknown");
   });
 });
 

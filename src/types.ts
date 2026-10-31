@@ -1,5 +1,4 @@
 import { z } from "zod";
-import type { PayoutRouteKind } from "./payout.js";
 
 // ISO 4217 minor-unit exponents for the currencies we accept. Anything else is rejected.
 export const CURRENCY_EXPONENT: Record<string, number> = {
@@ -79,16 +78,11 @@ export interface PaymentProof {
 
 export interface PaymentDraft {
   status: "awaiting_human_approval";
-  /** True when master data names the vendor and its payout route is configured: Approve then pays. */
-  executable: boolean;
+  executable: false;
   invoiceId: string;
   supplier: string;
   amountMinor: number;
   currency: string;
   routeQuote?: RouteQuote;
-  /** Destination from vendor master data, never from the invoice. */
-  payout?: { route: PayoutRouteKind; vendorId: string; payee: string };
-  /** Why Approve cannot pay: vendor unknown, payment details differ, or route not configured. */
-  blockedReason?: string;
   note: string;
 }

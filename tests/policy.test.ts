@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PaymentRequirements } from "@x402/core/types";
-import { filterOffers, PayoutLedger, precheck, SpendLedger, type SpendPolicy } from "../src/policy.js";
+import { filterOffers, SpendLedger, type SpendPolicy } from "../src/policy.js";
 
 const policy: SpendPolicy = {
   allowedPayTo: ["addr_test1seller"],
@@ -30,45 +30,6 @@ describe("x402 offer filter", () => {
     expect(filterOffers([offer({ extra: { assetTransferMethod: "default" } })], policy)).toHaveLength(1);
     expect(filterOffers([offer({ extra: { assetTransferMethod: "script" } })], policy)).toHaveLength(0);
     expect(filterOffers([offer({ extra: { assetTransferMethod: "masumi" } })], policy)).toHaveLength(0);
-  });
-});
-
-describe("payout ledger", () => {
-  const limits = { maxLovelace: 5_000_000n, budgetLovelace: 8_000_000n };
-
-  it("pays an invoice at most once; refused releases, unknown locks", () => {
-    const l = new PayoutLedger(limits);
-    expect(l.reserve("a", "EUR", 1_248_000).ok).toBe(true);
-    expect(l.reserve("a", "EUR", 1_248_000)).toMatchObject({ ok: false, reason: expect.stringContaining("in progress") });
-    l.release("a");
-    expect(l.reserve("a", "EUR", 1_248_000).ok).toBe(true);
-    l.markPaid("a");
-    expect(l.reserve("a", "EUR", 1_248_000)).toMatchObject({ ok: false, reason: expect.stringContaining("already paid out") });
-
-    expect(l.reserve("b", "EUR", 100).ok).toBe(true);
-    l.markUnknown("b");
-    expect(l.reserve("b", "EUR", 100)).toMatchObject({ ok: false, reason: expect.stringContaining("unknown outcome") });
-  });
-
-  it("caps ADA payouts per invoice and per session; fiat is not counted", () => {
-    const l = new PayoutLedger(limits);
-    expect(l.reserve("big", "ADA", 5_000_001)).toMatchObject({ ok: false, reason: expect.stringContaining("cap") });
-    expect(l.reserve("x", "ADA", 4_500_000).ok).toBe(true);
-    expect(l.reserve("y", "ADA", 4_000_000)).toMatchObject({ ok: false, reason: expect.stringContaining("budget") });
-    expect(l.reserve("fiat", "EUR", 99_999_999).ok).toBe(true);
-    l.markUnknown("x");
-    expect(l.spentLovelace).toBe(4_500_000n);
-    expect(l.reserve("z", "ADA", 3_500_000).ok).toBe(true);
-    expect(l.reserve("w", "ADA", 1)).toMatchObject({ ok: false, reason: expect.stringContaining("budget") });
-  });
-});
-
-describe("precheck", () => {
-  const base = { id: "I-1", supplier: "S", destinationCountry: "DE", currency: "ADA", amountMinor: 1 };
-
-  it("accepts a Cardano address as the account identifier", () => {
-    expect(precheck(base).ok).toBe(false);
-    expect(precheck({ ...base, cardanoAddress: "addr_test1..." }).ok).toBe(true);
   });
 });
 

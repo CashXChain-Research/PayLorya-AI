@@ -80,59 +80,6 @@ export class SpendLedger {
   }
 }
 
-/**
- * Invoice payouts after approval: at most one per invoice, ever. ADA payouts spend the buyer
- * wallet, so they are capped per payout and per session (fiat runs on the CashXChain sandbox).
- */
-export class PayoutLedger {
-  private paid = new Set<string>();
-  private unknown = new Set<string>();
-  // In flight: fingerprint -> lovelace held (0n for fiat).
-  private pending = new Map<string, bigint>();
-  private spent = 0n;
-
-  constructor(private readonly limits: { maxLovelace: bigint; budgetLovelace: bigint }) {}
-
-  reserve(fingerprint: string, currency: string, amountMinor: number): { ok: true } | { ok: false; reason: string } {
-    if (this.unknown.has(fingerprint)) {
-      return { ok: false, reason: "an earlier payout for this invoice has an unknown outcome; check its reference before paying again" };
-    }
-    if (this.paid.has(fingerprint)) return { ok: false, reason: "this invoice is already paid out" };
-    if (this.pending.has(fingerprint)) return { ok: false, reason: "a payout for this invoice is already in progress" };
-    let lovelace = 0n;
-    if (currency === "ADA") {
-      lovelace = BigInt(amountMinor);
-      if (lovelace > this.limits.maxLovelace) return { ok: false, reason: "amount is above the ADA payout cap" };
-      const held = [...this.pending.values()].reduce((sum, a) => sum + a, this.spent);
-      if (held + lovelace > this.limits.budgetLovelace) return { ok: false, reason: "ADA payout budget exhausted" };
-    }
-    this.pending.set(fingerprint, lovelace);
-    return { ok: true };
-  }
-
-  /** Nothing was sent: the invoice may be approved again. */
-  release(fingerprint: string): void {
-    this.pending.delete(fingerprint);
-  }
-
-  markPaid(fingerprint: string): void {
-    this.spent += this.pending.get(fingerprint) ?? 0n;
-    this.pending.delete(fingerprint);
-    this.paid.add(fingerprint);
-  }
-
-  /** May have been sent: counts against the budget and locks the invoice. */
-  markUnknown(fingerprint: string): void {
-    this.spent += this.pending.get(fingerprint) ?? 0n;
-    this.pending.delete(fingerprint);
-    this.unknown.add(fingerprint);
-  }
-
-  get spentLovelace(): bigint {
-    return this.spent;
-  }
-}
-
 /** Cheap local checks before spending anything on the paid report. */
 export function precheck(invoice: Invoice): { ok: true } | { ok: false; reason: string } {
   if (!invoice.iban && !invoice.routingNumber && !invoice.cardanoAddress) {
