@@ -86,7 +86,8 @@ the invoice, so a retry or a restart replays the earlier payout instead of payin
 | Transaction hash / explorer link | Stored only from a successful settle response containing a hash; live explorer verification pending |
 | Field extraction | Real Claude API integration for text; JSON skips the model; amounts parsed deterministically; live sample validation pending |
 | IBAN / BIC / ABA checks, duplicates | Real deterministic code; BIC is a format/country check, not bank ownership verification |
-| Corridors, rails, fees, FX, ETA | Simulated (`demo-fixture`), labeled **Simulated route/fees** |
+| Corridors, required fields, quote | CashXChain sandbox (`cxc-sandbox`) when `CASHXCHAIN_API_KEY` is set; otherwise simulated (`demo-fixture`, **Simulated route/fees**) |
+| ETA | Simulated (`demo-fixture`) only; CashXChain does not quote timing |
 | Supplier payout | CashXChain sandbox API (`/v1/banking/*`), only after human approval; tested offline against a fake, live sandbox check pending. Not executed without `CASHXCHAIN_API_KEY` |
 | Payout quote and fee | CashXChain sandbox quote (`simulated: true`, sandbox pricing) |
 | Compliance | Data-quality and routing check; not an AML, sanctions or KYB decision |

@@ -203,7 +203,7 @@ async function cxcRouting(invoice: Invoice, cxc: CashXChainClient): Promise<Rout
     const [corridorRes, accountsRes] = await Promise.allSettled([cxc.corridor(currency, country, "business"), cxc.listAccounts()]);
     if (corridorRes.status === "rejected") {
       const error: unknown = corridorRes.reason;
-      if (!(error instanceof CxcApiError && error.code === "corridor_unsupported")) return fixtureRouting(invoice);
+      if (!(error instanceof CxcApiError && error.code === "corridor_unsupported")) return fallback(invoice, error);
       return {
         corridor: { id: "corridor", status: "fail", message: `No CashXChain corridor for ${country}/${currency} (corridor_unsupported)`, source: "cxc-sandbox" },
         requiredFields: { id: "required_fields", status: "skip", message: "No corridor, no field rules", source: "cxc-sandbox" },
@@ -221,9 +221,15 @@ async function cxcRouting(invoice: Invoice, cxc: CashXChainClient): Promise<Rout
     const account = accountsRes.status === "fulfilled" ? pickSourceAccount(accountsRes.value, currency) : undefined;
     const cxcQuote = account ? await cxcQuoteFor(invoice, account.id, corridor, cxc) : undefined;
     return cxcQuote ? { ...routing, cxcQuote } : { ...routing, routeQuote: fixtureRouting(invoice).routeQuote };
-  } catch {
-    return fixtureRouting(invoice); // malformed CashXChain answer
+  } catch (error) {
+    return fallback(invoice, error); // malformed CashXChain answer
   }
+}
+
+/** Logged, so a bad key or an outage does not hide behind fixture-labelled checks. No invoice data. */
+function fallback(invoice: Invoice, error: unknown): Routing {
+  console.warn(`CashXChain readiness fallback to demo fixtures: ${error instanceof Error ? error.message : String(error)}`);
+  return fixtureRouting(invoice);
 }
 
 function cxcFieldsCheck(invoice: Invoice, corridor: CxcCorridor): ReadinessCheck {

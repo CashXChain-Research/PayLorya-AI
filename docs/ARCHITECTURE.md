@@ -128,16 +128,38 @@ Any other API failure (auth, 5xx, network) leaves the draft non-executable with 
 - Plan limits are CashXChain's: free plan USD 2,500 per payout, 5,000 per day, 10,000 per month. Over
   a limit the create answers `422 plan_limit_exceeded` and nothing is paid. The samples stay small.
 
+## Readiness checks from CashXChain
+
+When `CASHXCHAIN_API_KEY` is set, `POST /v1/payment-readiness` takes the `corridor` and
+`required_fields` checks and the quote from the CashXChain sandbox instead of the demo corridor
+table. The calls are read-only: no beneficiary is created and nothing moves.
+
+- Corridor: `GET /v1/banking/corridors?currency&country&entity_type=business`. A pass names the
+  corridor's rails; `corridor_unsupported` fails the check (verdict `blocked`).
+- Required fields reuse the payout mapping (`accountFor`, `corridorFieldsFor`, `missingFields`): no
+  account details in an accepted scheme, or a missing corridor field such as `account_type` for
+  USD/US, fails the check naming them (verdict `needs_info`).
+- Quote: `POST /v1/banking/payouts/quote` from the account `pickSourceAccount` selects, returned as
+  `cxcQuote` ("CashXChain sandbox quote") instead of `routeQuote`.
+- These checks carry `source: "cxc-sandbox"`. Any other CashXChain failure (network, 5xx, 401, no
+  active account) falls back to the demo fixtures for the affected checks, still labelled
+  `demo-fixture`, and is logged. The readiness client times out after 8 s per call, because it runs
+  between x402 verify and settle, inside the signed transaction's validity window.
+- One build per Idempotency-Key: an x402 retry under the same key, sequential or concurrent, returns
+  the identical cached report without calling CashXChain again. The invoice fingerprint is claimed
+  before the CashXChain calls, so duplicates are detected in arrival order.
+- `account`, `duplicate` and `amount` checks and the verdict rules are unchanged.
+
 ## Readiness checks
 
 | Check | Source | Logic |
 | --- | --- | --- |
 | account | deterministic | IBAN mod-97 + country length; BIC format + country; ABA routing checksum |
-| corridor | demo-fixture | destination country + currency in the demo corridor table |
-| required_fields | demo-fixture | per corridor (SEPA: IBAN; US: routing + account; AE: IBAN + BIC) |
+| corridor | cxc-sandbox, else demo-fixture | CashXChain corridor; without a key, the demo corridor table |
+| required_fields | cxc-sandbox, else demo-fixture | CashXChain accepted schemes and required fields; else per demo corridor (SEPA: IBAN; US: routing + account; AE: IBAN + BIC) |
 | duplicate | deterministic | fingerprint ledger keyed by Idempotency-Key |
 | amount | deterministic | demo ceiling |
-| quote | demo-fixture | simulated fee / FX / ETA |
+| quote | cxc-sandbox, else demo-fixture | CashXChain sandbox payout quote; else simulated fee / FX / ETA |
 
 Verdict: `blocked` (corridor, duplicate, amount), `needs_info` (fields, account, warnings),
 otherwise `ready_for_review`.

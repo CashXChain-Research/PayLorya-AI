@@ -14,13 +14,15 @@ const app = express();
 app.use(express.json({ limit: "256kb" }));
 app.use(express.static("public"));
 
-// One sandbox client for the paid readiness checks and the supplier payouts.
-const cxc = config.CASHXCHAIN_API_KEY ? new CashXChainClient({ apiKey: config.CASHXCHAIN_API_KEY }) : undefined;
+// The readiness checks run between x402 verify and settle, inside the signed tx's validity window:
+// short timeout there (fallback to fixtures). Payouts keep the default.
+const apiKey = config.CASHXCHAIN_API_KEY;
+const readinessCxc = apiKey ? new CashXChainClient({ apiKey, timeoutMs: 8_000 }) : undefined;
 
 if (config.LOCAL_FACILITATOR) mountLocalFacilitator(app, config);
-mountSeller(app, config, cxc);
+mountSeller(app, config, readinessCxc);
 
-const payouts = cxc ? new PayoutDesk(cxc, runs) : undefined;
+const payouts = apiKey ? new PayoutDesk(new CashXChainClient({ apiKey }), runs) : undefined;
 const agent = config.x402Ready ? new BuyerAgent(config, runs, undefined, payouts) : undefined;
 
 app.get(["/health", "/api/health"], (_req, res) => {
