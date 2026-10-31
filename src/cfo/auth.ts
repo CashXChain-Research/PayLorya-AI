@@ -35,6 +35,8 @@ export function createAuth(sql: Sql, opts: { baseUrl: string; trustedOrigins?: s
     secret,
     baseURL: opts.baseUrl,
     trustedOrigins: [opts.baseUrl, ...(opts.trustedOrigins ?? [])],
+    // Better Auth skips the Origin check when NODE_ENV is "test"; keep it on so tests see production.
+    advanced: { disableOriginCheck: false },
     emailAndPassword: { enabled: true, minPasswordLength: 8, autoSignIn: true, requireEmailVerification: Boolean(mailer) },
     emailVerification: { sendOnSignUp: Boolean(mailer), sendOnSignIn: Boolean(mailer), autoSignInAfterVerification: true },
     plugins: [
