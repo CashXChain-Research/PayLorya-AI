@@ -39,7 +39,7 @@ const ROUTES: Route[] = [
   { re: /^\/app\/settings\/?$/, title: "Settings", nav: "settings", render: renderSettings },
 ];
 
-// One flat list. Connections and Activity live under "Agent & access" as sub-tabs.
+// One flat list. Activity lives under "Agent & access" as a sub-tab.
 const NAV: Array<[string, string, string, string]> = [
   ["overview", "/app", "home", "Overview"],
   ["chat", "/app/chat", "sparkle", "AI CFO chat"],
@@ -47,14 +47,14 @@ const NAV: Array<[string, string, string, string]> = [
   ["payments", "/app/payments", "pay", "Payments"],
   ["budgets", "/app/budgets", "budget", "Planning"],
   ["payees", "/app/payees", "payees", "Payees"],
+  ["connections", "/app/connections", "link", "Connections"],
   ["agent", "/app/agent", "shield", "Agent & access"],
 ];
 
 /** Routes shown as sub-tabs of one sidebar item: route nav key -> sidebar key. */
-const SUB: Record<string, string> = { agent: "agent", connections: "agent", activity: "agent" };
+const SUB: Record<string, string> = { agent: "agent", activity: "agent" };
 const SUB_TABS: Array<[string, string, string]> = [
   ["agent", "/app/agent", "Agent"],
-  ["connections", "/app/connections", "Connections"],
   ["activity", "/app/activity", "Activity"],
 ];
 
