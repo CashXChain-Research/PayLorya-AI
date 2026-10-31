@@ -171,7 +171,7 @@ describe("trust boundary", () => {
   });
 });
 
-describe("amount parsing (current behaviour)", () => {
+describe("amount parsing", () => {
   it.each([
     ["12,480.00", 1_248_000],
     ["12.480,00", 1_248_000],
@@ -210,19 +210,32 @@ describe("amount parsing (current behaviour)", () => {
     ["100", "XYZ"],
   ])("rejects %j %s", (raw, currency) => expect(parseAmountMinor(raw, currency)).toBeUndefined());
 
-  // Pinned, not intended: a fix should change these lines on purpose.
-  it("known parser defects", () => {
-    // JPY printed with decimals: the separators are dropped, 100x the amount.
-    expect(parseAmountMinor("1,000.00", "JPY")).toBe(100_000);
-    // The sign is stripped: a credit note becomes an amount due.
-    expect(parseAmountMinor("-50,00", "EUR")).toBe(5_000);
-    expect(parseAmountMinor("(50.00)", "EUR")).toBe(5_000);
-    // No group-size check: a repeated separator is read as thousands, 100x the amount.
-    expect(parseAmountMinor("12.480.00", "EUR")).toBe(124_800_000);
-    // ADA: one separator with three digits is decimal, unlike EUR ("1,000 tADA" is 1 tADA).
-    expect(parseAmountMinor("1,000", "ADA")).toBe(1_000_000);
-    // ADA: more than six decimals are read as thousands (0.0000001 tADA becomes 1 tADA).
-    expect(parseAmountMinor("0.0000001", "ADA")).toBe(1_000_000);
+  it.each([
+    ["1,000.00", "JPY", 1_000], // zero decimals printed on a currency without a minor unit
+    ["1.234,-", "EUR", 123_400], // German whole-euro notation
+    ["1.234,500", "EUR", 123_450], // trailing zeros beyond the cents
+    ["3.50 tADA", "ADA", 3_500_000],
+  ])("reads %s %s as %i", (raw, currency, minor) => expect(parseAmountMinor(raw, currency)).toBe(minor));
+
+  // Each of these used to pay a different amount (sign dropped, 100x, 1/1000x): now the run stops.
+  it.each([
+    ["-50,00", "EUR", "a minus sign: a credit note, not an amount due"],
+    ["(50.00)", "EUR", "brackets: a credit"],
+    ["50.00 CR", "EUR", "credit marker"],
+    ["12.480.00", "EUR", "groups that are not thousands (was 1,248,000.00)"],
+    ["1,23,456.00", "EUR", "groups that are not thousands before the decimals"],
+    ["1,234.567", "EUR", "more decimals than the currency has"],
+    ["1,000.50", "JPY", "a fraction of a yen (was 100,050)"],
+    ["1,000", "ADA", "thousands or decimals? (was 1 tADA)"],
+    ["3.500", "ADA", "thousands or decimals?"],
+    ["0.0000001", "ADA", "below one lovelace (was 1 tADA)"],
+  ])("refuses %s %s: %s", (raw, currency) => expect(parseAmountMinor(raw, currency)).toBeUndefined());
+
+  it("an amount that is not one clear amount due fails extraction with the reason; nothing is paid", async () => {
+    await fakeAnthropic(JSON.stringify({ ...fields, amount: "-624,00" }));
+    await expect(extractInvoice("credit note", "test-model")).rejects.toThrow(
+      new ExtractionError('amount "-624,00" is not one clear amount due (sign, credit, ambiguous or malformed); nothing was paid'),
+    );
   });
 
   it("normalizes tADA through the SDK path", async () => {

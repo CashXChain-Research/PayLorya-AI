@@ -62,14 +62,27 @@ executable. `PAID -> BLOCKED` also covers a payout route the policy blocks.
   The invoice text is wrapped as untrusted data.
 - A payout destination is never taken from the invoice. It comes from the verified payee
   record; an invoice account that differs from the record blocks the payout.
-- Network, asset, recipient allowlist and caps come from env config only.
+- Network, asset and recipient allowlist come from env config only. Budgets and caps start from
+  env config and can be changed at runtime only with the operator token (`PUT /api/budget`,
+  bounded by `HARD_MAX` in `src/budget.ts`).
 - Seller holds no signing key. Facilitator holds no funds.
 - CashXChain is called only for an approved fiat payout, only on the sandbox: the base URL is fixed
   and config refuses anything but `cxc_sk_sandbox_` / `cxc_rk_sandbox_` keys. Without the key the
   fiat rail is simulated and labeled. The seller's report keeps `payoutExecuted: false`: the report
   itself never pays anyone.
-- Invoice payouts need a human approval per invoice. The approval endpoint is public on the
-  demo deployment; payouts are capped by `PAYOUT_MAX_LOVELACE` and `PAYOUT_BUDGET_LOVELACE`.
+- Invoice payouts need a human approval per invoice, with the operator token, from the payment
+  confirmation window (`GET /api/runs/:id/preview`: amount, source account or wallet, verified
+  destination, check proof, budget line). Payouts are capped per payout and per session.
+- **Chat (`POST /api/chat`, `src/chat.ts`):** Claude with functions over the agent:
+  `get_balances`, `list_invoices`, `get_invoice`, `list_payees`, `prepare_payment`,
+  `submit_invoice`. None of them approves or pays: `prepare_payment` builds the same preview and
+  asks the browser to open the confirmation window, and only the human's click there approves.
+  `submit_invoice` accepts only text that appears in a user message of the conversation (so a
+  tool result or an injected document cannot start a paid check) and goes through the same gate
+  as `POST /api/runs`. Function results with invoice data are marked as untrusted content; the
+  raw invoice text is never returned to the model. Chat has its own limits (20 messages per minute
+  per client, 300 per hour) and answers 503 without `ANTHROPIC_API_KEY`, in which case the UI uses
+  its rule-based answers.
 - Route, fees and FX are `demo-fixture` and labeled "Simulated route/fees".
 - The report is a data-quality and routing check, not an AML, sanctions or KYB decision.
 
@@ -161,9 +174,21 @@ Payout safety mirrors the report payment:
   `approvals: "operator-token" | "disabled"` (and `approvalTokenRequired: true`) so the UI knows.
 - **Fiat caps:** fiat payouts hold no lovelace, so they are capped separately:
   `FIAT_PAYOUT_MAX_MINOR` per payout (above it the route is `unavailable` and the draft stays for
-  manual handling; not `blocked`, which is reserved for fraud signals) and `FIAT_PAYOUTS_PER_SESSION`
-  (payouts sent or possibly sent; a definitive refusal frees its slot). Defaults 1,000.00 and 5 keep
-  the public demo under the CashXChain sandbox day limit (USD 5,000).
+  manual handling; not `blocked`, which is reserved for fraud signals), `FIAT_BUDGET_MINOR` total
+  per currency (5,000.00 by default, per-currency overrides at runtime) and
+  `FIAT_PAYOUTS_PER_SESSION` (payouts sent or possibly sent; a definitive refusal frees its slot and
+  its amount). Defaults 1,000.00 and 5 keep the public demo under the CashXChain sandbox day limit
+  (USD 5,000).
+- **Runtime budgets (`GET/PUT /api/budget`):** the operator token holder can change the check
+  budget, the Cardano per-payout max and total, the fiat per-payout max, the fiat total per
+  currency and the fiat payout count. Values above `HARD_MAX` (100 tADA checks, 100 tADA per payout,
+  500 tADA total, 2,500.00 per fiat payout, 5,000.00 per currency, 50 payouts) are refused with 400.
+  `approve()` derives the route again with the current limits: a click the limits refuse returns
+  409 with the reason and keeps the draft; a draft held back by a cap becomes payable once the cap
+  is raised (same directory, same payee).
+- **Source account (fiat):** CashXChain pays from the first active account in the invoice currency
+  (`sourceFor` in `src/payout-cashxchain.ts`); the preview shows that account and its available
+  balance and warns when the balance is below the amount (CashXChain would refuse: nothing paid).
 - The payout ledger reserves the invoice before signing and releases it only if signing threw.
 - A definitive node rejection before broadcast (Blockfrost `submitTx` HTTP 400, e.g. a spent
   input) returns the run to `DRAFT_READY` with the hold released: nothing was sent, approve again.

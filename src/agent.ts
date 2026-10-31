@@ -4,13 +4,15 @@ import { wrapFetchWithPayment, x402Client, x402HTTPClient } from "@x402/fetch";
 import { blockfrostProvider, CARDANO_NETWORK, type Config } from "./config.js";
 import { extractInvoice } from "./extract.js";
 import { PayoutUnknownError } from "./payout-cashxchain.js";
-import { blockfrostChainView, blockfrostSubmitter, simulatedCxcPayouts, type ChainSubmitter, type ChainView, type FiatPayoutClient, type TxOutput } from "./payout.js";
+import { blockfrostChainView, blockfrostSubmitter, simulatedCxcPayouts, type ChainSubmitter, type ChainView, type FiatAccount, type FiatPayoutClient, type TxOutput } from "./payout.js";
 import { filterOffers, precheck, SpendLedger, type SpendPolicy } from "./policy.js";
 import { invoiceFingerprint } from "./readiness.js";
 import { decideRoute, findPayee, payeeDirectory, payoutKey, type VerifiedPayee } from "./routing.js";
 import type { Run, RunStore } from "./runs.js";
 import { READINESS_PATH } from "./seller.js";
-import { InvoiceSchema, type Invoice, type PaymentDraft, type PaymentProof, type PayoutResult, type ReadinessReport, type RouteDecision } from "./types.js";
+import { CURRENCY_EXPONENT, InvoiceSchema, type Invoice, type PaymentDraft, type PaymentProof, type PayoutResult, type ReadinessReport, type RouteDecision } from "./types.js";
+import { applyBudgetUpdate, fiatBudgetFor, formatMinor, initialBudget } from "./budget.js";
+import type { Balances, Budget, BudgetLine, BudgetUpdate, BudgetUsage, Money, PaymentDestination, PaymentPreview, PaymentSource } from "./contracts.js";
 
 /** Payout rails and chain access; tests inject stubs. */
 export interface PayoutRails {
@@ -40,6 +42,9 @@ const EXPIRY_MARGIN_SLOTS = 600n;
 const PAID_ON_CARDANO = "Paid on Cardano Preprod (testnet)";
 
 const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
+const errorText = (error: unknown): string => (error instanceof Error ? error.message : String(error));
+// Headroom for network fees when warning that the buyer wallet runs low (display only).
+const FEE_MARGIN_LOVELACE = 1_000_000n;
 
 /**
  * Buyer role: the autonomous agent. Claude only extracts fields; every money decision
@@ -49,8 +54,11 @@ const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, m
 export class BuyerAgent {
   private readonly signer: ClientCardanoSigner;
   private readonly policy: SpendPolicy;
+  private readonly payoutPolicy: SpendPolicy;
   private readonly ledger: SpendLedger;
   private readonly payoutLedger: SpendLedger;
+  // Limits the operator can change at runtime; the policies above follow it (updateBudget).
+  private budgetState: Budget;
   private readonly payees: VerifiedPayee[];
   private readonly fiat: FiatPayoutClient;
   private submitter?: ChainSubmitter;
@@ -60,8 +68,8 @@ export class BuyerAgent {
   // Last tx this wallet broadcast (or may have), and when we learned of it.
   private lastTx?: { hash: string; at: number };
   private walletQueue: Promise<void> = Promise.resolve();
-  // Fiat payout keys counted against FIAT_PAYOUTS_PER_SESSION (fiat holds no lovelace budget).
-  private readonly fiatKeys = new Set<string>();
+  // Fiat payouts sent or possibly sent, by payout key: the session count and the per-currency budget.
+  private readonly fiatCommitted = new Map<string, Money>();
 
   constructor(
     private readonly config: Config,
@@ -85,10 +93,9 @@ export class BuyerAgent {
     };
     this.ledger = new SpendLedger(this.policy);
     // Separate budget for invoice payouts; fiat payouts hold 0 lovelace but still lock the invoice.
-    this.payoutLedger = new SpendLedger(
-      { allowedPayTo: [], maxPriceLovelace: config.PAYOUT_MAX_LOVELACE, sessionBudgetLovelace: config.PAYOUT_BUDGET_LOVELACE, maxPaymentsPerRun: 1 },
-      "payout",
-    );
+    this.payoutPolicy = { allowedPayTo: [], maxPriceLovelace: config.PAYOUT_MAX_LOVELACE, sessionBudgetLovelace: config.PAYOUT_BUDGET_LOVELACE, maxPaymentsPerRun: 1 };
+    this.payoutLedger = new SpendLedger(this.payoutPolicy, "payout");
+    this.budgetState = initialBudget(config);
     this.payees = payeeDirectory(config.SUPPLIER_CARDANO_ADDRESS);
     this.fiat = rails.fiat ?? simulatedCxcPayouts;
     this.submitter = rails.submitter;
@@ -107,7 +114,32 @@ export class BuyerAgent {
 
   /** Fiat payouts this session that were sent or may have been (the session limit counts these). */
   get fiatPayoutsUsed(): number {
-    return this.fiatKeys.size;
+    return this.fiatCommitted.size;
+  }
+
+  get budget(): Budget {
+    return structuredClone(this.budgetState);
+  }
+
+  get budgetUsage(): BudgetUsage {
+    const fiatPaidMinor: Record<string, number> = {};
+    for (const { currency, minor } of this.fiatCommitted.values()) fiatPaidMinor[currency] = (fiatPaidMinor[currency] ?? 0) + minor;
+    return {
+      checkSpentLovelace: this.spentLovelace.toString(),
+      cardanoPaidLovelace: this.paidOutLovelace.toString(),
+      fiatPaidMinor,
+      fiatPayouts: this.fiatCommitted.size,
+    };
+  }
+
+  /** Operator change of the spending limits (bounded by HARD_MAX). Applies to the next payment. */
+  updateBudget(update: BudgetUpdate): Budget {
+    const next = applyBudgetUpdate(this.budgetState, update);
+    this.budgetState = next;
+    this.policy.sessionBudgetLovelace = BigInt(next.checkBudgetLovelace);
+    this.payoutPolicy.maxPriceLovelace = BigInt(next.cardanoPayoutMaxLovelace);
+    this.payoutPolicy.sessionBudgetLovelace = BigInt(next.cardanoBudgetLovelace);
+    return this.budget;
   }
 
   get paidOutLovelace(): bigint {
@@ -150,9 +182,199 @@ export class BuyerAgent {
    */
   approve(run: Run): { ok: true; done: Promise<void> } | { ok: false; reason: string } {
     if (run.state !== "DRAFT_READY" || !run.draft) return { ok: false, reason: `run is ${run.state}, not awaiting approval` };
-    if (!run.draft.executable) return { ok: false, reason: run.draft.route.reason };
-    this.runs.transition(run, "EXECUTING", `Approved: ${run.draft.route.rail}`);
+    const check = this.payableNow(run);
+    if (!check.ok) return check;
+    if (!run.draft.executable) {
+      // Held back by a limit when drafted; the operator has raised it since. Same directory, same payee.
+      run.route = check.route;
+      run.draft = draftFrom(run.invoice!, run.report!, check.route);
+    }
+    this.runs.transition(run, "EXECUTING", `Approved: ${check.route.rail}`);
     return { ok: true, done: this.execute(run) };
+  }
+
+  /**
+   * Whether approving this draft would start a payout now, with the route derived again from the
+   * directory and the current limits. Side-effect free: approve() and the preview share it.
+   */
+  private payableNow(run: Run): { ok: true; route: RouteDecision } | { ok: false; reason: string } {
+    const invoice = run.invoice!;
+    const route = this.route(run, invoice);
+    if (route.status !== "selected") return { ok: false, reason: route.reason };
+    if (run.draft!.executable && (route.rail !== run.draft!.route.rail || route.destination !== run.draft!.route.destination)) {
+      return { ok: false, reason: "payout route changed since the draft" };
+    }
+    const key = payoutKey(findPayee(this.directory(run), invoice.supplier)!, invoice);
+    if (route.rail === "cardano_preprod") {
+      const allowed = this.payoutLedger.canPay(key, BigInt(invoice.amountMinor));
+      return allowed.ok ? { ok: true, route } : { ok: false, reason: `payout refused: ${allowed.reason}` };
+    }
+    const allowed = this.payoutLedger.canPay(key, 0n);
+    if (!allowed.ok) return { ok: false, reason: `payout refused: ${allowed.reason}` };
+    const fiat = this.fiatRefusal(key, invoice);
+    return fiat ? { ok: false, reason: fiat } : { ok: true, route };
+  }
+
+  /** Session count and per-currency budget for a fiat payout not yet counted. */
+  private fiatRefusal(key: string, invoice: Invoice): string | undefined {
+    if (this.fiatCommitted.has(key)) return undefined;
+    const limit = this.budgetState.fiatPayoutsPerSession;
+    if (this.fiatCommitted.size >= limit) return `payout refused: fiat payout limit of ${limit} per session reached`;
+    const cap = fiatBudgetFor(this.budgetState, invoice.currency);
+    const used = this.budgetUsage.fiatPaidMinor[invoice.currency] ?? 0;
+    if (used + invoice.amountMinor > cap) {
+      return `payout refused: the ${invoice.currency} budget (${formatMinor(cap, invoice.currency)}, ${formatMinor(used, invoice.currency)} used) does not cover ${formatMinor(invoice.amountMinor, invoice.currency)}`;
+    }
+    return undefined;
+  }
+
+  /** GET /api/runs/:id/preview: what approving would pay, from where and to whom. Moves nothing. */
+  async preview(run: Run, approvals: PaymentPreview["approvals"]): Promise<PaymentPreview> {
+    const invoice = run.invoice!;
+    const draft = run.draft!;
+    const payee = findPayee(this.directory(run), invoice.supplier);
+    const route = this.route(run, invoice);
+    const rail = route.rail ?? draft.route.rail;
+    const blockers: string[] = [];
+    const warnings: string[] = [];
+    if (run.state !== "DRAFT_READY") blockers.push(`run is ${run.state}, not awaiting approval`);
+    else {
+      const now = this.payableNow(run);
+      if (!now.ok) blockers.push(now.reason);
+    }
+    if (approvals === "disabled") blockers.push("approvals are switched off: APPROVE_TOKEN is not configured");
+
+    const amount: Money = { minor: invoice.amountMinor, currency: invoice.currency };
+    const key = payee ? payoutKey(payee, invoice) : undefined;
+    const usage = this.budgetUsage;
+    let from: PaymentSource | undefined;
+    let to: PaymentDestination | undefined;
+    let budget: BudgetLine;
+    if (rail === "cardano_preprod") {
+      const balance = await this.walletLovelace();
+      from = { kind: "cardano_wallet", address: this.buyerAddress, network: CARDANO_NETWORK, ...(balance !== undefined ? { balanceLovelace: balance.toString() } : {}) };
+      if (balance !== undefined && balance < BigInt(invoice.amountMinor) + FEE_MARGIN_LOVELACE) {
+        warnings.push(`The buyer wallet holds ${formatMinor(Number(balance), "ADA")}, too little for this payout plus network fees`);
+      }
+      if (route.destination) to = { kind: "cardano_address", address: route.destination };
+      const used = Number(usage.cardanoPaidLovelace);
+      budget = {
+        label: "Cardano payouts this session",
+        currency: "ADA",
+        usedMinor: used,
+        limitMinor: Number(this.budgetState.cardanoBudgetLovelace),
+        afterMinor: used + invoice.amountMinor,
+        perPaymentMaxMinor: Number(this.budgetState.cardanoPayoutMaxLovelace),
+      };
+    } else {
+      from = await this.fiatSource(invoice, warnings);
+      if (payee?.iban) to = { kind: "iban", iban: payee.iban, ...(payee.bic ? { bic: payee.bic } : {}) };
+      else if (payee?.routingNumber && payee.accountNumber) {
+        to = { kind: "us_account", routingNumber: payee.routingNumber, accountNumber: payee.accountNumber, ...(payee.accountType ? { accountType: payee.accountType } : {}) };
+      }
+      const used = usage.fiatPaidMinor[invoice.currency] ?? 0;
+      const counted = key !== undefined && this.fiatCommitted.has(key);
+      budget = {
+        label: `CashXChain payouts in ${invoice.currency} this session`,
+        currency: invoice.currency,
+        usedMinor: used,
+        limitMinor: fiatBudgetFor(this.budgetState, invoice.currency),
+        afterMinor: counted ? used : used + invoice.amountMinor,
+        perPaymentMaxMinor: this.budgetState.fiatPayoutMaxMinor,
+        payouts: { used: usage.fiatPayouts, limit: this.budgetState.fiatPayoutsPerSession },
+      };
+    }
+    return {
+      runId: run.id,
+      state: run.state,
+      payable: blockers.length === 0,
+      blockers,
+      warnings,
+      invoice: {
+        id: invoice.id,
+        supplier: invoice.supplier,
+        ...(invoice.reference ? { reference: invoice.reference } : {}),
+        destinationCountry: invoice.destinationCountry,
+        amount,
+      },
+      ...(payee ? { payee: payee.name } : {}),
+      ...(rail ? { rail } : {}),
+      railLabel: rail === "cardano_preprod" ? "Cardano Preprod (testnet tADA)" : rail === "cxc_fiat" ? this.fiat.label : "No payout rail",
+      amount,
+      ...(from ? { from } : {}),
+      ...(to ? { to } : {}),
+      budget,
+      check: {
+        verdict: run.report?.verdict ?? "none",
+        ...(run.payment ? { txHash: run.payment.transactionHash, explorerUrl: run.payment.explorerUrl, priceLovelace: run.payment.amount } : {}),
+        checks: run.report?.checks ?? [],
+      },
+      ...(rail === "cxc_fiat" && key ? { idempotencyKey: `payout-${key}` } : {}),
+      approvals,
+    };
+  }
+
+  /** GET /api/balances: the buyer wallet and the CashXChain accounts, with budgets and usage. */
+  async balances(): Promise<Balances> {
+    const [lovelace, accounts] = await Promise.all([
+      this.walletLovelace(true),
+      this.fiat.accounts ? this.fiat.accounts().then(list => ({ list }), (error: unknown) => ({ error: errorText(error) })) : { list: [] },
+    ]);
+    return {
+      cardano: {
+        address: this.buyerAddress,
+        network: CARDANO_NETWORK,
+        ...(typeof lovelace === "bigint" ? { balanceLovelace: lovelace.toString() } : lovelace ? { error: lovelace.error } : {}),
+      },
+      cashxchain: {
+        ready: !this.fiat.simulated,
+        simulated: this.fiat.simulated,
+        accounts: "list" in accounts ? accounts.list : [],
+        ...("error" in accounts ? { error: accounts.error } : {}),
+      },
+      budget: this.budget,
+      usage: this.budgetUsage,
+    };
+  }
+
+  /** Buyer wallet lovelace for display; undefined (or the error, when asked) if it cannot be read. */
+  private async walletLovelace(): Promise<bigint | undefined>;
+  private async walletLovelace(withError: true): Promise<bigint | { error: string } | undefined>;
+  private async walletLovelace(withError = false): Promise<bigint | { error: string } | undefined> {
+    const chain = this.chainView();
+    if (!chain?.addressLovelace) return undefined;
+    try {
+      return await chain.addressLovelace(this.buyerAddress);
+    } catch (error) {
+      return withError ? { error: errorText(error) } : undefined;
+    }
+  }
+
+  /** The CashXChain account a fiat payout would leave from, or the simulation label. */
+  private async fiatSource(invoice: Invoice, warnings: string[]): Promise<PaymentSource> {
+    if (this.fiat.simulated || !this.fiat.sourceAccount) return { kind: "simulated", label: this.fiat.label };
+    let account: FiatAccount | undefined;
+    try {
+      account = await this.fiat.sourceAccount(invoice.currency);
+    } catch (error) {
+      warnings.push(`CashXChain accounts could not be read: ${errorText(error)}`);
+      return { kind: "simulated", label: "CashXChain account not known yet" };
+    }
+    if (!account) {
+      warnings.push(`No active ${invoice.currency} account at CashXChain: the payout would be refused, nothing paid`);
+      return { kind: "simulated", label: `No ${invoice.currency} account` };
+    }
+    const exp = CURRENCY_EXPONENT[invoice.currency] ?? 2;
+    if (account.available !== undefined && Math.round(Number(account.available) * 10 ** exp) < invoice.amountMinor) {
+      warnings.push(`The ${invoice.currency} account holds ${account.available} ${invoice.currency}, less than this payout: CashXChain would refuse it, nothing paid`);
+    }
+    return {
+      kind: "cxc_account",
+      accountId: account.id,
+      currency: account.currency,
+      ...(account.name ? { name: account.name } : {}),
+      ...(account.available !== undefined ? { available: account.available } : {}),
+    };
   }
 
   reject(run: Run): { ok: true } | { ok: false; reason: string } {
@@ -167,7 +389,10 @@ export class BuyerAgent {
   }
 
   private route(run: Run, invoice: Invoice): RouteDecision {
-    return decideRoute(invoice, this.directory(run), { payoutMaxLovelace: this.config.PAYOUT_MAX_LOVELACE, fiatMaxMinor: this.config.FIAT_PAYOUT_MAX_MINOR });
+    return decideRoute(invoice, this.directory(run), {
+      payoutMaxLovelace: BigInt(this.budgetState.cardanoPayoutMaxLovelace),
+      fiatMaxMinor: this.budgetState.fiatPayoutMaxMinor,
+    });
   }
 
   private async execute(run: Run): Promise<void> {
@@ -248,11 +473,11 @@ export class BuyerAgent {
   }
 
   private async payViaCxc(run: Run, invoice: Invoice, destination: string, payee: VerifiedPayee, key: string): Promise<void> {
-    const limit = this.config.FIAT_PAYOUTS_PER_SESSION;
-    if (!this.fiatKeys.has(key) && this.fiatKeys.size >= limit) throw new Error(`payout refused: fiat payout limit of ${limit} per session reached`);
+    const refused = this.fiatRefusal(key, invoice);
+    if (refused) throw new Error(refused);
     const hold = this.payoutLedger.reserve(key, 0n);
     if (!hold.ok) throw new Error(`payout refused: ${hold.reason}`);
-    this.fiatKeys.add(key);
+    this.fiatCommitted.set(key, { minor: invoice.amountMinor, currency: invoice.currency });
     const base = { rail: "cxc_fiat" as const, simulated: this.fiat.simulated, amountMinor: invoice.amountMinor, currency: invoice.currency, destination };
     let reference: string;
     try {
@@ -262,7 +487,7 @@ export class BuyerAgent {
       if (this.fiat.isDefinitiveRejection?.(error)) {
         run.error = error instanceof Error ? error.message : String(error);
         this.payoutLedger.release(key);
-        this.fiatKeys.delete(key); // nothing sent: does not count against the session limit
+        this.fiatCommitted.delete(key); // nothing sent: counts against neither the session limit nor the budget
         return this.runs.transition(run, "DRAFT_READY", `Payout refused before it was sent, nothing paid; approve again: ${run.error}`);
       }
       // A real API may have accepted the payout before failing: lock, never retry blindly.

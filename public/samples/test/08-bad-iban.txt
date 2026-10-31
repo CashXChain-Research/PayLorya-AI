@@ -1,0 +1,11 @@
+INVOICE INV-2026-1107
+From: Brenner Maschinenbau GmbH, Messerschmittstraße 14, 86165 Augsburg, Germany
+Bill to: CashXChain UG, Munich
+Date: 2026-10-31
+- Spare parts kit SK-1: EUR 980.00
+Amount due: EUR 980.00
+Payment reference: PO-7807
+Bank: Commerzbank Augsburg
+IBAN: DE89 3704 0044 0532 0130 01
+BIC: COBADEFFXXX
+Due: 2026-11-30

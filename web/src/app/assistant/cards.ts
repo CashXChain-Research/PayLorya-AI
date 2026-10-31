@@ -61,7 +61,7 @@ export function approvalHtml(run: Run, card: Card): string {
     const busy = (act: string) => (card.busy === act ? " loading" : "");
     const off = block || card.busy ? " disabled" : "";
     foot = `<div class="actions">
-        <button class="btn primary${busy("approve")}" type="button" data-act="approve"${off}>${I.lock} Approve and pay</button>
+        <button class="btn primary${busy("approve")}" type="button" data-act="approve"${off}>${I.lock} Review and pay</button>
         <button class="btn ghost${busy("reject")}" type="button" data-act="reject"${card.busy ? " disabled" : ""}>Reject</button>
       </div>
       ${block ? `<p class="ap-why">${I.info}<span>${esc(block)}. <a href="#/settings">Agent settings</a></span></p>` : `<p class="fine">${esc(card.note ?? d.note)}</p>`}`;

@@ -50,6 +50,8 @@ const EnvSchema = z.object({
   // invoice currency) and per server session. Keeps the public demo under the sandbox day limit.
   FIAT_PAYOUT_MAX_MINOR: z.coerce.number().int().positive().default(100_000),
   FIAT_PAYOUTS_PER_SESSION: z.coerce.number().int().positive().default(5),
+  // Fiat total per currency and session (minor units); runtime-adjustable per currency via PUT /api/budget.
+  FIAT_BUDGET_MINOR: z.coerce.number().int().positive().default(500_000),
   // Optional operator token: when set, approving or rejecting a draft requires it.
   APPROVE_TOKEN: optional,
 

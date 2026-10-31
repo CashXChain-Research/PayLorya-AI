@@ -1,5 +1,5 @@
 import type { CheckStatus, PayoutResult } from "../../../src/types.js";
-import { $, esc, shortHash } from "../shared/dom.js";
+import { $, esc, short, shortHash } from "../shared/dom.js";
 import { reducedMotion } from "../shared/nav.js";
 import type { RunState } from "./api.js";
 
@@ -16,7 +16,46 @@ export const I = {
   out: svg(12, 2.4, `<path d="M7 17L17 7M9 7h8v8"/>`),
   chev: svg(14, 2.2, `<path d="M6 9l6 6 6-6"/>`),
   lock: svg(12, 2.4, `<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>`),
+  copy: svg(14, 2, `<rect x="9" y="9" width="11" height="11" rx="2.5"/><path d="M5 15V6a2 2 0 0 1 2-2h8"/>`),
+  expand: svg(14, 2.2, `<path d="M8 4H4v4M16 4h4v4M8 20H4v-4M16 20h4v-4"/>`),
+  close: svg(18, 2.2, `<path d="M6 6l12 12M18 6L6 18"/>`),
+  arrowRight: svg(18, 2.2, `<path d="M5 12h14M13 6l6 6-6 6"/>`),
+  refresh: svg(15, 2.2, `<path d="M20 11a8 8 0 0 0-14.6-4.5L4 8M4 4v4h4M4 13a8 8 0 0 0 14.6 4.5L20 16M20 20v-4h-4"/>`),
 };
+
+/** A long address, shortened, with copy and show-all buttons (wire them with bindAddr). */
+export const addrHtml = (address: string): string => `<span class="addr">
+    <span class="mono addr-v" data-full="${esc(address)}" data-short="${esc(short(address))}" title="${esc(address)}">${esc(short(address))}</span>
+    <button class="addr-b" type="button" data-copy="${esc(address)}" aria-label="Copy the address" title="Copy">${I.copy}</button>
+    ${short(address) === address ? "" : `<button class="addr-b" type="button" data-expand aria-expanded="false" aria-label="Show the full address" title="Show all">${I.expand}</button>`}
+  </span>`;
+
+/** Copy and show-all for every addrHtml() inside root (delegated). */
+export function bindAddr(root: HTMLElement): void {
+  root.addEventListener("click", e => {
+    const button = (e.target as Element).closest<HTMLButtonElement>(".addr-b");
+    const value = button?.closest(".addr")?.querySelector<HTMLElement>(".addr-v");
+    if (!button || !value) return;
+    if (button.dataset.copy !== undefined) {
+      const done = (ok: boolean) => {
+        button.classList.toggle("copied", ok);
+        button.setAttribute("aria-label", ok ? "Copied" : "Copy failed");
+        window.setTimeout(() => {
+          button.classList.remove("copied");
+          button.setAttribute("aria-label", "Copy the address");
+        }, 1600);
+      };
+      // No clipboard API outside a secure context (plain http): "Copy failed", show-all still works.
+      if (!window.isSecureContext || !navigator.clipboard) done(false);
+      else void navigator.clipboard.writeText(button.dataset.copy).then(() => done(true), () => done(false));
+      return;
+    }
+    const open = button.getAttribute("aria-expanded") !== "true";
+    button.setAttribute("aria-expanded", String(open));
+    value.textContent = (open ? value.dataset.full : value.dataset.short) ?? "";
+    value.closest(".addr")!.classList.toggle("full", open);
+  });
+}
 
 type Tone = "run" | "ok" | "done" | "warn" | "bad";
 const STATE: Record<RunState, [label: string, tone: Tone]> = {

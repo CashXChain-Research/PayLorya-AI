@@ -1,12 +1,16 @@
 import { $, esc } from "../../shared/dom.js";
 import { createRun, getSamples } from "../api.js";
+import { confirmPayment } from "../confirm.js";
 import { INVOICE_ACCEPT, readInvoiceFile } from "../files.js";
+import { health, onHealth } from "../health.js";
 import { loadList } from "../list.js";
 import { currentRoute, go, onRoute } from "../router.js";
 import { sendBlock } from "../settings/policy.js";
 import { getSettings } from "../settings/store.js";
-import { I } from "../ui.js";
-import { ASK_CHIPS, answer, askChips } from "./answers.js";
+import { I, bindAddr } from "../ui.js";
+import { initWalletPanel } from "../wallets.js";
+import { ASK_CHIPS, askChips } from "./answers.js";
+import { chat, noteInvoice } from "./chat.js";
 import { AI, MARK } from "./icons.js";
 import { dropTarget } from "./drop.js";
 import { act, initNarration, track } from "./narrate.js";
@@ -34,15 +38,21 @@ let seq = 0;
 let input: HTMLTextAreaElement;
 let sendBtn: HTMLButtonElement;
 
+const SUBTITLE = {
+  model: "Claude chats and can prepare payments. Only you confirm them, in the payment window.",
+  rules: "Claude reads the invoices. Answers here come from your run data.",
+};
+
 const layout = (): string => `
   <header class="page-head">
     <h1>Assistant</h1>
-    <p>Drop an invoice or ask about your payments. Your AI CFO works through it here and asks before any money moves.</p>
+    <p>Chat with your AI CFO or drop an invoice. It prepares the payment; you confirm it in the payment window before any money moves.</p>
   </header>
+  <div class="ax-grid">
   <section class="card chat" id="ax-chat" aria-label="Chat with your AI CFO">
     <header class="chat-head">
       <span class="chat-av mark">${MARK}</span>
-      <div class="chat-id"><b>AI CFO</b><span>Claude reads the invoices. Answers here come from your run data.</span></div>
+      <div class="chat-id"><b>AI CFO</b><span id="ax-sub">${SUBTITLE.rules}</span></div>
     </header>
     <div class="chat-thread" id="ax-thread"><div class="thread-in" id="ax-log" role="log" aria-live="polite"></div></div>
     <form class="composer" id="ax-form" autocomplete="off">
@@ -58,13 +68,15 @@ const layout = (): string => `
     <div class="chat-drop" id="ax-drop" aria-hidden="true">
       <div class="zone"><span class="ic">${AI.drop}</span><b>Drop the invoice to send it to your AI CFO</b><span>PDF or text, up to 5 MB</span></div>
     </div>
-  </section>`;
+  </section>
+  <aside class="wal wal-panel" id="ax-wal"></aside>
+  </div>`;
 
 const chip = (attrs: string, html: string): string => `<button class="chip" type="button" ${attrs}>${html}</button>`;
 
 function welcome(): void {
   void say("hello", {
-    html: `Hi, I'm your AI CFO. Drop a supplier invoice here, as a PDF or text. I read it, verify it with a paid check, pick the payout rail and ask you before any money moves.`,
+    html: `Hi, I'm your AI CFO. Drop a supplier invoice here, as a PDF or text, or ask me something. I read it, verify it with a paid check and prepare the payout in the invoice currency, on Cardano or via CashXChain. <b>Only you confirm it</b>, in the payment window that shows the full proof first.`,
   }, { delay: 0 });
   const loaded = getSamples().catch(() => ({}) as Record<string, string>);
   void enqueue(async () => {
@@ -73,10 +85,10 @@ function welcome(): void {
     const group = (title: string, items: typeof SAMPLES) => items.length
       ? `<span class="m-label">${title}</span><div class="chips">${items.map(s => chip(`data-sample="${esc(s.key)}"`, `${s.safety ? I.shieldSm : AI.spark}${esc(s.label)}`)).join("")}</div>`
       : "";
-    const pdfs = `<span class="m-label">Sample PDFs to upload</span><div class="chips">${PDFS.map(p => `<a class="chip dl" href="${p.href}" download>${AI.save}${esc(p.label)}</a>`).join("")}</div>`;
+    const pdfs = `<span class="m-label">Sample PDFs to upload</span><div class="chips">${PDFS.map(p => `<a class="chip dl" href="${p.href}" download>${AI.save}${esc(p.label)}</a>`).join("")}<a class="chip dl" href="/samples/test/" target="_blank" rel="noopener">${AI.file}All test invoices (text + PDF)</a></div>`;
     const html = `${group("Try an example", shown.filter(s => !s.safety))}${group("Safety tests", shown.filter(s => s.safety))}${pdfs}`;
     await post("hello", { kind: "card", html: `<div class="m-chips">${html}</div>` }, { delay: 0 });
-    await post("hello", { html: `You can also ask me about your payments.${askChips(ASK_CHIPS.slice(0, 3))}` }, { delay: 0 });
+    await post("hello", { html: `You can also ask me about your payments, wallets and budgets.${askChips(ASK_CHIPS.slice(0, 3))}` }, { delay: 0 });
   });
 }
 
@@ -88,7 +100,7 @@ function blockedBySettings(key: string): boolean {
   return true;
 }
 
-async function start(text: string, key: string): Promise<void> {
+async function start(text: string, key: string, label: string): Promise<void> {
   let res: Awaited<ReturnType<typeof createRun>>;
   try {
     res = await createRun(text);
@@ -102,6 +114,7 @@ async function start(text: string, key: string): Promise<void> {
   }
   const id = res.data.id;
   void enqueue(async () => rekey(key, id));
+  noteInvoice(label, id);
   track(id);
   void loadList();
 }
@@ -110,7 +123,7 @@ async function sendInvoice(text: string, label?: string): Promise<void> {
   user(`${label ? `<span class="u-label">${esc(label)}</span>` : ""}${preview(text)}`, "doc");
   const key = `send-${++seq}`;
   if (blockedBySettings(key)) return;
-  await start(text, key);
+  await start(text, key, label ?? (text.trim().split("\n")[0] ?? "").slice(0, 80));
 }
 
 async function sendFile(file: File, extra = 0): Promise<void> {
@@ -134,7 +147,7 @@ async function sendFile(file: File, extra = 0): Promise<void> {
     el.innerHTML = `Read ${n} line${n === 1 ? "" : "s"} from <b>${esc(file.name)}</b>.${extra ? ` <span class="m-fine">One invoice at a time: I left the other ${extra === 1 ? "file" : `${extra} files`}.</span>` : ""}
       <details class="m-more"><summary>Show the text</summary><pre class="m-pre">${esc(r.text)}</pre></details>`;
   });
-  await start(r.text, key);
+  await start(r.text, key, file.name);
 }
 
 function sendFiles(files: FileList | File[] | null | undefined): void {
@@ -144,7 +157,7 @@ function sendFiles(files: FileList | File[] | null | undefined): void {
 
 function ask(text: string): void {
   user(esc(text).replace(/\n/g, "<br>"));
-  void say(`ask-${++seq}`, { html: answer(text) }, { delay: 650 });
+  void chat(text, `ask-${++seq}`);
 }
 
 function sync(): void {
@@ -224,12 +237,22 @@ export function initAssistant(): void {
   initThread($("ax-thread"), $("ax-log"), $("ax-jump"));
   initComposer(view);
   initNarration();
+  initWalletPanel($("ax-wal"));
+  bindAddr($("ax-log"));
+  const subtitle = () => ($("ax-sub").textContent = health.chatReady ? SUBTITLE.model : SUBTITLE.rules);
+  onHealth(subtitle);
+  subtitle();
 
   $("ax-log").addEventListener("click", e => {
     const target = e.target as Element;
     const open = target.closest<HTMLElement>("[data-open]");
     if (open?.dataset.open) {
       go("inbox", open.dataset.open);
+      return;
+    }
+    const pay = target.closest<HTMLElement>("[data-confirm]");
+    if (pay?.dataset.confirm) {
+      void confirmPayment(pay.dataset.confirm);
       return;
     }
     const button = target.closest<HTMLButtonElement>("button[data-act]");

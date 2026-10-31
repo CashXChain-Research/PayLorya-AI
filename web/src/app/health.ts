@@ -4,6 +4,12 @@ import { countTo } from "./ui.js";
 
 /** Last /api/health response; empty while the agent is unreachable. */
 export let health: Partial<Health> = {};
+const listeners = new Set<() => void>();
+
+/** Called after every /api/health load (e.g. chatReady changed). */
+export function onHealth(listener: () => void): void {
+  listeners.add(listener);
+}
 
 /** Nav status and wallet chip, the price hint and the spend/payout stats. */
 export async function loadHealth(): Promise<void> {
@@ -27,4 +33,5 @@ export async function loadHealth(): Promise<void> {
   $("k-budget").textContent = budget ? `of ${ada(budget)} session budget` : "session budget";
   $("k-meter").style.width = budget ? `${Math.min(100, (spent / budget) * 100)}%` : "0";
   $("k-paid-sub").textContent = `${ada(health.paidOutLovelace)} of ${ada(health.payoutBudgetLovelace)} on Cardano`;
+  for (const listener of listeners) listener();
 }

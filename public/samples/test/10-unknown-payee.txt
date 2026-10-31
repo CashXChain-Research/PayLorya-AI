@@ -1,0 +1,11 @@
+INVOICE VL-2026-77
+From: Vogel Logistik GmbH, Hafenstraße 3, 68159 Mannheim, Germany
+Bill to: CashXChain UG, Munich
+Date: 2026-10-31
+- Pallet transport Augsburg to Munich: EUR 310.00
+Amount due: EUR 310.00
+Payment reference: VL-77
+Bank: Volksbank Mannheim
+IBAN: DE75 5121 0800 1245 1261 99
+BIC: SOLADEST600
+Due: 2026-11-30
