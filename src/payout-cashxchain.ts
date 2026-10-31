@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { CashXChainClient, CxcApiError, type CxcAccountInput, type CxcBeneficiaryInput, type CxcPayout } from "./cashxchain.js";
-import type { FiatPayoutClient } from "./payout.js";
+import type { FiatPayoutClient, FiatPayoutRequest } from "./payout.js";
+import type { VerifiedPayee } from "./routing.js";
 import { CURRENCY_EXPONENT, type Invoice } from "./types.js";
 
 /** Nothing was sent to CashXChain's rail: safe to approve again after fixing the cause. */
@@ -27,7 +28,7 @@ export interface CashXChainPayoutOptions {
 
 /**
  * Fiat payouts on the CashXChain sandbox money API (`/v1/banking/*`, docs.cashxchain.com/docs/api).
- * The destination is the verified payee account the router selected, never the invoice text.
+ * Beneficiary name and bank details come only from the verified payee record, never the invoice.
  * Sandbox only: the client's base URL is fixed and config refuses live keys.
  */
 export class CashXChainPayoutRoute implements FiatPayoutClient {
@@ -44,9 +45,14 @@ export class CashXChainPayoutRoute implements FiatPayoutClient {
     this.pollAttempts = opts.pollAttempts ?? 10;
   }
 
-  async payout({ idempotencyKey, invoice, destination }: { idempotencyKey: string; invoice: Invoice; destination: string }): Promise<{ reference: string }> {
+  /** Lets the agent release the hold and offer Approve again: nothing reached CashXChain's rail. */
+  isDefinitiveRejection(error: unknown): boolean {
+    return error instanceof PayoutRefusedError;
+  }
+
+  async payout({ idempotencyKey, invoice, payee }: FiatPayoutRequest): Promise<{ reference: string }> {
     // Everything before the payout POST sends nothing: any failure here is a refusal.
-    const { sourceAccountId, beneficiaryId } = await refuseOnError(() => this.prepare(invoice, destination));
+    const { sourceAccountId, beneficiaryId } = await refuseOnError(() => this.prepare(invoice, payee));
     const body = {
       source_account_id: sourceAccountId,
       beneficiary_id: beneficiaryId,
@@ -77,7 +83,12 @@ export class CashXChainPayoutRoute implements FiatPayoutClient {
         case "created": // recorded, outcome not known yet (also a replay of an unclear first attempt)
           if (i >= this.pollAttempts) throw new PayoutUnknownError(`CashXChain payout ${payout.id} is still created`, payout.id);
           break;
-        default: // failed, cancelled, returned: final, but treated as unclear until a human checks
+        // Final and documented as "did not happen" / "stopped before execution". This is also how a
+        // replay of a key refused for insufficient_balance answers (200, status failed).
+        case "failed":
+        case "cancelled":
+          throw new PayoutRefusedError(payout.status, `CashXChain payout ${payout.id} is ${payout.status}; nothing was paid`);
+        default: // returned (settled, then sent back) or anything unknown: a human checks
           throw new PayoutUnknownError(`CashXChain payout ${payout.id} is ${payout.status}`, payout.id);
       }
       await new Promise(resolve => setTimeout(resolve, this.pollIntervalMs));
@@ -89,9 +100,9 @@ export class CashXChainPayoutRoute implements FiatPayoutClient {
     }
   }
 
-  private async prepare(invoice: Invoice, destination: string): Promise<{ sourceAccountId: string; beneficiaryId: string }> {
-    const account = accountFromDestination(destination);
-    if (!account) throw new PayoutRefusedError("unsupported_destination", `cannot pay destination format "${destination}"`);
+  private async prepare(invoice: Invoice, payee: VerifiedPayee): Promise<{ sourceAccountId: string; beneficiaryId: string }> {
+    const target = beneficiaryTarget(payee);
+    if (!target) throw new PayoutRefusedError("no_bank_account", `verified payee ${payee.name} has no bank account on record`);
 
     const { accounts } = await this.client.listAccounts();
     const source = accounts.find(a => a.currency === invoice.currency && a.status === "active");
@@ -101,10 +112,11 @@ export class CashXChainPayoutRoute implements FiatPayoutClient {
 
     const beneficiary: CxcBeneficiaryInput = {
       beneficiary_type: "business",
-      name: invoice.supplier,
+      name: payee.name,
       currency: invoice.currency,
-      country_code: invoice.destinationCountry,
-      account,
+      country_code: target.country,
+      account: target.account,
+      ...(payee.accountType ? { corridor_fields: { account_type: payee.accountType } } : {}),
     };
     // Same payee details, same key: the sandbox returns the beneficiary it already registered.
     const key = `agentpay-ben-${createHash("sha256").update(JSON.stringify(beneficiary)).digest("hex").slice(0, 32)}`;
@@ -123,11 +135,14 @@ async function refuseOnError<T>(step: () => Promise<T>): Promise<T> {
   }
 }
 
-/** The router's destination: a bare IBAN, or "ABA <routing> / <account>" (src/routing.ts). */
-export function accountFromDestination(destination: string): CxcAccountInput | undefined {
-  const aba = /^ABA (\d{9}) \/ ([A-Za-z0-9]+)$/.exec(destination);
-  if (aba) return { scheme: "us_routing", routing_number: aba[1]!, account_number: aba[2]! };
-  if (/^[A-Z]{2}\d{2}[A-Z0-9]{10,30}$/.test(destination)) return { scheme: "iban", iban: destination };
+/** Account and bank country from the verified record: IBAN (country from its prefix) or US ABA. */
+export function beneficiaryTarget(payee: VerifiedPayee): { account: CxcAccountInput; country: string } | undefined {
+  if (payee.iban) {
+    return { account: { scheme: "iban", iban: payee.iban, ...(payee.bic ? { bic: payee.bic } : {}) }, country: payee.iban.slice(0, 2) };
+  }
+  if (payee.routingNumber && payee.accountNumber) {
+    return { account: { scheme: "us_routing", routing_number: payee.routingNumber, account_number: payee.accountNumber }, country: "US" };
+  }
   return undefined;
 }
 
