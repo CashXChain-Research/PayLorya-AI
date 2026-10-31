@@ -1,0 +1,3256 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "PayLorya AI API",
+    "version": "1.0.0",
+    "summary": "Read your books, forecast cash and draft payments from your own systems and agents.",
+    "description": "PayLorya AI is an AI CFO for businesses, built by CashXChain. This API lets your own systems and agents read what it knows (cash, forecast, payments, documents, budgets, activity) and draft payments, which always wait for a person's approval.\n\n**Auth.** `Authorization: Bearer ply_sk_…`. Create keys in the dashboard (Developers). A key acts for the account that created it.\n\n**Scopes.** `read` covers every GET; `write` covers drafting payments, uploading and deleting documents, and chats.\n\n**Human only.** Approving, rejecting and signing payments, connections, payees, budgets, the agent's rights (workspace), API keys, webhook management and funding answer 403 `human_only` to any key. Operations marked `x-human-only: true` are listed for reference only.\n\n**Rate limit.** 120 requests per minute per key (bursts up to 120), then 429 `rate_limited` with `retry-after`.\n\n**Idempotency.** Send `Idempotency-Key` (max 200 characters) on any write. The same key with the same method, path and body replays the first reply with `idempotent-replayed: true`; a different request gives 422 `idempotency_mismatch`; one still running gives 409 `idempotency_in_progress`. Keys are kept 24 hours, per API key. A reply of 5xx frees the key for a retry.\n\n**Errors.** JSON `{ \"error\": \"…\", \"code\": \"…\" }`; `code` is present on auth, scope, rate-limit and idempotency errors.\n\n**MCP.** The same key works on the MCP endpoint `https://paylorya.valentin.is/mcp` (Streamable HTTP). Docs: https://paylorya.valentin.is/developers\n\nTest networks only: tADA on Cardano Preprod and the CashXChain sandbox. No real money moves.",
+    "contact": {
+      "name": "CashXChain",
+      "url": "https://cashxchain.com",
+      "email": "info@cashxchain.com"
+    }
+  },
+  "externalDocs": {
+    "description": "Developer guide",
+    "url": "https://paylorya.valentin.is/developers"
+  },
+  "servers": [
+    {
+      "url": "https://paylorya.valentin.is/api/v1",
+      "description": "Production (test networks: Cardano Preprod, CashXChain sandbox)"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "Account",
+      "description": "Who the key acts for."
+    },
+    {
+      "name": "Insights",
+      "description": "Overview and cash forecast."
+    },
+    {
+      "name": "Payments",
+      "description": "Draft payments; a person approves them in the dashboard."
+    },
+    {
+      "name": "Payees",
+      "description": "Saved payees. Read with a key; added and changed in the dashboard."
+    },
+    {
+      "name": "Budgets",
+      "description": "Monthly budgets with this month's spend."
+    },
+    {
+      "name": "Ledger",
+      "description": "Transactions and activity."
+    },
+    {
+      "name": "Documents",
+      "description": "Invoices, receipts, statements and more, read by the AI CFO."
+    },
+    {
+      "name": "Chat",
+      "description": "Talk to the AI CFO."
+    },
+    {
+      "name": "Connections",
+      "description": "Banks, wallets and CashXChain accounts. Read-only with a key."
+    },
+    {
+      "name": "API keys",
+      "description": "Managed in the dashboard. A key can list them."
+    },
+    {
+      "name": "Webhooks",
+      "description": "Managed in the dashboard. A key can list them."
+    }
+  ],
+  "paths": {
+    "/me": {
+      "get": {
+        "operationId": "getMe",
+        "tags": [
+          "Account"
+        ],
+        "summary": "The key and its account",
+        "description": "Returns the account (workspace) and the key making the call.",
+        "x-scope": "read",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Me"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/InvalidKey"
+          },
+          "403": {
+            "$ref": "#/components/responses/InsufficientScope"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/overview": {
+      "get": {
+        "operationId": "getOverview",
+        "tags": [
+          "Insights"
+        ],
+        "summary": "Account overview",
+        "description": "Cash across connections, open payables, payments waiting for approval, spend by category, last six months, budgets and the agent's limits.",
+        "x-scope": "read",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Overview"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/InvalidKey"
+          },
+          "403": {
+            "$ref": "#/components/responses/InsufficientScope"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/forecast": {
+      "get": {
+        "operationId": "getForecast",
+        "tags": [
+          "Insights"
+        ],
+        "summary": "Cash forecast",
+        "description": "Daily balance forecast.",
+        "x-scope": "read",
+        "parameters": [
+          {
+            "name": "days",
+            "in": "query",
+            "description": "Horizon in days, 7 to 365. Default 90.",
+            "schema": {
+              "type": "integer",
+              "minimum": 7,
+              "maximum": 365,
+              "default": 90
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Forecast"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/InvalidKey"
+          },
+          "403": {
+            "$ref": "#/components/responses/InsufficientScope"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/payments": {
+      "get": {
+        "operationId": "listPayments",
+        "tags": [
+          "Payments"
+        ],
+        "summary": "List payments",
+        "x-scope": "read",
+        "responses": {
+          "200": {
+            "description": "Newest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Payment"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/InvalidKey"
+          },
+          "403": {
+            "$ref": "#/components/responses/InsufficientScope"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      },
+      "post": {
+        "operationId": "draftPayment",
+        "tags": [
+          "Payments"
+        ],
+        "summary": "Draft a payment",
+        "description": "Drafts a payment to a saved payee. A draft made with an API key always waits for a person: its status is `pending_approval` (or `blocked` when it cannot execute as it stands, see `policy.checks`). Nothing is paid until someone approves it in the dashboard. A second open payment for the same payee and amount, or for the same document, is refused with 409.",
+        "x-scope": "write",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaymentCreate"
+              },
+              "example": {
+                "payeeId": "8b1f…",
+                "amountMinor": 12000,
+                "currency": "EUR",
+                "reason": "INV-2026-114"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Drafted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Payment"
+                }
+              }
+            },
+            "headers": {
+              "idempotent-replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/InvalidKey"
+          },
+          "403": {
+            "$ref": "#/components/responses/InsufficientScope"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/IdempotencyMismatch"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/payments/{id}/approve": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Id"
+        }
+      ],
+      "post": {
+        "operationId": "approvePayment",
+        "tags": [
+          "Payments"
+        ],
+        "summary": "Approve a payment",
+        "description": "Approves a drafted payment for execution.\n\n**Human only.** Done by a person signed in to the dashboard. An API key gets 403 `human_only`, whatever its scopes.",
+        "x-human-only": true,
+        "responses": {
+          "200": {
+            "description": "Approved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Payment"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/InvalidKey"
+          },
+          "403": {
+            "$ref": "#/components/responses/HumanOnly"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        }
+      }
+    },
+    "/payments/{id}/reject": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Id"
+        }
+      ],
+      "post": {
+        "operationId": "rejectPayment",
+        "tags": [
+          "Payments"
+        ],
+        "summary": "Reject a payment",
+        "description": "Rejects a drafted payment.\n\n**Human only.** Done by a person signed in to the dashboard. An API key gets 403 `human_only`, whatever its scopes.",
+        "x-human-only": true,
+        "responses": {
+          "200": {
+            "description": "Rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Payment"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/InvalidKey"
+          },
+          "403": {
+            "$ref": "#/components/responses/HumanOnly"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        }
+      }
+    },
+    "/payees": {
+      "get": {
+        "operationId": "listPayees",
+        "tags": [
+          "Payees"
+        ],
+        "summary": "List payees",
+        "x-scope": "read",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Payee"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/InvalidKey"
+          },
+          "403": {
+            "$ref": "#/components/responses/InsufficientScope"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createPayee",
+        "tags": [
+          "Payees"
+        ],
+        "summary": "Add a payee",
+        "description": "Adds a payee to the directory.\n\n**Human only.** Done by a person signed in to the dashboard. An API key gets 403 `human_only`, whatever its scopes.",
+        "x-human-only": true,
+        "responses": {
+          "201": {
+            "description": "Added",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Payee"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/InvalidKey"
+          },
+          "403": {
+            "$ref": "#/components/responses/HumanOnly"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PayeeInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/payees/{id}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Id"
+        }
+      ],
+      "patch": {
+        "operationId": "updatePayee",
+        "tags": [
+          "Payees"
+        ],
+        "summary": "Change a payee",
+        "description": "Changes a payee's name or account details.\n\n**Human only.** Done by a person signed in to the dashboard. An API key gets 403 `human_only`, whatever its scopes.",
+        "x-human-only": true,
+        "responses": {
+          "200": {
+            "description": "Changed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Payee"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/InvalidKey"
+          },
+          "403": {
+            "$ref": "#/components/responses/HumanOnly"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deletePayee",
+        "tags": [
+          "Payees"
+        ],
+        "summary": "Remove a payee",
+        "description": "Removes a payee.\n\n**Human only.** Done by a person signed in to the dashboard. An API key gets 403 `human_only`, whatever its scopes.",
+        "x-human-only": true,
+        "responses": {
+          "204": {
+            "description": "Removed"
+          },
+          "401": {
+            "$ref": "#/components/responses/InvalidKey"
+          },
+          "403": {
+            "$ref": "#/components/responses/HumanOnly"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        }
+      }
+    },
+    "/budgets": {
+      "get": {
+        "operationId": "listBudgets",
+        "tags": [
+          "Budgets"
+        ],
+        "summary": "List budgets",
+        "x-scope": "read",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Budget"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/InvalidKey"
+          },
+          "403": {
+            "$ref": "#/components/responses/InsufficientScope"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createBudget",
+        "tags": [
+          "Budgets"
+        ],
+        "summary": "Create a budget",
+        "description": "Creates a monthly budget for a category.\n\n**Human only.** Done by a person signed in to the dashboard. An API key gets 403 `human_only`, whatever its scopes.",
+        "x-human-only": true,
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Budget"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/InvalidKey"
+          },
+          "403": {
+            "$ref": "#/components/responses/HumanOnly"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BudgetInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/budgets/{id}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Id"
+        }
+      ],
+      "patch": {
+        "operationId": "updateBudget",
+        "tags": [
+          "Budgets"
+        ],
+        "summary": "Change a budget",
+        "description": "Changes a budget.\n\n**Human only.** Done by a person signed in to the dashboard. An API key gets 403 `human_only`, whatever its scopes.",
+        "x-human-only": true,
+        "responses": {
+          "200": {
+            "description": "Changed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Budget"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/InvalidKey"
+          },
+          "403": {
+            "$ref": "#/components/responses/HumanOnly"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteBudget",
+        "tags": [
+          "Budgets"
+        ],
+        "summary": "Delete a budget",
+        "description": "Deletes a budget.\n\n**Human only.** Done by a person signed in to the dashboard. An API key gets 403 `human_only`, whatever its scopes.",
+        "x-human-only": true,
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          },
+          "401": {
+            "$ref": "#/components/responses/InvalidKey"
+          },
+          "403": {
+            "$ref": "#/components/responses/HumanOnly"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        }
+      }
+    },
+    "/transactions": {
+      "get": {
+        "operationId": "listTransactions",
+        "tags": [
+          "Ledger"
+        ],
+        "summary": "List transactions",
+        "description": "The ledger built from documents and executed payments.",
+        "x-scope": "read",
+        "parameters": [
+          {
+            "name": "month",
+            "in": "query",
+            "description": "Only this month, `YYYY-MM`. Anything else is ignored.",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Transaction"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/InvalidKey"
+          },
+          "403": {
+            "$ref": "#/components/responses/InsufficientScope"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/activity": {
+      "get": {
+        "operationId": "listActivity",
+        "tags": [
+          "Ledger"
+        ],
+        "summary": "Activity log",
+        "description": "What people, the agent and the system did, newest first.",
+        "x-scope": "read",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "1 to 500. Default 100.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Activity"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/InvalidKey"
+          },
+          "403": {
+            "$ref": "#/components/responses/InsufficientScope"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/documents": {
+      "get": {
+        "operationId": "listDocuments",
+        "tags": [
+          "Documents"
+        ],
+        "summary": "List documents",
+        "x-scope": "read",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Document"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/InvalidKey"
+          },
+          "403": {
+            "$ref": "#/components/responses/InsufficientScope"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      },
+      "post": {
+        "operationId": "uploadDocument",
+        "tags": [
+          "Documents"
+        ],
+        "summary": "Upload a document",
+        "description": "Uploads one file (PDF, image, CSV or text; at most 15 MB). It returns at once with `status: processing`; the AI CFO reads it in the background. Poll GET /documents/{id}. Counts against the account's daily AI limit (429 without `code` when reached; 503 when the AI model is not configured).",
+        "x-scope": "write",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FileUpload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Uploaded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Document"
+                }
+              }
+            },
+            "headers": {
+              "idempotent-replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/InvalidKey"
+          },
+          "403": {
+            "$ref": "#/components/responses/InsufficientScope"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "413": {
+            "$ref": "#/components/responses/TooLarge"
+          },
+          "422": {
+            "$ref": "#/components/responses/IdempotencyMismatch"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      }
+    },
+    "/documents/{id}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Id"
+        }
+      ],
+      "get": {
+        "operationId": "getDocument",
+        "tags": [
+          "Documents"
+        ],
+        "summary": "Get a document",
+        "description": "With the extracted fields, its transactions and its payments.",
+        "x-scope": "read",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/InvalidKey"
+          },
+          "403": {
+            "$ref": "#/components/responses/InsufficientScope"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteDocument",
+        "tags": [
+          "Documents"
+        ],
+        "summary": "Delete a document",
+        "x-scope": "write",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted",
+            "headers": {
+              "idempotent-replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/InvalidKey"
+          },
+          "403": {
+            "$ref": "#/components/responses/InsufficientScope"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/IdempotencyMismatch"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/documents/{id}/file": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Id"
+        }
+      ],
+      "get": {
+        "operationId": "getDocumentFile",
+        "tags": [
+          "Documents"
+        ],
+        "summary": "Download the original file",
+        "x-scope": "read",
+        "responses": {
+          "200": {
+            "description": "The file, with its own content type.",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "contentMediaType": "application/octet-stream"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/InvalidKey"
+          },
+          "403": {
+            "$ref": "#/components/responses/InsufficientScope"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/chats": {
+      "get": {
+        "operationId": "listChats",
+        "tags": [
+          "Chat"
+        ],
+        "summary": "List chats",
+        "x-scope": "read",
+        "responses": {
+          "200": {
+            "description": "Most recently updated first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ChatSummary"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/InvalidKey"
+          },
+          "403": {
+            "$ref": "#/components/responses/InsufficientScope"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createChat",
+        "tags": [
+          "Chat"
+        ],
+        "summary": "Start a chat",
+        "x-scope": "write",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatSummary"
+                }
+              }
+            },
+            "headers": {
+              "idempotent-replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/InvalidKey"
+          },
+          "403": {
+            "$ref": "#/components/responses/InsufficientScope"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/IdempotencyMismatch"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/chats/{id}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Id"
+        }
+      ],
+      "get": {
+        "operationId": "getChat",
+        "tags": [
+          "Chat"
+        ],
+        "summary": "Get a chat with its messages",
+        "x-scope": "read",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/InvalidKey"
+          },
+          "403": {
+            "$ref": "#/components/responses/InsufficientScope"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteChat",
+        "tags": [
+          "Chat"
+        ],
+        "summary": "Delete a chat",
+        "x-scope": "write",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted",
+            "headers": {
+              "idempotent-replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/InvalidKey"
+          },
+          "403": {
+            "$ref": "#/components/responses/InsufficientScope"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/IdempotencyMismatch"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/chats/{id}/messages": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Id"
+        }
+      ],
+      "post": {
+        "operationId": "sendChatMessage",
+        "tags": [
+          "Chat"
+        ],
+        "summary": "Send a message to the AI CFO",
+        "description": "Sends a message (and up to 10 files) and streams the answer as Server-Sent Events: `user` (your stored message), `text` (`{delta}` chunks), `tool` (`{name, status, summary}`), `done` (`{message}`) or `error` (`{message}`). The AI CFO acts as the agent: payments it drafts follow the account's agent autonomy and limits, set in the dashboard. Counts against the daily AI limit. A replay with the same Idempotency-Key returns the status only, without the stream.",
+        "x-scope": "write",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatMessageCreate"
+              },
+              "example": {
+                "text": "Which invoices are due this week?"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Event stream",
+            "headers": {
+              "idempotent-replayed": {
+                "$ref": "#/components/headers/IdempotentReplayed"
+              }
+            },
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "event: text\ndata: {\"delta\":\"Two invoices are due\"}\n\n"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/InvalidKey"
+          },
+          "403": {
+            "$ref": "#/components/responses/InsufficientScope"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/IdempotencyMismatch"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      }
+    },
+    "/connections": {
+      "get": {
+        "operationId": "listConnections",
+        "tags": [
+          "Connections"
+        ],
+        "summary": "List connections",
+        "description": "Bank accounts, wallets and CashXChain accounts with their balances. Adding, changing, refreshing and removing connections is human only.",
+        "x-scope": "read",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Connection"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/InvalidKey"
+          },
+          "403": {
+            "$ref": "#/components/responses/InsufficientScope"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/connections/catalog": {
+      "get": {
+        "operationId": "listConnectionKinds",
+        "tags": [
+          "Connections"
+        ],
+        "summary": "Connection kinds",
+        "description": "What can be connected on this server.",
+        "x-scope": "read",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/InvalidKey"
+          },
+          "403": {
+            "$ref": "#/components/responses/InsufficientScope"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/cashxchain": {
+      "get": {
+        "operationId": "getCashxchainAccount",
+        "tags": [
+          "Connections"
+        ],
+        "summary": "CashXChain sub-account",
+        "description": "The account's CashXChain sandbox sub-account: link status and, once linked, its accounts and balances.",
+        "x-scope": "read",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/InvalidKey"
+          },
+          "403": {
+            "$ref": "#/components/responses/InsufficientScope"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/funding": {
+      "get": {
+        "operationId": "getFundingStatus",
+        "tags": [
+          "Connections"
+        ],
+        "summary": "Test tADA status",
+        "description": "Whether the account's agent wallet can still get its one test-tADA grant. Requesting it is human only.",
+        "x-scope": "read",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/InvalidKey"
+          },
+          "403": {
+            "$ref": "#/components/responses/InsufficientScope"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/api-keys": {
+      "get": {
+        "operationId": "listApiKeys",
+        "tags": [
+          "API keys"
+        ],
+        "summary": "List API keys",
+        "description": "The account's keys: name, prefix, scopes, last use. Never the keys themselves.",
+        "x-scope": "read",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ApiKey"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/InvalidKey"
+          },
+          "403": {
+            "$ref": "#/components/responses/InsufficientScope"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createApiKey",
+        "tags": [
+          "API keys"
+        ],
+        "summary": "Create an API key",
+        "description": "Creates a key. The response carries the key itself (`key`), shown once.\n\n**Human only.** Done by a person signed in to the dashboard. An API key gets 403 `human_only`, whatever its scopes.",
+        "x-human-only": true,
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiKey"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/InvalidKey"
+          },
+          "403": {
+            "$ref": "#/components/responses/HumanOnly"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        }
+      }
+    },
+    "/api-keys/{id}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Id"
+        }
+      ],
+      "delete": {
+        "operationId": "revokeApiKey",
+        "tags": [
+          "API keys"
+        ],
+        "summary": "Revoke an API key",
+        "description": "Revokes a key at once.\n\n**Human only.** Done by a person signed in to the dashboard. An API key gets 403 `human_only`, whatever its scopes.",
+        "x-human-only": true,
+        "responses": {
+          "204": {
+            "description": "Revoked"
+          },
+          "401": {
+            "$ref": "#/components/responses/InvalidKey"
+          },
+          "403": {
+            "$ref": "#/components/responses/HumanOnly"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        }
+      }
+    },
+    "/webhooks": {
+      "get": {
+        "operationId": "listWebhooks",
+        "tags": [
+          "Webhooks"
+        ],
+        "summary": "List webhook endpoints",
+        "x-scope": "read",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Webhook"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/InvalidKey"
+          },
+          "403": {
+            "$ref": "#/components/responses/InsufficientScope"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createWebhook",
+        "tags": [
+          "Webhooks"
+        ],
+        "summary": "Add a webhook endpoint",
+        "description": "Body `{url, events?}`; `url` must be HTTPS. Returns the endpoint with its signing secret `whsec_…`, shown once.\n\n**Human only.** Done by a person signed in to the dashboard. An API key gets 403 `human_only`, whatever its scopes.",
+        "x-human-only": true,
+        "responses": {
+          "201": {
+            "description": "Added",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookCreated"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/InvalidKey"
+          },
+          "403": {
+            "$ref": "#/components/responses/HumanOnly"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "url"
+                ],
+                "properties": {
+                  "url": {
+                    "type": "string",
+                    "format": "uri"
+                  },
+                  "events": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/WebhookEventType"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/webhooks/{id}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Id"
+        }
+      ],
+      "delete": {
+        "operationId": "deleteWebhook",
+        "tags": [
+          "Webhooks"
+        ],
+        "summary": "Remove a webhook endpoint",
+        "description": "Stops deliveries to this endpoint.\n\n**Human only.** Done by a person signed in to the dashboard. An API key gets 403 `human_only`, whatever its scopes.",
+        "x-human-only": true,
+        "responses": {
+          "401": {
+            "$ref": "#/components/responses/InvalidKey"
+          },
+          "403": {
+            "$ref": "#/components/responses/HumanOnly"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "2XX": {
+            "description": "Done (dashboard session only)."
+          }
+        }
+      }
+    },
+    "/webhooks/{id}/test": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Id"
+        }
+      ],
+      "post": {
+        "operationId": "testWebhook",
+        "tags": [
+          "Webhooks"
+        ],
+        "summary": "Send a test event",
+        "description": "Sends a `ping` event to the endpoint.\n\n**Human only.** Done by a person signed in to the dashboard. An API key gets 403 `human_only`, whatever its scopes.",
+        "x-human-only": true,
+        "responses": {
+          "401": {
+            "$ref": "#/components/responses/InvalidKey"
+          },
+          "403": {
+            "$ref": "#/components/responses/HumanOnly"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "2XX": {
+            "description": "Done (dashboard session only)."
+          }
+        }
+      }
+    }
+  },
+  "webhooks": {
+    "payment.created": {
+      "post": {
+        "operationId": "onPaymentCreated",
+        "summary": "A payment was drafted",
+        "description": "Signed with `x-paylorya-signature: t=<unix>,v1=<hex>`, where v1 = HMAC-SHA256(secret, `<t>.<raw body>`). Also sent: `x-paylorya-event`, `x-paylorya-delivery`. Answer 2xx; anything else is retried with backoff, about 6 attempts.",
+        "security": [],
+        "parameters": [
+          {
+            "name": "x-paylorya-event",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/WebhookEventType"
+            }
+          },
+          {
+            "name": "x-paylorya-delivery",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-paylorya-signature",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "examples": [
+                "t=1793448000,v1=5f2b…"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaymentCreatedEvent"
+              }
+            }
+          }
+        },
+        "responses": {
+          "2XX": {
+            "description": "Received"
+          }
+        }
+      }
+    },
+    "payment.updated": {
+      "post": {
+        "operationId": "onPaymentUpdated",
+        "summary": "A payment changed status",
+        "description": "`data` carries the payment and its `previousStatus`. Same headers and signature as `payment.created`.",
+        "security": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaymentUpdatedEvent"
+              }
+            }
+          }
+        },
+        "responses": {
+          "2XX": {
+            "description": "Received"
+          }
+        }
+      }
+    },
+    "ping": {
+      "post": {
+        "operationId": "onPing",
+        "summary": "Test event",
+        "description": "Sent by the dashboard's test button. Same headers and signature.",
+        "security": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PingEvent"
+              }
+            }
+          }
+        },
+        "responses": {
+          "2XX": {
+            "description": "Received"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "ply_sk_ followed by 40 base62 characters",
+        "description": "An account API key, created in the dashboard (Developers)."
+      }
+    },
+    "parameters": {
+      "Id": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      },
+      "IdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": false,
+        "description": "Any unique string, at most 200 characters. Same key and same request within 24 h: the first reply is returned again, nothing runs twice.",
+        "schema": {
+          "type": "string",
+          "maxLength": 200
+        }
+      }
+    },
+    "headers": {
+      "IdempotentReplayed": {
+        "description": "`true` when this reply is a replay of an earlier request with the same Idempotency-Key.",
+        "schema": {
+          "type": "string",
+          "enum": [
+            "true"
+          ]
+        }
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "The request is not valid: the message names the field.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": "amountMinor: Too small: expected number to be >0"
+            }
+          }
+        }
+      },
+      "InvalidKey": {
+        "description": "No valid key: unknown, mistyped or revoked.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": "This API key is not valid: unknown, mistyped or revoked.",
+              "code": "invalid_key"
+            }
+          }
+        }
+      },
+      "InsufficientScope": {
+        "description": "The key lacks the scope this call needs.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": "This key lacks the \"write\" scope.",
+              "code": "insufficient_scope"
+            }
+          }
+        }
+      },
+      "HumanOnly": {
+        "description": "Only a person signed in to the dashboard can do this.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": "This action needs a person signed in to the PayLorya AI dashboard (approving, signing, credentials, payees, budgets, agent rights).",
+              "code": "human_only"
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "No such record in this account.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": "document not found"
+            }
+          }
+        }
+      },
+      "Conflict": {
+        "description": "A conflict: the same Idempotency-Key is still running (`idempotency_in_progress`), or the request clashes with the current state (e.g. an open payment for the same bill).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": "A request with this Idempotency-Key is still running.",
+              "code": "idempotency_in_progress"
+            }
+          }
+        }
+      },
+      "IdempotencyMismatch": {
+        "description": "This Idempotency-Key was used with a different request.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": "This Idempotency-Key was used with a different request.",
+              "code": "idempotency_mismatch"
+            }
+          }
+        }
+      },
+      "RateLimited": {
+        "description": "More than 120 requests in a minute with this key; or, without `code`, the account's daily AI limit (documents and chat messages).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": "Too many requests with this key: try again in 1 s.",
+              "code": "rate_limited"
+            }
+          }
+        },
+        "headers": {
+          "retry-after": {
+            "description": "Seconds to wait (key rate limit only).",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        }
+      },
+      "ServerError": {
+        "description": "Something went wrong on our side. A request with an Idempotency-Key that ends in 5xx can be retried with the same key.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": "Something went wrong"
+            }
+          }
+        }
+      },
+      "TooLarge": {
+        "description": "The file is larger than 15 MB.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": "File too large (max 15 MB)"
+            }
+          }
+        }
+      },
+      "Unavailable": {
+        "description": "The AI model is not configured on this server.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": "The AI model is not configured on this server"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "What went wrong, in plain English."
+          },
+          "code": {
+            "type": "string",
+            "description": "Machine-readable code. Set by the key layer (auth, scopes, rate limit, idempotency); most route errors carry only `error`.",
+            "enum": [
+              "invalid_key",
+              "insufficient_scope",
+              "human_only",
+              "rate_limited",
+              "idempotency_mismatch",
+              "idempotency_in_progress",
+              "invalid_request"
+            ]
+          }
+        }
+      },
+      "Scope": {
+        "type": "string",
+        "description": "`read`: every GET. `write`: drafting payments, uploading and deleting documents, chats.",
+        "enum": [
+          "read",
+          "write"
+        ]
+      },
+      "ApiKey": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "prefix",
+          "scopes",
+          "createdAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "prefix": {
+            "type": "string",
+            "description": "Recognisable part of the key, e.g. `ply_sk_AbCd…WxYz`. The key itself is never returned again.",
+            "examples": [
+              "ply_sk_AbCd…WxYz"
+            ]
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Scope"
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lastUsedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "revokedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "AgentLimits": {
+        "type": "object",
+        "required": [
+          "perPaymentUsdMinor",
+          "monthlyUsdMinor",
+          "knownPayeesOnly"
+        ],
+        "properties": {
+          "perPaymentUsdMinor": {
+            "type": "integer",
+            "description": "Largest payment the agent may execute on its own, USD cents."
+          },
+          "monthlyUsdMinor": {
+            "type": "integer",
+            "description": "What the agent may execute on its own per calendar month, USD cents."
+          },
+          "knownPayeesOnly": {
+            "type": "boolean",
+            "description": "The agent pays only payees saved in the payee directory on its own."
+          }
+        }
+      },
+      "Workspace": {
+        "type": "object",
+        "description": "The account (workspace) the key belongs to.",
+        "required": [
+          "id",
+          "name",
+          "baseCurrency",
+          "autonomy",
+          "limits",
+          "createdAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "baseCurrency": {
+            "type": "string",
+            "const": "USD"
+          },
+          "autonomy": {
+            "type": "string",
+            "description": "What the AI CFO agent may do on its own. Changed only in the dashboard.",
+            "enum": [
+              "read_only",
+              "guarded",
+              "full"
+            ]
+          },
+          "limits": {
+            "$ref": "#/components/schemas/AgentLimits"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "cashxchain": {
+            "type": "object",
+            "description": "CashXChain sandbox sub-account link, once attempted."
+          },
+          "funding": {
+            "type": "object",
+            "description": "The one test-tADA grant to the agent wallet, once sent."
+          }
+        }
+      },
+      "Me": {
+        "type": "object",
+        "required": [
+          "workspace",
+          "apiKey"
+        ],
+        "properties": {
+          "workspace": {
+            "$ref": "#/components/schemas/Workspace"
+          },
+          "apiKey": {
+            "$ref": "#/components/schemas/ApiKey"
+          }
+        }
+      },
+      "Balance": {
+        "type": "object",
+        "required": [
+          "asset",
+          "amount"
+        ],
+        "properties": {
+          "asset": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "string",
+            "description": "Decimal string in the asset's major unit."
+          },
+          "usdMinor": {
+            "type": "integer",
+            "description": "Indicative value, USD cents."
+          }
+        }
+      },
+      "Connection": {
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "label",
+          "network",
+          "access",
+          "supports",
+          "status",
+          "balances",
+          "createdAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "cardano_agent_wallet",
+              "cardano_wallet",
+              "evm_wallet",
+              "cashxchain",
+              "bank"
+            ]
+          },
+          "label": {
+            "type": "string"
+          },
+          "network": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "access": {
+            "type": "string",
+            "enum": [
+              "read",
+              "read_write"
+            ]
+          },
+          "keyHint": {
+            "type": "string",
+            "description": "Set when the connection carries its own credential; never the credential."
+          },
+          "supports": {
+            "type": "object",
+            "properties": {
+              "read": {
+                "type": "boolean"
+              },
+              "write": {
+                "type": "boolean"
+              }
+            }
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "error"
+            ]
+          },
+          "balances": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Balance"
+            }
+          },
+          "error": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Destination": {
+        "type": "object",
+        "description": "Account details to pay to. Bank fields for fiat rails, `cardanoAddress` for tADA.",
+        "properties": {
+          "country": {
+            "type": "string",
+            "description": "ISO 3166-1 alpha-2.",
+            "pattern": "^[A-Z]{2}$"
+          },
+          "iban": {
+            "type": "string"
+          },
+          "bic": {
+            "type": "string"
+          },
+          "routingNumber": {
+            "type": "string",
+            "description": "US ABA routing number, 9 digits."
+          },
+          "accountNumber": {
+            "type": "string"
+          },
+          "accountType": {
+            "type": "string",
+            "enum": [
+              "checking",
+              "savings"
+            ]
+          },
+          "cardanoAddress": {
+            "type": "string",
+            "description": "Cardano Preprod address (`addr_test1…`)."
+          }
+        }
+      },
+      "Payee": {
+        "allOf": [
+          {
+            "type": "object",
+            "required": [
+              "id",
+              "name",
+              "createdAt"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          },
+          {
+            "$ref": "#/components/schemas/Destination"
+          }
+        ]
+      },
+      "PayeeInput": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 140
+          },
+          "country": {
+            "type": "string",
+            "pattern": "^[A-Z]{2}$"
+          },
+          "iban": {
+            "type": "string",
+            "description": "Spaces are removed and letters upper-cased."
+          },
+          "bic": {
+            "type": "string",
+            "description": "8 or 11 characters."
+          },
+          "routingNumber": {
+            "type": "string",
+            "pattern": "^\\d{9}$"
+          },
+          "accountNumber": {
+            "type": "string",
+            "maxLength": 34
+          },
+          "accountType": {
+            "type": "string",
+            "enum": [
+              "checking",
+              "savings"
+            ]
+          },
+          "cardanoAddress": {
+            "type": "string",
+            "pattern": "^addr_test1[0-9a-z]{50,}$"
+          }
+        }
+      },
+      "Budget": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "category",
+          "limitUsdMinor",
+          "createdAt",
+          "spentUsdMinor"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "limitUsdMinor": {
+            "type": "integer",
+            "description": "Monthly limit, USD cents."
+          },
+          "spentUsdMinor": {
+            "type": "integer",
+            "description": "Money out in this category this calendar month, USD cents."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "BudgetInput": {
+        "type": "object",
+        "required": [
+          "name",
+          "category",
+          "limitUsdMinor"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "category": {
+            "type": "string",
+            "maxLength": 60
+          },
+          "limitUsdMinor": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      },
+      "Transaction": {
+        "type": "object",
+        "required": [
+          "id",
+          "date",
+          "description",
+          "category",
+          "amountMinor",
+          "currency",
+          "usdMinor",
+          "source"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "description": {
+            "type": "string"
+          },
+          "counterparty": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "amountMinor": {
+            "type": "integer",
+            "description": "Signed, in the currency's minor unit: negative is money out."
+          },
+          "currency": {
+            "type": "string"
+          },
+          "usdMinor": {
+            "type": "integer",
+            "description": "Signed indicative USD value, cents."
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "document",
+              "payment",
+              "manual"
+            ]
+          },
+          "documentId": {
+            "type": "string"
+          }
+        }
+      },
+      "Document": {
+        "type": "object",
+        "required": [
+          "id",
+          "filename",
+          "mimeType",
+          "size",
+          "source",
+          "status",
+          "createdAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "filename": {
+            "type": "string"
+          },
+          "mimeType": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer",
+            "description": "Bytes."
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "upload",
+              "chat"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "description": "`processing` right after upload; the AI CFO reads it in the background.",
+            "enum": [
+              "processing",
+              "processed",
+              "failed"
+            ]
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "invoice",
+              "receipt",
+              "bank_statement",
+              "contract",
+              "payroll",
+              "tax",
+              "other"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "counterparty": {
+            "type": "string"
+          },
+          "amountMinor": {
+            "type": "integer"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "issueDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "dueDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "category": {
+            "type": "string"
+          },
+          "error": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "DocumentDetail": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Document"
+          },
+          {
+            "type": "object",
+            "required": [
+              "transactions",
+              "payments"
+            ],
+            "properties": {
+              "extracted": {
+                "type": "object",
+                "description": "Raw fields the AI CFO extracted.",
+                "additionalProperties": true
+              },
+              "transactions": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Transaction"
+                }
+              },
+              "payments": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Payment"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "FileUpload": {
+        "type": "object",
+        "required": [
+          "filename",
+          "mimeType",
+          "dataBase64"
+        ],
+        "properties": {
+          "filename": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "mimeType": {
+            "type": "string",
+            "description": "e.g. `application/pdf`, `image/png`, `text/csv`.",
+            "maxLength": 100
+          },
+          "dataBase64": {
+            "type": "string",
+            "description": "The file, base64-encoded. At most 15 MB decoded.",
+            "contentEncoding": "base64"
+          }
+        }
+      },
+      "PolicyCheck": {
+        "type": "object",
+        "required": [
+          "id",
+          "status",
+          "message"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "fail",
+              "warn"
+            ]
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "PolicyDecision": {
+        "type": "object",
+        "description": "The deterministic policy's verdict. Drafts made with an API key always get `approval` or `blocked`, never `auto`.",
+        "required": [
+          "decision",
+          "checks"
+        ],
+        "properties": {
+          "decision": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "approval",
+              "blocked"
+            ]
+          },
+          "checks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PolicyCheck"
+            }
+          }
+        }
+      },
+      "PaymentStatus": {
+        "type": "string",
+        "description": "`pending_approval`: waits for a person. `blocked`: cannot execute as it stands (see `policy.checks`). `awaiting_signature`: a tADA payout waiting for the owner's wallet.",
+        "enum": [
+          "pending_approval",
+          "approved",
+          "executing",
+          "awaiting_signature",
+          "executed",
+          "rejected",
+          "failed",
+          "blocked"
+        ]
+      },
+      "Payment": {
+        "type": "object",
+        "required": [
+          "id",
+          "payeeName",
+          "amountMinor",
+          "currency",
+          "usdMinor",
+          "rail",
+          "reason",
+          "status",
+          "requestedBy",
+          "policy",
+          "createdAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "payeeName": {
+            "type": "string"
+          },
+          "payeeId": {
+            "type": "string"
+          },
+          "destination": {
+            "$ref": "#/components/schemas/Destination",
+            "description": "Only for a payee that is not saved."
+          },
+          "amountMinor": {
+            "type": "integer",
+            "description": "Minor unit of `currency` (cents; lovelace for ADA; yen for JPY)."
+          },
+          "currency": {
+            "type": "string"
+          },
+          "usdMinor": {
+            "type": "integer",
+            "description": "Indicative USD value, cents."
+          },
+          "rail": {
+            "type": "string",
+            "description": "`cashxchain` for fiat (sandbox), `cardano_preprod` for tADA, `manual` when no rail pays this currency.",
+            "enum": [
+              "cardano_preprod",
+              "cashxchain",
+              "manual"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          },
+          "documentId": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PaymentStatus"
+          },
+          "requestedBy": {
+            "type": "string",
+            "description": "`user` for drafts made with an API key or in the dashboard; `agent` for the AI CFO's own drafts.",
+            "enum": [
+              "agent",
+              "user"
+            ]
+          },
+          "policy": {
+            "$ref": "#/components/schemas/PolicyDecision"
+          },
+          "runId": {
+            "type": "string"
+          },
+          "txHash": {
+            "type": "string"
+          },
+          "explorerUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "reference": {
+            "type": "string"
+          },
+          "error": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "decidedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "executedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "cardano": {
+            "type": "object",
+            "description": "tADA payout details: wallet, verification, transaction and confirmation."
+          },
+          "verification": {
+            "type": "object",
+            "description": "The x402 verification report bought on Cardano before the payout."
+          },
+          "payoutKey": {
+            "type": "string",
+            "description": "The payout's idempotency key, fixed at the first attempt."
+          }
+        }
+      },
+      "PaymentCreate": {
+        "type": "object",
+        "required": [
+          "payeeId",
+          "amountMinor",
+          "currency",
+          "reason"
+        ],
+        "properties": {
+          "payeeId": {
+            "type": "string",
+            "description": "A saved payee (GET /payees). Payees are added in the dashboard."
+          },
+          "amountMinor": {
+            "type": "integer",
+            "description": "Minor unit of `currency`: 12000 EUR = 120.00 EUR; ADA in lovelace (1 tADA = 1000000).",
+            "minimum": 1
+          },
+          "currency": {
+            "type": "string",
+            "description": "ADA pays tADA on Cardano Preprod; USD, EUR, GBP, CHF, AED, PLN and SEK go to the CashXChain sandbox; JPY has no rail and is drafted as `blocked`.",
+            "enum": [
+              "USD",
+              "EUR",
+              "GBP",
+              "CHF",
+              "AED",
+              "PLN",
+              "SEK",
+              "JPY",
+              "ADA"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "description": "e.g. the invoice number.",
+            "minLength": 1,
+            "maxLength": 300
+          },
+          "documentId": {
+            "type": "string",
+            "description": "Link the payment to an uploaded document."
+          }
+        }
+      },
+      "Activity": {
+        "type": "object",
+        "required": [
+          "id",
+          "at",
+          "actor",
+          "action",
+          "detail"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "actor": {
+            "type": "string",
+            "enum": [
+              "user",
+              "agent",
+              "system"
+            ]
+          },
+          "action": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "ref": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "Overview": {
+        "type": "object",
+        "properties": {
+          "workspace": {
+            "$ref": "#/components/schemas/Workspace"
+          },
+          "cash": {
+            "type": "object",
+            "properties": {
+              "totalUsdMinor": {
+                "type": "integer"
+              },
+              "connections": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "usdMinor": {
+                      "type": "integer"
+                    },
+                    "balances": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Balance"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "payables": {
+            "type": "object",
+            "properties": {
+              "count": {
+                "type": "integer"
+              },
+              "totalUsdMinor": {
+                "type": "integer"
+              },
+              "upcoming": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Document"
+                }
+              }
+            }
+          },
+          "approvals": {
+            "type": "object",
+            "properties": {
+              "count": {
+                "type": "integer"
+              },
+              "payments": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Payment"
+                }
+              }
+            }
+          },
+          "spendByCategory": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "category": {
+                  "type": "string"
+                },
+                "usdMinor": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "monthly": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "month": {
+                  "type": "string",
+                  "description": "YYYY-MM"
+                },
+                "inUsdMinor": {
+                  "type": "integer"
+                },
+                "outUsdMinor": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "budgets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Budget"
+            }
+          },
+          "agent": {
+            "type": "object",
+            "properties": {
+              "autonomy": {
+                "type": "string"
+              },
+              "executedThisMonthUsdMinor": {
+                "type": "integer"
+              },
+              "limits": {
+                "$ref": "#/components/schemas/AgentLimits"
+              }
+            }
+          },
+          "documents": {
+            "type": "object",
+            "properties": {
+              "total": {
+                "type": "integer"
+              },
+              "processing": {
+                "type": "integer"
+              }
+            }
+          }
+        }
+      },
+      "Forecast": {
+        "type": "object",
+        "description": "Connected balances today, minus open payables on their due dates, plus open receivables. Deterministic; no model involved.",
+        "properties": {
+          "days": {
+            "type": "integer"
+          },
+          "startUsdMinor": {
+            "type": "integer"
+          },
+          "points": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "date": {
+                  "type": "string",
+                  "format": "date"
+                },
+                "balanceUsdMinor": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "date": {
+                  "type": "string",
+                  "format": "date"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "usdMinor": {
+                  "type": "integer"
+                },
+                "documentId": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "ChatSummary": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "updatedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ChatMessage": {
+        "type": "object",
+        "required": [
+          "id",
+          "role",
+          "text",
+          "createdAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "user",
+              "assistant"
+            ]
+          },
+          "text": {
+            "type": "string"
+          },
+          "attachments": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "documentId": {
+                  "type": "string"
+                },
+                "filename": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "tools": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "summary": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ChatDetail": {
+        "type": "object",
+        "required": [
+          "chat",
+          "messages"
+        ],
+        "properties": {
+          "chat": {
+            "$ref": "#/components/schemas/ChatSummary"
+          },
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChatMessage"
+            }
+          }
+        }
+      },
+      "ChatMessageCreate": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 20000,
+            "default": ""
+          },
+          "attachments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FileUpload"
+            },
+            "maxItems": 10,
+            "default": []
+          }
+        }
+      },
+      "WebhookEventType": {
+        "type": "string",
+        "enum": [
+          "payment.created",
+          "payment.updated",
+          "ping"
+        ]
+      },
+      "Webhook": {
+        "type": "object",
+        "required": [
+          "id",
+          "url",
+          "events",
+          "createdAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "description": "HTTPS only.",
+            "format": "uri"
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WebhookEventType"
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "WebhookCreated": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Webhook"
+          },
+          {
+            "type": "object",
+            "required": [
+              "secret"
+            ],
+            "properties": {
+              "secret": {
+                "type": "string",
+                "description": "Signing secret, `whsec_…`. Shown once."
+              }
+            }
+          }
+        ]
+      },
+      "WebhookEvent": {
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "createdAt",
+          "data"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "`evt_…`"
+          },
+          "type": {
+            "$ref": "#/components/schemas/WebhookEventType"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "data": {
+            "type": "object"
+          }
+        }
+      },
+      "PaymentCreatedEvent": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/WebhookEvent"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "const": "payment.created"
+              },
+              "data": {
+                "type": "object",
+                "properties": {
+                  "payment": {
+                    "$ref": "#/components/schemas/Payment"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "PaymentUpdatedEvent": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/WebhookEvent"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "const": "payment.updated"
+              },
+              "data": {
+                "type": "object",
+                "properties": {
+                  "payment": {
+                    "$ref": "#/components/schemas/Payment"
+                  },
+                  "previousStatus": {
+                    "$ref": "#/components/schemas/PaymentStatus"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "PingEvent": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/WebhookEvent"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "const": "ping"
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
