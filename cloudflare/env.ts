@@ -2,6 +2,7 @@
 // Must cover every key of the config schema in src/config.ts except PORT (tests/cloudflare-env.test.ts).
 export const FORWARDED = [
   "PUBLIC_BASE_URL",
+  "AUTH_TRUSTED_ORIGINS",
   "BLOCKFROST_PREPROD_URL",
   "BLOCKFROST_PROJECT_ID",
   "SELLER_ADDRESS",
