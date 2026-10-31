@@ -26,6 +26,8 @@ export interface Workspace {
 export interface Me {
   user: { id: string; name: string; email: string };
   workspace: Workspace;
+  /** password: the account has one (optional; codes work without). codes: email codes are delivered. */
+  signIn?: { password: boolean; codes: boolean };
 }
 
 /** PATCH /api/v1/workspace. Switching to "full" requires confirm: "FULL ACCESS". */
