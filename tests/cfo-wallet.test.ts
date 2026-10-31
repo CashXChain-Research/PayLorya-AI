@@ -61,6 +61,8 @@ function stubKit() {
     inBlock: new Set<string>(),
     nextHash: TX,
     holds: 50_000_000n,
+    /** Unix ms of the newest block the provider has indexed. */
+    tip: Date.now(),
   };
   const kit: TxKit = {
     async build({ payTo, lovelace, funds, validUntil }) {
@@ -76,6 +78,7 @@ function stubKit() {
     },
     isDefinitiveRejection: () => state.definitive,
     confirmed: async hash => state.inBlock.has(hash),
+    tipTime: async () => state.tip,
   };
   return { kit, state };
 }
@@ -200,14 +203,36 @@ describe("tADA payouts from the workspace's own wallet: stored at every step, si
     expect(await payment(me, id)).toMatchObject({ status: "executed", txHash: TX });
   });
 
-  it("a sent transaction that expires unconfirmed goes back to signing: nothing was sent", async () => {
+  it("a sent transaction counts as never included only once the indexer is well past its validity", async () => {
     const s = await start();
     const me = await s.user("owner@nordwind.example");
     const id = await approvedAdaPayment(me);
-    await me("POST", `/api/v1/payments/${id}/transaction`, funds());
+    const built = (await me("POST", `/api/v1/payments/${id}/transaction`, funds())).json;
     s.state.submitError = new Error("timeout");
     await me("POST", `/api/v1/payments/${id}/signature`, { txHash: TX, witnessSet: "a10081" });
-    await s.deps.payments.sweep(Date.now() + 15 * 60_000);
+    const validUntil = Date.parse(built.validUntil);
+
+    // Long past its validity by our clock, but the provider has indexed only 5 minutes past it: the
+    // transaction may sit in a block it has not indexed yet. Wait; never reset to signing.
+    s.state.tip = validUntil + 5 * 60_000;
+    await s.deps.payments.sweep(validUntil + 60 * 60_000);
+    expect((await payment(me, id)).status).toBe("executing");
+    // It was in a block after all: found once indexed, paid once.
+    s.state.inBlock.add(TX);
+    await s.deps.payments.sweep(validUntil + 61 * 60_000);
+    expect(await payment(me, id)).toMatchObject({ status: "executed", txHash: TX });
+  });
+
+  it("a sent transaction the indexer has passed without seeing goes back to signing: nothing was sent", async () => {
+    const s = await start();
+    const me = await s.user("owner@nordwind.example");
+    const id = await approvedAdaPayment(me);
+    const built = (await me("POST", `/api/v1/payments/${id}/transaction`, funds())).json;
+    s.state.submitError = new Error("timeout");
+    await me("POST", `/api/v1/payments/${id}/signature`, { txHash: TX, witnessSet: "a10081" });
+    const validUntil = Date.parse(built.validUntil);
+    s.state.tip = validUntil + 11 * 60_000;
+    await s.deps.payments.sweep(validUntil + 11 * 60_000);
     expect(await payment(me, id)).toMatchObject({ status: "awaiting_signature", error: expect.stringMatching(/expired before it reached a block/) });
   });
 

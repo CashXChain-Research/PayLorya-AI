@@ -41,6 +41,12 @@ export const NEEDS_OWN_WALLET = "tADA payouts leave from your own wallet: connec
 export const INTERRUPTED =
   "Interrupted by a server restart before it finished. Approve it again to continue: it pays under the same idempotency key, never twice.";
 
+/**
+ * How far past a sent transaction's validity the provider's newest indexed block must be before an
+ * unseen transaction counts as never included. An indexer that lags only delays the decision.
+ */
+export const EXPIRY_MARGIN_MS = 10 * 60_000;
+
 export const CHECK_TIMED_OUT =
   "The verification on Cardano did not finish in time, so nothing was paid. Approve it again to retry.";
 
@@ -143,6 +149,18 @@ export class Payments {
     }
     // One send per payment: a second tab or a double click finds it already claimed.
     if (!(await this.store.claimPayment(ws, id, ["awaiting_signature"], "executing"))) return refuse(409, "This payment is already being sent");
+    // Owned by this request until it is recorded and sent: the sweep must not take it for cut off.
+    const live = `${ws}:${id}`;
+    this.running.add(live);
+    try {
+      return await this.send(ws, id, p, c, kit, signed);
+    } finally {
+      this.running.delete(live);
+    }
+  }
+
+  private async send(ws: string, id: string, p: Payment, c: CardanoPayout, kit: TxKit, signed: string): Promise<Result<Payment>> {
+    if (!c.tx) return refuse(409, "That transaction has expired. Sign again: a fresh one is built.");
     const submitted = { txHash: c.tx.txHash, at: new Date().toISOString(), validUntil: c.tx.validUntil };
     await this.store.updatePayment(ws, id, { cardano: { ...c, submitted }, error: undefined });
     await this.store.log(ws, "user", "signed payment", `${p.payeeName}: ${fmt(p.amountMinor, p.currency)} in their wallet`, { type: "payment", id });
@@ -223,9 +241,13 @@ export class Payments {
         if (p.status === "executing" && sent) {
           if (!kit) continue;
           if (await kit.confirmed(sent.txHash)) await this.finishCardano(ws, p.id, new Date(now).toISOString());
-          else if (now > Date.parse(sent.validUntil) + 120_000) {
-            await this.store.updatePayment(ws, p.id, { status: "awaiting_signature", cardano: { ...p.cardano!, submitted: undefined }, error: "The transaction expired before it reached a block: nothing was sent. Sign again." });
-            await this.store.log(ws, "system", "payment not sent", `${p.payeeName}: the transaction expired unconfirmed`, { type: "payment", id: p.id });
+          // Never included only once the provider's own chain view is well past its validity: a block
+          // can land just before the deadline and be indexed minutes later. Until then, wait.
+          else if (now > Date.parse(sent.validUntil) + EXPIRY_MARGIN_MS && (await kit.tipTime()) > Date.parse(sent.validUntil) + EXPIRY_MARGIN_MS && !(await kit.confirmed(sent.txHash))) {
+            if (await this.store.claimPayment(ws, p.id, ["executing"], "awaiting_signature")) {
+              await this.store.updatePayment(ws, p.id, { cardano: { ...p.cardano!, submitted: undefined }, error: "The transaction expired before it reached a block: nothing was sent. Sign again." });
+              await this.store.log(ws, "system", "payment not sent", `${p.payeeName}: the transaction expired unconfirmed`, { type: "payment", id: p.id });
+            }
           }
         } else if (p.status === "executing") {
           if (await this.store.claimPayment(ws, p.id, ["executing"], "pending_approval")) {

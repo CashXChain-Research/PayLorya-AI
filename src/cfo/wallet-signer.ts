@@ -42,6 +42,8 @@ export interface TxKit {
   isDefinitiveRejection(error: unknown): boolean;
   /** True once the transaction is in a block. */
   confirmed(txHash: string): Promise<boolean>;
+  /** Unix ms of the newest block the provider has indexed: how far its view of the chain reaches. */
+  tipTime(): Promise<number>;
 }
 
 const ADA = (lovelace: bigint) => `${(Number(lovelace) / 1e6).toLocaleString("en-US", { maximumFractionDigits: 6 })} tADA`;
@@ -83,6 +85,13 @@ export function evolutionKit(blockfrost: { baseUrl: string; projectId: string })
       if (res.status === 404) return false;
       if (!res.ok) throw new Error(`Blockfrost answered ${res.status}`);
       return true;
+    },
+    async tipTime() {
+      const res = await fetch(`${base}/blocks/latest`, { headers: { project_id: blockfrost.projectId }, signal: AbortSignal.timeout(10_000) });
+      if (!res.ok) throw new Error(`Blockfrost answered ${res.status}`);
+      const time = ((await res.json()) as { time?: unknown }).time;
+      if (typeof time !== "number") throw new Error("Blockfrost returned no block time");
+      return time * 1000;
     },
   };
 }
