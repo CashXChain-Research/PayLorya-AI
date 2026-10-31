@@ -1,4 +1,4 @@
-# PayFlow AI — submission draft
+# PayLorya AI — submission draft
 
 **Release status: draft. Do not submit unchanged.** Live proof and event rules are pending.
 This document prepares the fields named in the work brief; the actual Devfolio form has not
@@ -23,12 +23,12 @@ Use the organizer's stated timezone; record an exact date, time and timezone bel
 
 ## Name and tagline
 
-**Name:** PayFlow AI
+**Name:** PayLorya AI
 
 **Tagline:** Pay-per-call payment readiness for autonomous agents, settled via x402 using
 tADA on Cardano Preprod (testnet).
 
-**Brand:** PayFlow AI — Claude reads. Code decides. You approve. (Fiat payouts on CashXChain rails.)
+**Brand:** PayLorya AI — Claude reads. Code decides. You approve. (Fiat payouts on CashXChain rails.)
 
 ## Problem
 
@@ -38,7 +38,7 @@ also needs a firm limit between interpreting untrusted text and spending money o
 
 ## Solution
 
-PayFlow AI combines a paid payment-readiness API with a reference buyer agent. The API
+PayLorya AI combines a paid payment-readiness API with a reference buyer agent. The API
 checks account details, required fields, duplicates and a demo amount ceiling, then returns
 a readiness report with Simulated route/fees. The buyer purchases that report via x402 using
 tADA on Cardano Preprod (testnet).

@@ -1,4 +1,4 @@
-# PayFlow AI: technical description
+# PayLorya AI: technical description
 
 Source for the Cardano track submission (TUM Blockchain & AI Hackathon 2026). Each statement is
 backed by code, `evidence/*.json` or [ARCHITECTURE.md](ARCHITECTURE.md). Snapshot: `main`,
@@ -14,7 +14,7 @@ backed by code, `evidence/*.json` or [ARCHITECTURE.md](ARCHITECTURE.md). Snapsho
 A business that pays supplier invoices wants an agent to prepare the payment. Reading the invoice
 is the easy part. The hard part is knowing that the payment is safe to send. The account may be
 invalid, a field may be missing, the invoice may be a duplicate, or the bank details may have been
-swapped (invoice redirection). The **PayFlow Readiness API** (`POST /v1/payment-readiness`)
+swapped (invoice redirection). The **PayLorya Readiness API** (`POST /v1/payment-readiness`)
 sells that check for **2 tADA per report, paid via x402 on Cardano Preprod**. Our Claude-based
 agent is its first customer. The agent:
 

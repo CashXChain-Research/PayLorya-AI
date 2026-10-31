@@ -2,7 +2,7 @@
 
 ## Product
 
-**PayFlow Readiness API**: pay-per-request validation for autonomous payment agents.
+**PayLorya Readiness API**: pay-per-request validation for autonomous payment agents.
 Any agent POSTs a structured invoice to `POST /v1/payment-readiness`, pays per response via
 x402 on Cardano Preprod, and gets a readiness report. Our Claude agent is the demo customer.
 

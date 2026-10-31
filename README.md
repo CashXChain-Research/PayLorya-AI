@@ -1,15 +1,15 @@
-<p><img src="public/brand/payflow-logo.svg" alt="PayFlow AI" height="48"></p>
+<p><img src="public/brand/paylorya-logo.svg" alt="PayLorya AI" height="48"></p>
 
-# PayFlow AI
+# PayLorya AI
 
 **Pay-per-call payment readiness for autonomous agents.**
 
-An agent sends a supplier invoice to the PayFlow Readiness API and pays for a report with
+An agent sends a supplier invoice to the PayLorya Readiness API and pays for a report with
 x402, using **tADA on Cardano Preprod (testnet)**. The report checks account details, required
 fields and duplicates, and shows **Simulated route/fees**. Our Claude-powered demo customer
 ends with a draft awaiting human approval; no supplier payout is executed.
 
-**PayFlow AI** — the AI CFO that checks before it pays. Claude reads. Code decides. You approve. Fiat payouts run on [CashXChain](https://cashxchain.com) rails (sandbox).
+**PayLorya AI** — the AI CFO that checks before it pays. Claude reads. Code decides. You approve. Fiat payouts run on [CashXChain](https://cashxchain.com) rails (sandbox).
 
 **AI CFO product:** the same app now also serves a marketing site at `/`, accounts at `/signup`, and a
 dashboard at `/app`. In the dashboard, users connect wallets and accounts with read or read & write

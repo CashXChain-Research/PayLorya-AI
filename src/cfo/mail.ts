@@ -7,7 +7,7 @@ export interface Mailer {
   sendCode(to: string, code: string, purpose: CodePurpose): Promise<void>;
 }
 
-export const PRODUCT = "PayFlow AI";
+export const PRODUCT = "PayLorya AI";
 
 /**
  * Mail colors and font, mirroring the base.css tokens (--primary, --accent, --font). Mail clients
@@ -39,7 +39,7 @@ export function codeEmail(code: string, purpose: CodePurpose, minutes: number) {
   const t = MAIL_THEME;
   const html = `<!doctype html><html><body style="margin:0;padding:24px;background:${t.page};font-family:${t.font};color:${t.ink}">
 <table role="presentation" width="100%" style="max-width:480px;margin:0 auto;background:${t.card};border-radius:12px;padding:28px">
-<tr><td style="font-size:18px;font-weight:700;color:${t.primary};padding-bottom:16px;border-bottom:3px solid ${t.accent}">PayFlow <span style="color:${t.accent}">AI</span></td></tr>
+<tr><td style="font-size:18px;font-weight:700;color:${t.primary};padding-bottom:16px;border-bottom:3px solid ${t.accent}">PayLorya <span style="color:${t.accent}">AI</span></td></tr>
 <tr><td style="height:16px"></td></tr>
 <tr><td style="font-size:15px;line-height:1.5;padding-bottom:16px">${lead}</td></tr>
 <tr><td style="font-size:32px;font-weight:700;letter-spacing:8px;color:${t.primary};padding:12px 0 20px;font-family:SFMono-Regular,Menlo,Consolas,monospace">${code}</td></tr>
@@ -60,7 +60,7 @@ export function resendMailer(opts: { apiKey: string; from: string; expiresMinute
           authorization: `Bearer ${opts.apiKey}`,
           "content-type": "application/json",
           // Resend dedupes on this for 24 h: a retried request does not mail the same code twice.
-          "idempotency-key": `payflow-code-${createHash("sha256").update(`${to}|${purpose}|${code}`).digest("hex").slice(0, 32)}`,
+          "idempotency-key": `paylorya-code-${createHash("sha256").update(`${to}|${purpose}|${code}`).digest("hex").slice(0, 32)}`,
         },
         body: JSON.stringify({ from: opts.from, to: [to], subject: mail.subject, text: mail.text, html: mail.html }),
         signal: AbortSignal.timeout(10_000),

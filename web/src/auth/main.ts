@@ -38,7 +38,7 @@ if (next !== "/app") {
 }
 
 // Handed from sign-up/login to /verify in this tab only, never in the URL.
-const PENDING_KEY = "payflow-verify";
+const PENDING_KEY = "paylorya-verify";
 
 function readPending(): Pending | undefined {
   try {

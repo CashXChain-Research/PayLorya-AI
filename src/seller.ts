@@ -9,7 +9,7 @@ import { InvoiceSchema, type ReadinessReport } from "./types.js";
 export const READINESS_PATH = "/v1/payment-readiness";
 
 /**
- * Seller role: the PayFlow Payment Readiness API. Any agent can call it; each response costs
+ * Seller role: the PayLorya Payment Readiness API. Any agent can call it; each response costs
  * PRICE_LOVELACE on Cardano Preprod via x402 (`exact` scheme, `authorization` flow).
  */
 export function mountSeller(app: Express, config: Config): void {
@@ -46,7 +46,7 @@ export function mountSeller(app: Express, config: Config): void {
             price: { amount: config.PRICE_LOVELACE.toString(), asset: "lovelace" },
             ...(extra ? { extra } : {}),
           },
-          description: "PayFlow cross-border payment readiness report",
+          description: "PayLorya cross-border payment readiness report",
           mimeType: "application/json",
         },
       },
