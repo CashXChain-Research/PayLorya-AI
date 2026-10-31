@@ -1,7 +1,7 @@
 import type { PayoutResult } from "../../../../src/types.js";
 import { esc, money } from "../../shared/dom.js";
 import type { Run } from "../api.js";
-import { approvalsDisabled } from "../approval.js";
+import { APPROVALS_OFF, approvalsDisabled } from "../approval.js";
 import { approvalBlock } from "../settings/policy.js";
 import { getSettings } from "../settings/store.js";
 import { I, callout, clock, eta, pill, txLink } from "../ui.js";
@@ -57,7 +57,7 @@ export function approvalHtml(run: Run, card: Card): string {
     foot = `${callout("warn", "Cannot be paid yet", `${esc(rt.reason)}.`)}
       <div class="actions"><button class="btn ghost" type="button" data-act="reject"${card.busy ? " disabled" : ""}>Reject</button></div>`;
   } else {
-    const block = approvalBlock(run, getSettings()) ?? (approvalsDisabled() ? "Approvals are switched off on this server" : undefined);
+    const block = approvalBlock(run, getSettings()) ?? (approvalsDisabled() ? APPROVALS_OFF : undefined);
     const busy = (act: string) => (card.busy === act ? " loading" : "");
     const off = block || card.busy ? " disabled" : "";
     foot = `<div class="actions">

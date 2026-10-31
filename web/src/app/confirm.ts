@@ -1,7 +1,7 @@
 import type { BudgetLine, Money, PaymentDestination, PaymentSource } from "../../../src/contracts.js";
 import { ada, amountText, decimalMoney, esc, money } from "../shared/dom.js";
 import { getPreview, getRun, type PaymentPreview, type Run } from "./api.js";
-import { decideRun, emitPaymentChange } from "./approval.js";
+import { APPROVALS_OFF, decideRun, emitPaymentChange } from "./approval.js";
 import { payoutHtml } from "./assistant/cards.js";
 import { go } from "./router.js";
 import { markAttempted } from "./settings/auto-state.js";
@@ -162,7 +162,7 @@ async function follow(w: Win): Promise<void> {
 
 /** Why "Confirm and pay" is off, if it is (no trailing period). */
 function blockOf(p: PaymentPreview): string | undefined {
-  if (p.approvals === "disabled") return "Approvals are switched off on this server (no operator token configured)";
+  if (p.approvals === "disabled") return APPROVALS_OFF;
   if (p.blockers.length) return p.blockers.map(b => b.replace(/\.\s*$/, "")).join(" · ");
   if (!p.payable) return "The agent says this payout cannot start now";
   return railBlock(p.rail, getSettings());

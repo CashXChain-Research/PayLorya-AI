@@ -2,7 +2,7 @@ import type { Budget, BudgetUsage } from "../../../../src/contracts.js";
 import { $, ada, esc, exponent, money, tada } from "../../shared/dom.js";
 import { reducedMotion } from "../../shared/nav.js";
 import { getBalances, getBudget, putBudget, type BudgetState, type BudgetUpdate } from "../api.js";
-import { approvalsDisabled, emitPaymentChange, withOperatorToken } from "../approval.js";
+import { APPROVALS_OFF, approvalsDisabled, emitPaymentChange, withOperatorToken } from "../approval.js";
 import { health } from "../health.js";
 import { I, callout } from "../ui.js";
 import { fiatCurrencies } from "../wallets.js";
@@ -258,7 +258,7 @@ async function save(): Promise<void> {
     status(`Not saved: ${res.error}`, "bad");
   } else if (res.status === 0) status(res.error, "");
   else if (res.status === 401) status("The operator token was not accepted. Nothing was changed.", "bad");
-  else if (res.status === 503) status("Approvals are switched off on this server (no operator token), so the budget can't be changed. Nothing was changed.", "bad");
+  else if (res.status === 503) status(`${APPROVALS_OFF} Nothing was changed.`, "bad");
   else status(`Not saved: ${res.error}.`, "bad");
 }
 
@@ -306,7 +306,7 @@ export function updateLimits(): void {
     : h.status ? "" : "Agent offline.";
   const line = $("lim-token");
   line.hidden = !approvalsDisabled();
-  line.querySelector("span")!.textContent = "Approvals are switched off on this server (no operator token): the budget is read-only here";
+  line.querySelector("span")!.textContent = `${APPROVALS_OFF} Until then the budget is read-only.`;
   if (state) updateFoot();
 }
 
