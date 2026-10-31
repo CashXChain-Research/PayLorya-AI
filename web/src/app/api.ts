@@ -38,7 +38,7 @@ export interface RunSummary {
 
 export type Decision = "approve" | "reject";
 type Accepted = { id: string; state: RunState };
-export type PostResult = { ok: true; data: Accepted } | { ok: false; error: string };
+export type PostResult = { ok: true; data: Accepted } | { ok: false; error: string; status: number };
 
 const getJson = async <T>(url: string): Promise<T> => (await fetch(url)).json() as Promise<T>;
 
@@ -53,17 +53,20 @@ export async function getRun(id: string): Promise<Run | undefined> {
   return run?.timeline ? (run as Run) : undefined;
 }
 
-async function post(url: string, body?: unknown): Promise<PostResult> {
+async function post(url: string, body?: unknown, headers: Record<string, string> = {}): Promise<PostResult> {
   const init: RequestInit = body === undefined
-    ? { method: "POST" }
-    : { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) };
+    ? { method: "POST", headers }
+    : { method: "POST", headers: { ...headers, "content-type": "application/json" }, body: JSON.stringify(body) };
   const res = await fetch(url, init);
   const data = (await res.json().catch(() => ({}))) as Partial<Accepted> & { error?: string };
-  if (!res.ok || !data.id) return { ok: false, error: data.error || `HTTP ${res.status}` };
+  if (!res.ok || !data.id) return { ok: false, error: data.error || `HTTP ${res.status}`, status: res.status };
   return { ok: true, data: data as Accepted };
 }
 
 export const createRun = (input: string): Promise<PostResult> => post("/api/runs", { input });
-/** 409 when the run is no longer awaiting approval or the draft cannot execute. */
-export const decide = (id: string, decision: Decision): Promise<PostResult> =>
-  post(`/api/runs/${encodeURIComponent(id)}/${decision}`);
+/**
+ * 401 when the server has APPROVE_TOKEN set and the token is missing or wrong.
+ * 409 when the run is no longer awaiting approval or the draft cannot execute.
+ */
+export const decide = (id: string, decision: Decision, approveToken?: string): Promise<PostResult> =>
+  post(`/api/runs/${encodeURIComponent(id)}/${decision}`, undefined, approveToken ? { authorization: `Bearer ${approveToken}` } : {});
