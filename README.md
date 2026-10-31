@@ -1,3 +1,5 @@
+<p><img src="public/brand/payflow-logo.svg" alt="PayFlow AI" height="48"></p>
+
 # PayFlow AI
 
 **Pay-per-call payment readiness for autonomous agents.**
