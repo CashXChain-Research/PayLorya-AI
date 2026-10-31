@@ -4,6 +4,7 @@ import { del, get, patch, post } from "../api.js";
 import type { Ctx } from "../state.js";
 import type { Access, CatalogEntry, Connection, ConnectionCreate, ConnectionKind, CxcState } from "../types.js";
 import { ago, balance, confirmDialog, copyText, dialog, empty, fieldError, icon, pageHead, sk, toast, usd, val } from "../ui.js";
+import { cardanoWallets, connectCardano, connectEvm, hasEvmWallet } from "../wallets.js";
 
 const KIND_ICON: Record<ConnectionKind, string> = {
   cardano_agent_wallet: "bot",
@@ -20,6 +21,31 @@ const NETWORK: Record<string, [string, string]> = {
   bank: ["Bank", ""],
 };
 const PLACEHOLDER: Partial<Record<ConnectionKind, string>> = { cardano_wallet: "addr_test1…", evm_wallet: "0x…" };
+const CXC_KEY = /^cxc_(sk|rk)_sandbox_[A-Za-z0-9]+$/;
+
+// Set from GET /api/v1/cashxchain: a linked sub-account is what a key-less CashXChain connection reads.
+let cxcLinked = false;
+
+/** Whose CashXChain account a connection reads: the workspace's own key, its sub-account, or the shared one. */
+function cxcOwner(c: Connection): string {
+  if (c.kind !== "cashxchain") return "";
+  if (c.keyHint) return `<div class="addr-row owner"><span class="muted small">Your account · key</span><span class="mono" title="Stored encrypted">${esc(c.keyHint)}</span></div>`;
+  return `<div class="addr-row owner"><span class="muted small">${cxcLinked ? "Your linked CashXChain sub-account" : "PayLorya AI shared sandbox account"}</span></div>`;
+}
+
+/** "Connect Lace" buttons for the browser wallets found; they fill the address field. */
+function walletButtons(kind: ConnectionKind): string {
+  if (kind !== "cardano_wallet" && kind !== "evm_wallet") return "";
+  const wallets: Array<{ id: string; name: string; icon?: string }> =
+    kind === "cardano_wallet" ? cardanoWallets() : hasEvmWallet() ? [{ id: "ethereum", name: "browser wallet" }] : [];
+  if (!wallets.length) {
+    const which = kind === "cardano_wallet" ? "a Cardano wallet such as Lace or Eternl" : "an EVM wallet such as MetaMask";
+    return `<p class="fine">${icon("info", 13)} No browser wallet found. Install ${which} to connect with one click, or paste the address.</p>`;
+  }
+  return `<div class="field"><span class="lbl">Connect a wallet</span><div class="wallet-pick">${wallets
+    .map(w => `<button type="button" class="btn ghost sm" data-wallet="${esc(w.id)}">${w.icon ? `<img src="${esc(w.icon)}" alt="" width="18" height="18">` : icon("wallet", 16)}Connect ${esc(w.name)}</button>`)
+    .join("")}</div><span class="fine">Your wallet asks for permission and shares this address only: the AI CFO reads balances, it can never sign.</span></div>`;
+}
 
 function networkPill(n: string): string {
   const [name, note] = NETWORK[n] ?? [n, ""];
@@ -35,6 +61,7 @@ function connCard(c: Connection, i: number): string {
       <div class="conn-t"><h3>${esc(c.label)}</h3>${networkPill(c.network)}</div>
       <span class="pill ${c.status === "active" ? "t-ok" : c.status === "error" ? "t-bad" : "t-neutral"}">${c.status === "active" ? '<i class="live"></i>Active' : c.status === "error" ? "Error" : "Coming soon"}</span>
     </div>
+    ${cxcOwner(c)}
     ${c.address ? `<div class="addr-row"><span class="mono" title="${esc(c.address)}">${esc(short(c.address))}</span><button type="button" class="icon-btn xs" data-copy="${esc(c.address)}" aria-label="Copy address">${icon("copy", 13)}</button></div>` : ""}
     ${c.error ? `<div class="callout bad sm">${icon("alert", 14)}<span>${esc(c.error)}</span></div>` : ""}
     <div class="conn-bal">
@@ -89,7 +116,14 @@ async function addDialog(entry: CatalogEntry): Promise<Connection | null> {
     submit: "Connect",
     body: `<p class="dlg-text">${esc(entry.description)}</p>
       <div class="field"><label for="c-label">Name <span class="opt-l">optional</span></label><input id="c-label" name="label" placeholder="${esc(entry.name)}" autocomplete="off"></div>
+      ${entry.needsAddress ? walletButtons(entry.kind) : ""}
       ${entry.needsAddress ? `<div class="field"><label for="c-addr">Address</label><input id="c-addr" name="address" class="mono" placeholder="${esc(PLACEHOLDER[entry.kind] ?? "Address")}" autocomplete="off" spellcheck="false"></div>` : ""}
+      ${
+        entry.acceptsApiKey
+          ? `<div class="field"><label for="c-key">API key${entry.sharedFallback ? ' <span class="opt-l">optional</span>' : ""}</label><input id="c-key" name="apiKey" type="password" class="mono" placeholder="cxc_sk_sandbox_…" autocomplete="off" spellcheck="false">
+        <span class="fine">From your CashXChain sandbox dashboard: a secret key, or a restricted key with accounts:read (to pay, also payments:read, payments:write and beneficiaries:write). Stored encrypted; shown again only by its last four characters.${entry.sharedFallback ? " Leave empty to use PayLorya AI's shared sandbox account." : ""}</span></div>`
+          : ""
+      }
       <div class="field"><span class="lbl">Agent access</span>
         <div class="radio-cards">
           <label><input type="radio" name="access" value="read" checked><span>${icon("eye", 16)}<b>Read-only</b><em>See balances and history</em></span></label>
@@ -98,10 +132,38 @@ async function addDialog(entry: CatalogEntry): Promise<Connection | null> {
       </div>
       ${entry.kind === "cardano_agent_wallet" || entry.kind === "cardano_wallet" ? `<p class="fine">${icon("info", 13)} Cardano Preprod is a test network. Balances are tADA with no real value.</p>` : ""}
       ${entry.kind === "cashxchain" ? `<p class="fine">${icon("info", 13)} CashXChain sandbox: a test ledger, no real money moves.</p>` : ""}`,
+    onOpen: form => {
+      form.addEventListener("click", async e => {
+        const b = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-wallet]");
+        if (!b || b.disabled) return;
+        b.disabled = true;
+        b.classList.add("loading");
+        try {
+          const address = entry.kind === "cardano_wallet" ? await connectCardano(b.dataset.wallet!) : await connectEvm();
+          const input = form.elements.namedItem("address") as HTMLInputElement | null;
+          if (input) {
+            input.value = address;
+            input.closest(".field")?.classList.remove("invalid");
+          }
+          toast("Address taken from your wallet", "ok");
+        } catch (error) {
+          fieldError(form, "address", error instanceof Error ? error.message : "The wallet could not be connected.");
+        } finally {
+          b.disabled = false;
+          b.classList.remove("loading");
+        }
+      });
+    },
     onSubmit: async form => {
       const body: ConnectionCreate = { kind: entry.kind, access: (val(form, "access") || "read") as Access };
       const label = val(form, "label");
       if (label) body.label = label;
+      if (entry.acceptsApiKey) {
+        const apiKey = val(form, "apiKey");
+        if (apiKey && !CXC_KEY.test(apiKey)) return fieldError(form, "apiKey", "Use a CashXChain sandbox key: cxc_sk_sandbox_… or cxc_rk_sandbox_…");
+        if (!apiKey && !entry.sharedFallback) return fieldError(form, "apiKey", "Paste your CashXChain sandbox API key.");
+        if (apiKey) body.apiKey = apiKey;
+      }
       if (entry.needsAddress) {
         const address = val(form, "address");
         if (!address) return fieldError(form, "address", "Paste the wallet address.");
@@ -129,6 +191,11 @@ export async function renderConnections(view: HTMLElement, ctx: Ctx): Promise<vo
   const cxcEl = view.querySelector<HTMLElement>("#c-cxc")!;
   const paintCxc = (s: CxcState) => {
     cxcEl.innerHTML = cxcPanel(s);
+    const linked = s.link?.status === "linked";
+    if (linked !== cxcLinked) {
+      cxcLinked = linked;
+      if (conns.some(c => c.kind === "cashxchain" && !c.keyHint)) paint();
+    }
   };
   void get<CxcState>("/api/v1/cashxchain", true).then(s => ctx.alive() && paintCxc(s), () => undefined);
   cxcEl.addEventListener("click", async e => {

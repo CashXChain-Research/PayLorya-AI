@@ -203,7 +203,7 @@ describe("Resend mailer", () => {
     const calls: { url: string; init: RequestInit }[] = [];
     const mailer = resendMailer({
       apiKey: "re_test_key",
-      from: "PayLorya AI <no-reply@cashxchain.com>",
+      from: "PayLorya AI <no-reply@mail.valentin.is>",
       expiresMinutes: 10,
       fetch: (async (url: string, init: RequestInit) => {
         calls.push({ url, init });
@@ -219,7 +219,7 @@ describe("Resend mailer", () => {
     expect(headers["idempotency-key"]).toMatch(/^paylorya-code-[0-9a-f]{32}$/);
     expect((calls[1]!.init.headers as Record<string, string>)["idempotency-key"]).toBe(headers["idempotency-key"]);
     const body = JSON.parse(String(calls[0]!.init.body));
-    expect(body).toMatchObject({ from: "PayLorya AI <no-reply@cashxchain.com>", to: ["ada@example.com"] });
+    expect(body).toMatchObject({ from: "PayLorya AI <no-reply@mail.valentin.is>", to: ["ada@example.com"] });
     expect(body.subject).toBe("123456 is your PayLorya AI code: confirm your email");
     expect(body.text).toContain("123456");
     expect(body.text).toContain("expires in 10 minutes");
@@ -229,7 +229,7 @@ describe("Resend mailer", () => {
   it("reports a refused send with Resend's status", async () => {
     const mailer = resendMailer({
       apiKey: "re_x",
-      from: "PayLorya AI <no-reply@cashxchain.com>",
+      from: "PayLorya AI <no-reply@mail.valentin.is>",
       expiresMinutes: 10,
       fetch: (async () => new Response('{"message":"domain is not verified"}', { status: 403 })) as unknown as typeof fetch,
     });

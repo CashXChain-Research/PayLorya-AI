@@ -6,6 +6,7 @@ import { blockfrostProvider, type Config } from "../config.js";
 import type { CfoDeps } from "./api.js";
 import { CODE_MINUTES, createAuth } from "./auth.js";
 import { migrate } from "./db.js";
+import { CxcKeys } from "./cxc-keys.js";
 import { CxcLinker } from "./cxc-link.js";
 import { claudeExtractor } from "./ingest.js";
 import { resendMailer, type Mailer } from "./mail.js";
@@ -31,7 +32,7 @@ function storage(config: Config, opts: { memory?: boolean }): { sql: Sql; files:
 export async function createCfo(
   config: Config,
   engine: PaymentEngine,
-  opts: { memory?: boolean; mailer?: Mailer } = {},
+  opts: { memory?: boolean; mailer?: Mailer; /** Tests: a fake CashXChain for workspace keys. */ cashxchainBaseUrl?: string } = {},
 ): Promise<CfoDeps> {
   const { sql, files } = storage(config, opts);
   await migrate(sql);
@@ -40,11 +41,17 @@ export async function createCfo(
     opts.mailer ??
     (config.RESEND_API_KEY ? resendMailer({ apiKey: config.RESEND_API_KEY, from: config.RESEND_FROM, expiresMinutes: CODE_MINUTES }) : undefined);
   const auth = createAuth(sql, { baseUrl: config.baseUrl, secret: config.BETTER_AUTH_SECRET, mailer });
+  // A workspace's own CashXChain account, connected with its API key (sealed with BETTER_AUTH_SECRET).
+  const keys = new CxcKeys(store, config.BETTER_AUTH_SECRET, apiKey =>
+    new CashXChainClient({ apiKey, ...(opts.cashxchainBaseUrl ? { baseUrl: opts.cashxchainBaseUrl } : {}) }),
+  );
   return {
     store,
     auth,
-    payments: new Payments(store, engine),
+    payments: new Payments(store, engine, keys),
+    keys,
     connections: {
+      acceptsApiKey: keys.ready,
       ...(config.BLOCKFROST_PROJECT_ID ? { blockfrost: blockfrostProvider(config).blockfrost } : {}),
       get agentWalletAddress() {
         return engine.agent?.buyerAddress;

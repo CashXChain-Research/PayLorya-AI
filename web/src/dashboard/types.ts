@@ -60,6 +60,8 @@ export interface Connection {
   balances: Balance[];
   error?: string;
   createdAt: string;
+  /** CashXChain connected with the workspace's own API key: its prefix and last four characters. */
+  keyHint?: string;
 }
 
 /** POST /api/v1/connections. GET /api/v1/connections/catalog lists what can be added. */
@@ -68,6 +70,8 @@ export interface ConnectionCreate {
   label?: string;
   address?: string; // cardano_wallet (addr_test1...), evm_wallet (0x...)
   access?: Access;
+  /** cashxchain: the workspace's own sandbox API key (cxc_sk_sandbox_… or cxc_rk_sandbox_…). */
+  apiKey?: string;
 }
 
 export interface CatalogEntry {
@@ -77,6 +81,10 @@ export interface CatalogEntry {
   supports: { read: boolean; write: boolean };
   available: boolean; // false: shown as "coming soon"
   needsAddress: boolean;
+  /** cashxchain: an own API key can be connected. */
+  acceptsApiKey?: boolean;
+  /** cashxchain: without a key, PayLorya AI's shared sandbox account is used. */
+  sharedFallback?: boolean;
 }
 
 export type DocumentKind = "invoice" | "receipt" | "bank_statement" | "contract" | "payroll" | "tax" | "other";
