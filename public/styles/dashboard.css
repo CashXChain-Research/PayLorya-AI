@@ -309,6 +309,7 @@ a.today-item:hover { background: var(--surface-2); }
 .ap-amt span { font-size: 11.5px; color: var(--ink-3); white-space: nowrap; }
 .ap .decide { grid-area: act; justify-self: end; margin-top: 6px; }
 .decide { display: inline-flex; gap: 6px; }
+.decide .btn { white-space: nowrap; }
 .leaving { opacity: 0; transform: translateX(16px); }
 .list-empty { list-style: none; }
 .conn-mini li { display: flex; align-items: center; gap: 12px; padding: 9px 8px; border-radius: 12px; }

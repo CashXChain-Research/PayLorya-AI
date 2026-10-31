@@ -123,6 +123,17 @@ export interface Payment {
   createdAt: string;
   decidedAt?: string;
   executedAt?: string;
+  /** Set while a tADA payout waits for the owner's wallet signature (CIP-30 signTx). */
+  signRequest?: SignRequest;
+}
+
+/** The unsigned payout transaction the owner's wallet signs, and until when. */
+export interface SignRequest {
+  txCbor: string;
+  txHash: string;
+  /** The wallet address it spends from: the workspace's connected wallet. */
+  address: string;
+  expiresAt: string;
 }
 
 export interface Activity {
@@ -525,12 +536,14 @@ export class Store {
   async updatePayment(
     ws: string,
     id: string,
-    patch: Partial<Pick<Payment, "status" | "policy" | "runId" | "txHash" | "explorerUrl" | "reference" | "error" | "decidedAt" | "executedAt">>,
+    patch: Partial<Pick<Payment, "status" | "policy" | "runId" | "txHash" | "explorerUrl" | "reference" | "error" | "decidedAt" | "executedAt">> & {
+      signRequest?: SignRequest | null;
+    },
   ): Promise<Payment> {
     const p = (await this.payment(ws, id))!;
     const next = { ...p, ...patch };
     await this.run(
-      `UPDATE payments SET status = ?, policy_json = ?, run_id = ?, tx_hash = ?, explorer_url = ?, reference = ?, error = ?, decided_at = ?, executed_at = ?
+      `UPDATE payments SET status = ?, policy_json = ?, run_id = ?, tx_hash = ?, explorer_url = ?, reference = ?, error = ?, decided_at = ?, executed_at = ?, sign_request_json = ?
        WHERE workspace_id = ? AND id = ?`,
       next.status,
       JSON.stringify(next.policy),
@@ -541,6 +554,7 @@ export class Store {
       next.error ?? null,
       next.decidedAt ?? null,
       next.executedAt ?? null,
+      next.signRequest ? JSON.stringify(next.signRequest) : null,
       ws,
       id,
     );
@@ -788,5 +802,6 @@ function toPayment(r: Row): Payment {
     createdAt: String(r.created_at),
     decidedAt: opt(r.decided_at as string | null),
     executedAt: opt(r.executed_at as string | null),
+    ...(r.sign_request_json ? { signRequest: json<SignRequest>(r.sign_request_json, { txCbor: "", txHash: "", address: "", expiresAt: "" }) } : {}),
   };
 }

@@ -49,7 +49,8 @@ export function emitState(): void {
 export async function refreshBadges(): Promise<void> {
   try {
     const payments = await get<Payment[]>("/api/v1/payments", true);
-    state.approvals = payments.filter(p => p.status === "pending_approval").length;
+    // Approvals and tADA payouts waiting for a wallet signature.
+    state.approvals = payments.filter(p => p.status === "pending_approval" || (p.status === "executing" && Boolean(p.signRequest))).length;
     emitState();
   } catch {
     // badge only

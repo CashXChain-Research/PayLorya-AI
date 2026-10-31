@@ -11,6 +11,8 @@ import { CxcLinker } from "./cxc-link.js";
 import { claudeExtractor } from "./ingest.js";
 import { resendMailer, type Mailer } from "./mail.js";
 import { Payments, type PaymentEngine } from "./payments.js";
+import { SignatureDesk } from "./signatures.js";
+import { evolutionKit, type TxKit } from "./wallet-signer.js";
 import { localFiles, localSql, memoryFiles, remoteFiles, remoteSql, type Files, type Sql } from "./sql.js";
 import { Store } from "./store.js";
 
@@ -32,7 +34,15 @@ function storage(config: Config, opts: { memory?: boolean }): { sql: Sql; files:
 export async function createCfo(
   config: Config,
   engine: PaymentEngine,
-  opts: { memory?: boolean; mailer?: Mailer; /** Tests: the CashXChain client for a workspace key. */ cashxchainFor?: (apiKey: string) => CashXChainClient } = {},
+  opts: {
+    memory?: boolean;
+    mailer?: Mailer;
+    /** Tests: the CashXChain client for a workspace key. */
+    cashxchainFor?: (apiKey: string) => CashXChainClient;
+    /** Tests: builds tADA payouts from a workspace wallet; production: Evolution SDK over Blockfrost. */
+    walletKit?: TxKit;
+    signMs?: number;
+  } = {},
 ): Promise<CfoDeps> {
   const { sql, files } = storage(config, opts);
   await migrate(sql);
@@ -55,7 +65,11 @@ export async function createCfo(
   return {
     store,
     auth,
-    payments: new Payments(store, engine, keys),
+    payments: new Payments(store, engine, keys, {
+      ...(opts.walletKit ? { kit: opts.walletKit } : config.BLOCKFROST_PROJECT_ID ? { kit: evolutionKit(blockfrostProvider(config).blockfrost) } : {}),
+      desk: new SignatureDesk(),
+      ...(opts.signMs ? { signMs: opts.signMs } : {}),
+    }),
     keys,
     connections: {
       acceptsApiKey: keys.ready,

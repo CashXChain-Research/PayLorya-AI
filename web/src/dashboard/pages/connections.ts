@@ -44,7 +44,7 @@ function walletButtons(kind: ConnectionKind): string {
   }
   return `<div class="field"><span class="lbl">Connect a wallet</span><div class="wallet-pick">${wallets
     .map(w => `<button type="button" class="btn ghost sm" data-wallet="${esc(w.id)}">${w.icon ? `<img src="${esc(w.icon)}" alt="" width="18" height="18">` : icon("wallet", 16)}Connect ${esc(w.name)}</button>`)
-    .join("")}</div><span class="fine">Your wallet asks for permission and shares this address only: the AI CFO reads balances, it can never sign.</span></div>`;
+    .join("")}</div><span class="fine">Your wallet asks for permission and shares this address only. The AI CFO never holds your keys: with read &amp; write, you sign each payment in your wallet.</span></div>`;
 }
 
 function networkPill(n: string): string {
@@ -74,7 +74,7 @@ function connCard(c: Connection, i: number): string {
         <button type="button" role="radio" aria-checked="${c.access === "read"}" data-access="read" ${c.supports.write ? "" : "disabled"}>${icon("eye", 14)}Read-only</button>
         <button type="button" role="radio" aria-checked="${c.access === "read_write"}" data-access="read_write" ${c.supports.write ? "" : "disabled"}>${icon("pay", 14)}Read &amp; write</button>
       </div>
-      ${c.supports.write ? "" : `<span class="fine">Watch-only: this connection cannot send payments.</span>`}
+      ${c.supports.write ? (c.kind === "cardano_wallet" ? `<span class="fine">Read &amp; write: you sign each tADA payout in your wallet. No keys are stored.</span>` : "") : `<span class="fine">${c.kind === "cardano_agent_wallet" ? "Pays the x402 verification fees only; payouts leave from your own wallet." : "Watch-only: this connection cannot send payments."}</span>`}
     </div>
     <div class="conn-foot"><span class="muted small">Added ${esc(ago(c.createdAt))}</span>
       <span><button type="button" class="icon-btn" data-rename aria-label="Rename">${icon("edit", 16)}</button><button type="button" class="icon-btn" data-refresh aria-label="Refresh balances" title="Refresh balances">${icon("refresh", 16)}</button><button type="button" class="icon-btn danger-h" data-remove aria-label="Remove connection" title="Remove">${icon("trash", 16)}</button></span></div>
@@ -127,7 +127,7 @@ async function addDialog(entry: CatalogEntry): Promise<Connection | null> {
       <div class="field"><span class="lbl">Agent access</span>
         <div class="radio-cards">
           <label><input type="radio" name="access" value="read" checked><span>${icon("eye", 16)}<b>Read-only</b><em>See balances and history</em></span></label>
-          <label class="${entry.supports.write ? "" : "off"}"><input type="radio" name="access" value="read_write" ${entry.supports.write ? "" : "disabled"}><span>${icon("pay", 16)}<b>Read &amp; write</b><em>${entry.supports.write ? "May also send payments, within your policy" : "Not supported by this connection"}</em></span></label>
+          <label class="${entry.supports.write ? "" : "off"}"><input type="radio" name="access" value="read_write" ${entry.supports.write ? "" : "disabled"}><span>${icon("pay", 16)}<b>Read &amp; write</b><em>${entry.supports.write ? (entry.kind === "cardano_wallet" ? "Pays tADA: you sign each payment in your wallet" : "May also send payments, within your policy") : "Not supported by this connection"}</em></span></label>
         </div>
       </div>
       ${entry.kind === "cardano_agent_wallet" || entry.kind === "cardano_wallet" ? `<p class="fine">${icon("info", 13)} Cardano Preprod is a test network. Balances are tADA with no real value.</p>` : ""}
@@ -217,7 +217,7 @@ export async function renderConnections(view: HTMLElement, ctx: Ctx): Promise<vo
   const paint = () => {
     grid.innerHTML = conns.length
       ? conns.map(connCard).join("")
-      : `<div class="card wide-empty">${empty({ icon: "link", title: "No connections yet", text: "Connect your Cardano agent wallet, a watch-only wallet or your CashXChain sandbox account below. Your AI CFO starts reading balances right away." })}</div>`;
+      : `<div class="card wide-empty">${empty({ icon: "link", title: "No connections yet", text: "Connect your own Cardano wallet, an EVM wallet or your CashXChain sandbox account below. Your AI CFO starts reading balances right away." })}</div>`;
   };
   const paintCatalog = () => {
     catEl.innerHTML = catalog
