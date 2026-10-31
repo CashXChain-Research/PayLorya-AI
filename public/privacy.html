@@ -35,7 +35,7 @@
   <table>
     <thead><tr><th>Data</th><th>Purpose</th><th>Legal basis</th></tr></thead>
     <tbody>
-      <tr><td><b>Account data</b>: name, email address, password (stored only as a hash)</td><td>Creating and running your account</td><td>Art. 6(1)(b) GDPR (contract)</td></tr>
+      <tr><td><b>Account data</b>: name, email address, password (stored only as a hash), or the Google account data described in section 4</td><td>Creating and running your account</td><td>Art. 6(1)(b) GDPR (contract)</td></tr>
       <tr><td><b>Session data</b>: session token, IP address and browser user agent of each login session</td><td>Keeping you signed in; security and abuse prevention</td><td>Art. 6(1)(b) and (f) GDPR</td></tr>
       <tr><td><b>Workspace content</b>: uploaded documents (invoices, receipts, statements, contracts and others), data extracted from them, ledger entries, budgets, payees including bank details or wallet addresses, payments, chat messages, activity log</td><td>Providing the service you use</td><td>Art. 6(1)(b) GDPR</td></tr>
       <tr><td><b>Connected wallets and accounts</b>: public wallet addresses, account balances</td><td>Showing balances and executing payments you allow</td><td>Art. 6(1)(b) GDPR</td></tr>
@@ -44,13 +44,26 @@
   </table>
   <p>Documents you upload may contain personal data of third parties (for example names and bank details of your suppliers). You are responsible for having a legal basis to share them with us; we process them on your behalf only to provide the service.</p>
 
-  <h2>4. AI processing</h2>
+  <h2>4. Sign in with Google</h2>
+  <p>If you choose "Continue with Google", PayLorya AI uses Google's OAuth sign-in and requests only the basic scopes <code>openid</code>, <code>email</code> and <code>profile</code>. We receive from Google:</p>
+  <ul>
+    <li>your Google account ID,</li>
+    <li>your name,</li>
+    <li>your email address and whether Google has verified it,</li>
+    <li>the URL of your profile picture.</li>
+  </ul>
+  <p><b>How we use it:</b> only to create your PayLorya AI account, sign you in and show your name and email in the app. If an account with the same verified email already exists, the Google sign-in is linked to it.</p>
+  <p><b>What we do not do:</b> we do not access your Gmail, Drive, Calendar, contacts or any other Google data; we do not post on your behalf; we do not sell or share Google user data with third parties, use it for advertising, or use it to train AI models. Google user data is not sent to our AI provider.</p>
+  <p><b>Storage and deletion:</b> the data is stored with your account in our database (Cloudflare D1) and kept as long as your account exists. Google access tokens are used only during sign-in. To delete your account and this data, write to <a href="mailto:legal@cashxchain.com">legal@cashxchain.com</a>. You can also remove PayLorya AI's access at any time at <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>.</p>
+  <p>PayLorya AI's use and transfer of information received from Google APIs adheres to the <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, including the Limited Use requirements.</p>
+
+  <h2>5. AI processing</h2>
   <p>To read documents and answer chat messages, the content you submit is sent to the Claude API of Anthropic PBC (USA). Anthropic acts as our processor. According to Anthropic's commercial terms, API inputs and outputs are not used to train its models. AI results can be wrong; the AI CFO does not make decisions that produce legal effects for you on its own. Whether the agent may execute a payment without your approval is decided by rules and limits you set (autonomy level, limits, known payees), not by the model.</p>
 
-  <h2>5. Recipients and processors</h2>
+  <h2>6. Recipients and processors</h2>
   <ul>
     <li><b>Cloudflare, Inc.</b> (USA): hosting, content delivery, database (Cloudflare D1, primary location Western Europe) and file storage for uploaded documents (Cloudflare R2). Server logs are processed by Cloudflare.</li>
-    <li><b>Anthropic PBC</b> (USA): AI processing of documents and chat messages (section 4).</li>
+    <li><b>Anthropic PBC</b> (USA): AI processing of documents and chat messages (section 5).</li>
     <li><b>Google Ireland Ltd. / Google LLC</b>: only if you choose "Continue with Google". Google confirms your identity and sends us your name, email address and profile picture URL; we do not get access to your Google account otherwise.</li>
     <li><b>Blockfrost</b>: Cardano blockchain data provider; receives the Cardano addresses whose balances we look up.</li>
     <li><b>publicnode.com</b>: public RPC endpoints for Ethereum, Base and Polygon; receive the EVM addresses whose balances we look up.</li>
@@ -58,10 +71,10 @@
     <li><b>Public blockchains</b>: Cardano transactions (currently on the Preprod test network) are public and permanent by design. They cannot be deleted.</li>
   </ul>
 
-  <h2>6. Transfers outside the EU</h2>
+  <h2>7. Transfers outside the EU</h2>
   <p>Some processors are located in the USA or may process data there. Transfers are based on the EU-U.S. Data Privacy Framework where the recipient is certified, and otherwise on the EU Standard Contractual Clauses (Art. 46(2)(c) GDPR). Uploaded files are currently stored in a Cloudflare R2 bucket that is not restricted to the EU.</p>
 
-  <h2>7. Cookies and local storage</h2>
+  <h2>8. Cookies and local storage</h2>
   <p>We only use what is strictly necessary to run the service:</p>
   <ul>
     <li><b>Session cookies</b> (<code>better-auth.session_token</code> and a short-lived signed session cache cookie): keep you signed in. Deleted when you sign out or after the session expires (up to 14 days).</li>
@@ -69,16 +82,16 @@
   </ul>
   <p>We do not use cookies for tracking, analytics or advertising. Legal basis: § 25(2) no. 2 TDDDG and Art. 6(1)(b) GDPR.</p>
 
-  <h2>8. Retention</h2>
+  <h2>9. Retention</h2>
   <p>We keep account and workspace data for as long as your account exists. Sessions expire after 14 days of validity. When you delete documents, payees, budgets or chats, they are removed from our database and file storage. When your account is closed, we delete its data, except where we must keep it to meet legal retention obligations. To close your account, write to <a href="mailto:legal@cashxchain.com">legal@cashxchain.com</a>.</p>
 
-  <h2>9. Your rights</h2>
+  <h2>10. Your rights</h2>
   <p>You have the right to access (Art. 15), rectification (Art. 16), erasure (Art. 17), restriction of processing (Art. 18), data portability (Art. 20) and to object to processing based on legitimate interests (Art. 21 GDPR). To exercise them, contact us at <a href="mailto:legal@cashxchain.com">legal@cashxchain.com</a>. You also have the right to lodge a complaint with a data protection supervisory authority, in particular in the EU member state where you live or work.</p>
 
-  <h2>10. Security</h2>
+  <h2>11. Security</h2>
   <p>Data is transmitted over HTTPS. Passwords are stored only as hashes. Uploaded files are served back only to signed-in members of the workspace they belong to. No system is perfectly secure; tell us about suspected vulnerabilities at <a href="mailto:legal@cashxchain.com">legal@cashxchain.com</a>.</p>
 
-  <h2>11. Changes</h2>
+  <h2>12. Changes</h2>
   <p>We will update this policy when the service or the law changes. The date at the top shows the current version.</p>
 
   <nav class="legal-nav"><a href="/">Home</a><a href="/legal">Legal notice</a><a href="/terms">Terms of service</a></nav>
