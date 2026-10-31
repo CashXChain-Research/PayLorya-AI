@@ -72,6 +72,8 @@ export interface ConnectionCreate {
   access?: Access;
   /** cashxchain: the workspace's own sandbox API key (cxc_sk_sandbox_… or cxc_rk_sandbox_…). */
   apiKey?: string;
+  /** cardano_agent_wallet: the wallet's recovery phrase (12, 15 or 24 words). */
+  recoveryPhrase?: string;
 }
 
 export interface CatalogEntry {
@@ -87,6 +89,8 @@ export interface CatalogEntry {
   viaStripe?: boolean;
   /** cashxchain: the key may be left out; the workspace's linked sub-account is read instead. */
   linkedFallback?: boolean;
+  /** cardano_agent_wallet: connected with its recovery phrase (stored encrypted). */
+  acceptsRecoveryPhrase?: boolean;
 }
 
 export type DocumentKind = "invoice" | "receipt" | "bank_statement" | "contract" | "payroll" | "tax" | "other";
@@ -214,6 +218,8 @@ export interface Payment {
   executedAt?: string;
   /** tADA payouts from your own wallet. */
   cardano?: CardanoPayout;
+  /** The x402 verification bought on Cardano from your agent wallet before the payout. */
+  verification?: { txHash: string; explorerUrl: string; verdict?: string; payer?: string };
 }
 
 /** POST /api/v1/payments (user-drafted). Agent drafts arrive through the chat. */

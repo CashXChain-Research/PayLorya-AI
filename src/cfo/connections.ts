@@ -1,3 +1,7 @@
+import { Address } from "@evolution-sdk/evolution";
+import { addressFromSeed } from "@evolution-sdk/evolution/sdk/wallet/Derivation";
+import { validateMnemonic } from "@scure/bip39";
+import { wordlist } from "@scure/bip39/wordlists/english.js";
 import { CXC_SANDBOX_KEY, type CashXChainClient } from "../cashxchain.js";
 import { exponent, majorToMinor, toUsdMinor } from "./fx.js";
 import { accountBalances, StripeError, type StripeFc } from "./stripe.js";
@@ -12,6 +16,8 @@ export interface CatalogEntry {
   needsAddress: boolean;
   /** CashXChain: the workspace may connect its own account with an API key. */
   acceptsApiKey?: boolean;
+  /** Agent wallet: connected by pasting its recovery phrase (stored sealed). */
+  acceptsRecoveryPhrase?: boolean;
   /** CashXChain: the key may be left out, because the workspace's linked sub-account is read instead. */
   linkedFallback?: boolean;
   /** Bank: linked through Stripe Financial Connections (POST /connections/bank/session), not POST /connections. */
@@ -20,12 +26,10 @@ export interface CatalogEntry {
 
 export interface ConnectionEnv {
   blockfrost?: { baseUrl: string; projectId: string };
-  /** The platform's Preprod agent wallet, when x402 is configured. */
-  agentWalletAddress?: string;
   cashxchain?: CashXChainClient;
   /** `cashxchain` is the workspace's own linked sub-account (CxcLinker), not PayLorya AI's shared one. */
   linkedSubAccount?: boolean;
-  /** True when this server can seal a workspace's own CashXChain API key (BETTER_AUTH_SECRET is set). */
+  /** True when this server can seal a workspace's secrets (BETTER_AUTH_SECRET is set): API keys, recovery phrases. */
   acceptsApiKey?: boolean;
   /** Stripe Financial Connections (STRIPE_SECRET_KEY): read-only bank balances. */
   stripe?: StripeFc;
@@ -36,11 +40,14 @@ export function catalog(env: ConnectionEnv): CatalogEntry[] {
   return [
     {
       kind: "cardano_agent_wallet",
-      name: "PayLorya AI agent wallet (Cardano Preprod)",
-      description: "Pays the x402 verification fees before a payout. Read-only: your payouts leave from your own wallet, never from this one.",
-      supports: { read: true, write: false },
-      available: Boolean(env.agentWalletAddress && env.blockfrost),
+      name: "Agent wallet (Cardano Preprod)",
+      description:
+        "Your account's own wallet the AI CFO pays from: the x402 verification on Cardano before every payout, and tADA payouts. Connected with its recovery phrase, stored encrypted. Required to pay.",
+      supports: { read: true, write: true },
+      // Always the workspace's own wallet. PayLorya AI's wallet (BUYER_MNEMONIC) serves the public demo only.
+      available: Boolean(env.acceptsApiKey),
       needsAddress: false,
+      ...(env.acceptsApiKey ? { acceptsRecoveryPhrase: true } : {}),
     },
     {
       kind: "cashxchain",
@@ -57,7 +64,7 @@ export function catalog(env: ConnectionEnv): CatalogEntry[] {
     {
       kind: "cardano_wallet",
       name: "Your Cardano wallet (Preprod)",
-      description: "Lace, Eternl or any Cardano wallet. Read-only: balances. Read & write: the AI CFO prepares tADA payouts and you sign each one in your wallet; no keys are stored.",
+      description: "Lace, Eternl or any Cardano wallet. Read-only: balances. Read & write: tADA payouts leave from this wallet instead of the agent wallet, and you sign each one in it. No keys are stored.",
       supports: { read: true, write: true },
       available: Boolean(env.blockfrost),
       needsAddress: true,
@@ -84,8 +91,16 @@ export function catalog(env: ConnectionEnv): CatalogEntry[] {
 
 export function supportsWrite(kind: ConnectionKind): boolean {
   // A Cardano wallet "writes" only through its owner's signature on each payout (CIP-30).
-  return kind === "cardano_wallet" || kind === "cashxchain";
+  return kind === "cardano_agent_wallet" || kind === "cardano_wallet" || kind === "cashxchain";
 }
+
+/** The agent wallet's Preprod address (account 0, base address), as @x402/cardano's signer derives it. */
+export function agentWalletAddress(recoveryPhrase: string): string {
+  return Address.toBech32(addressFromSeed(recoveryPhrase, { networkId: 0 }).address);
+}
+
+/** Lower case, single spaces: how the phrase is checked, sealed and used. */
+export const normalizePhrase = (phrase: string): string => phrase.trim().toLowerCase().replace(/\s+/g, " ");
 
 export function networkOf(kind: ConnectionKind): string {
   switch (kind) {
@@ -104,15 +119,23 @@ export function networkOf(kind: ConnectionKind): string {
 /** Validates a new connection request. Returns an error message, or the values to store. */
 export function prepareConnection(
   env: ConnectionEnv,
-  input: { kind?: unknown; label?: unknown; address?: unknown; access?: unknown; apiKey?: unknown },
-): { error: string } | { kind: ConnectionKind; label: string; network: string; address?: string; access: Access; apiKey?: string } {
+  input: { kind?: unknown; label?: unknown; address?: unknown; access?: unknown; apiKey?: unknown; recoveryPhrase?: unknown },
+): { error: string } | { kind: ConnectionKind; label: string; network: string; address?: string; access: Access; apiKey?: string; recoveryPhrase?: string } {
   const entry = catalog(env).find(c => c.kind === input.kind);
   if (!entry) return { error: "unknown connection kind" };
   if (!entry.available) return { error: `${entry.name} is not available yet` };
   const kind = entry.kind;
   if (kind === "bank") return { error: "Link bank accounts with the Connect bank button (Stripe)" };
   let address: string | undefined;
-  if (kind === "cardano_agent_wallet") address = env.agentWalletAddress;
+  let recoveryPhrase: string | undefined;
+  const phrase = typeof input.recoveryPhrase === "string" ? normalizePhrase(input.recoveryPhrase) : "";
+  if (phrase && kind !== "cardano_agent_wallet") return { error: `${entry.name} does not take a recovery phrase` };
+  if (kind === "cardano_agent_wallet") {
+    if (!phrase) return { error: "Paste the agent wallet's recovery phrase" };
+    if (!validateMnemonic(phrase, wordlist)) return { error: "That is not a valid recovery phrase: 12, 15 or 24 English BIP-39 words" };
+    recoveryPhrase = phrase;
+    address = agentWalletAddress(phrase);
+  }
   if (kind === "cardano_wallet") {
     address = typeof input.address === "string" ? input.address.trim() : "";
     if (!/^addr_test1[0-9a-z]{50,}$/.test(address)) return { error: "Enter a Cardano Preprod address (addr_test1…)" };
@@ -133,7 +156,7 @@ export function prepareConnection(
   const wantsWrite = input.access === "read_write";
   const access: Access = wantsWrite && supportsWrite(kind) ? "read_write" : "read";
   const label = typeof input.label === "string" && input.label.trim() ? input.label.trim().slice(0, 80) : entry.name;
-  return { kind, label, network: networkOf(kind), ...(address ? { address } : {}), access, ...(apiKey ? { apiKey } : {}) };
+  return { kind, label, network: networkOf(kind), ...(address ? { address } : {}), access, ...(apiKey ? { apiKey } : {}), ...(recoveryPhrase ? { recoveryPhrase } : {}) };
 }
 
 const EVM_NETWORKS = [

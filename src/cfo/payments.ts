@@ -1,4 +1,5 @@
 import type { BuyerAgent } from "../agent.js";
+import type { WorkspaceAgents } from "./agents.js";
 import { CashXChainPayoutRoute } from "../payout-cashxchain.js";
 import type { FiatPayoutClient } from "../payout.js";
 import { normalizeIban } from "../readiness.js";
@@ -36,7 +37,8 @@ export interface PaymentEngine {
   runs: RunStore;
 }
 
-export const NEEDS_OWN_WALLET = "tADA payouts leave from your own wallet: connect your Cardano wallet with read & write on the Connections page";
+export const NEEDS_OWN_WALLET =
+  "tADA payouts leave from your agent wallet (read & write), or from your own Cardano wallet that you sign with (read & write): connect one on the Connections page";
 
 export const INTERRUPTED =
   "Interrupted by a server restart before it finished. Approve it again to continue: it pays under the same idempotency key, never twice.";
@@ -51,6 +53,8 @@ export const CHECK_TIMED_OUT =
   "The verification on Cardano did not finish in time, so nothing was paid. Approve it again to retry.";
 
 export interface PaymentsOptions {
+  /** One payout engine per account, signing with its own agent wallet. Without it nothing executes. */
+  agents?: Pick<WorkspaceAgents, "for" | "wallet">;
   /** tADA from the owner's wallet: builds and broadcasts; absent without BLOCKFROST_PROJECT_ID (tADA refused). */
   kit?: TxKit;
   /** Explorer prefix for a transaction hash (EXPLORER_TX_URL). */
@@ -87,11 +91,25 @@ export class Payments {
   private readonly running = new Set<string>();
 
   /** The workspace's own Cardano wallet (read & write): tADA payouts leave from it and nowhere else. */
-  private async ownWallet(ws: string): Promise<string> {
-    const c = (await this.store.connections(ws)).find(x => x.kind === "cardano_wallet" && x.access === "read_write" && x.address);
-    if (!c?.address) throw new Error(NEEDS_OWN_WALLET);
-    if (!this.wallets.kit) throw new Error("tADA payouts are not configured on this server (BLOCKFROST_PROJECT_ID)");
-    return c.address;
+  private async agentWalletState(ws: string): Promise<"ready" | "missing" | "read_only"> {
+    const wallet = await this.wallets.agents?.wallet(ws);
+    return !wallet ? "missing" : wallet.access === "read_write" ? "ready" : "read_only";
+  }
+
+  /**
+   * Where a tADA payout leaves from. The owner's own wallet set to read & write: they sign each
+   * payout in it (CIP-30), and its address is returned. Otherwise the account's agent wallet: the
+   * agent pays it on its own, like a CashXChain payout. Never PayLorya AI's wallet.
+   */
+  private async tadaSource(ws: string): Promise<{ agent: true } | { agent: false; from: string }> {
+    const connections = await this.store.connections(ws);
+    const own = connections.find(x => x.kind === "cardano_wallet" && x.access === "read_write" && x.address);
+    if (own?.address) {
+      if (!this.wallets.kit) throw new Error("tADA payouts are not configured on this server (BLOCKFROST_PROJECT_ID)");
+      return { agent: false, from: own.address };
+    }
+    if (connections.some(c => c.kind === "cardano_agent_wallet" && c.credentialHint && c.access === "read_write")) return { agent: true };
+    throw new Error(NEEDS_OWN_WALLET);
   }
 
   /**
@@ -278,9 +296,12 @@ export class Payments {
   }
 
   private async railWritable(ws: string, rail: Rail): Promise<boolean> {
-    // tADA: the workspace's own wallet, never the agent wallet. Fiat: its own CashXChain account.
-    const kind = rail === "cardano_preprod" ? "cardano_wallet" : rail === "cashxchain" ? "cashxchain" : undefined;
-    return (await this.store.connections(ws)).some(c => c.kind === kind && c.access === "read_write");
+    const connections = await this.store.connections(ws);
+    // tADA: the account's agent wallet, or its own wallet it signs with. Fiat: its own CashXChain account.
+    if (rail === "cardano_preprod") {
+      return connections.some(c => c.access === "read_write" && ((c.kind === "cardano_agent_wallet" && c.credentialHint) || c.kind === "cardano_wallet"));
+    }
+    return rail === "cashxchain" && connections.some(c => c.kind === "cashxchain" && c.access === "read_write");
   }
 
   async evaluate(
@@ -291,6 +312,7 @@ export class Payments {
     return decidePayment(workspace.autonomy, workspace.limits, {
       ...p,
       railWritable: await this.railWritable(ws, p.rail),
+      agentWallet: await this.agentWalletState(ws),
       agentExecutedThisMonthUsdMinor: await this.store.agentExecutedSince(ws, monthStart()),
     });
   }
@@ -415,8 +437,14 @@ export class Payments {
       await this.store.updatePayment(ws, id, { status: "failed", error });
       await this.store.log(ws, "system", "payment failed", `${p.payeeName}: ${error}`, { type: "payment", id });
     };
-    const agent = this.engine.agent;
-    if (!agent) return fail("The payment engine is not configured on this server");
+    // The account's own engine, signing with its own agent wallet: never PayLorya AI's.
+    let agent: BuyerAgent;
+    try {
+      if (!this.wallets.agents) throw new Error("The payment engine is not configured on this server");
+      agent = await this.wallets.agents.for(ws);
+    } catch (error) {
+      return fail(error instanceof Error ? error.message : String(error));
+    }
     const saved = p.payeeId ? await this.store.payee(ws, p.payeeId) : undefined;
     // The account paid to: the saved payee's, else the one shown in the approved draft.
     const payee = verifiedPayee({ name: saved?.name ?? p.payeeName, ...(saved ? clean(saved) : p.destination) });
@@ -425,7 +453,10 @@ export class Payments {
     let from: string | undefined;
     try {
       if (p.rail === "cashxchain") fiat = await this.ownFiatRoute(ws);
-      if (p.rail === "cardano_preprod") from = await this.ownWallet(ws);
+      if (p.rail === "cardano_preprod") {
+        const source = await this.tadaSource(ws);
+        if (!source.agent) from = source.from;
+      }
     } catch (error) {
       return fail(error instanceof Error ? error.message : String(error));
     }
@@ -453,6 +484,10 @@ export class Payments {
         }
         return;
       }
+      if (run.payment) {
+        const verification = { txHash: run.payment.transactionHash, explorerUrl: run.payment.explorerUrl, payer: run.payment.buyerAddress, ...(run.report?.verdict ? { verdict: run.report.verdict } : {}) };
+        await this.store.updatePayment(ws, id, { verification });
+      }
       if (run.state !== "DRAFT_READY" || !run.draft?.executable) return fail(reasonOf(run));
       if (from) {
         const route = run.draft.route;
@@ -461,7 +496,6 @@ export class Payments {
           from,
           payTo: route.destination,
           lovelace: String(p.amountMinor),
-          ...(run.payment ? { verification: { txHash: run.payment.transactionHash, explorerUrl: run.payment.explorerUrl, ...(run.report?.verdict ? { verdict: run.report.verdict } : {}) } } : {}),
         };
         await this.store.updatePayment(ws, id, { status: "awaiting_signature", cardano, error: undefined });
         await this.store.log(ws, "system", "payment awaiting signature", `${p.payeeName}: ${fmt(p.amountMinor, p.currency)} verified on Cardano; sign it in your wallet`, { type: "payment", id });

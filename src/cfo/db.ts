@@ -166,6 +166,8 @@ const MIGRATIONS: string[][] = [
   [`ALTER TABLE payments ADD COLUMN sign_request_json TEXT`],
   // The payout's idempotency key, fixed at the first attempt (a resumed payment pays the same).
   [`ALTER TABLE payments ADD COLUMN payout_key TEXT`],
+  // The x402 verification bought on Cardano from the account's agent wallet before the payout.
+  [`ALTER TABLE payments ADD COLUMN verification_json TEXT`],
 ];
 
 export async function migrate(sql: Sql): Promise<void> {

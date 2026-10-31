@@ -44,9 +44,11 @@ password by default. Codes are mailed through Resend (`POST https://api.resend.c
 ## What a customer can do
 
 - **Connect** wallets and accounts:
-  - Their own Cardano Preprod wallet (read, or read & write: they sign each tADA payout in it).
+  - Their own **agent wallet** on Cardano Preprod, by recovery phrase (required to pay): the AI
+    CFO pays the x402 verification and tADA payouts from it.
   - Their own CashXChain sandbox account by API key (read & write).
-  - The PayLorya AI agent wallet on Cardano Preprod (read-only: it pays the x402 verification fees).
+  - Their own Cardano Preprod wallet (read, or read & write: tADA payouts leave from it instead, and
+    they sign each one in it).
   - Any EVM address, with balances on Ethereum, Base and Polygon mainnet (watch-only).
   - Bank accounts are listed as coming soon.
   - Each connection is Read-only or Read & write. Watch-only kinds cannot be switched to write.
@@ -110,9 +112,10 @@ src/cfo/
   - CashXChain payouts are sandbox payouts, or simulated when no key is set.
   - USD figures use fixed indicative rates (`src/cfo/fx.ts`), not market data. tADA has a nominal
     rate only, so that USD limits also constrain tADA payments.
-- **Shared agent wallet for fees only**: the x402 verification fees of all workspaces come from one
-  agent wallet, and the agent's platform caps (session payout limits and budgets) apply to all
-  workspaces together. Payouts leave from each workspace's own wallet or account.
+- **No shared wallet or account**: every account pays from its own agent wallet (x402 verification,
+  tADA) and its own CashXChain account (fiat). PayLorya AI's wallet (`BUYER_MNEMONIC`) and
+  CashXChain key (`CASHXCHAIN_API_KEY`) serve the public demo only. Each account has its own
+  payout engine, so the platform caps (session payout limits and budgets) apply per account.
 - **Cost guard**: `CFO_AI_DAILY_LIMIT` caps model calls (documents and chat messages) per workspace
   per day. The default is 150.
 - **Not advice**: reports are financial analysis, not tax, legal or investment advice, and they are
@@ -159,13 +162,27 @@ A workspace uses its own accounts (Connections page). PayLorya AI's shared sandb
 - **Wallets by browser popup.** The Cardano and EVM connections offer "Connect Lace / Eternl / …"
   (CIP-30) and "Connect browser wallet" (EIP-1193, MetaMask). The wallet's permission popup hands
   over an address only; Cardano must be on a testnet (network id 0).
-- **tADA payouts from the workspace's own wallet (required).** They leave only from a Cardano
-  wallet connected with read & write; the agent wallet never pays a workspace's payout, and an old
-  read & write connection to it no longer counts (`NEEDS_OWN_WALLET`). Nothing holds the
-  customer's keys, and every step is stored, so a restart (a deploy, the container waking up)
-  loses nothing:
-  1. **Check on Cardano.** On approval the agent buys the x402 verification report on Cardano
-     Preprod (agent wallet pays the fee) and routes to the verified payee. The payment then waits
+- **Agent wallet per account (required), like the CashXChain key.**
+  - The account pastes its wallet's recovery phrase (12, 15 or 24 BIP-39 words), or creates a new
+    wallet in the browser ("Create a new wallet", 24 words from the browser's CSPRNG).
+  - The phrase is checked and sealed like an API key (`src/cfo/vault.ts`, AES-256-GCM, bound to the
+    account) and never shown again. The address is derived as `@x402/cardano`'s signer derives it
+    (account 0, Preprod).
+  - `WorkspaceAgents` (`src/cfo/agents.ts`) builds one `BuyerAgent` per account signing with it:
+    the x402 verification on Cardano before every payout, and tADA payouts on its own after
+    approval. Each payment shows its verification transaction and the paying address
+    (`payment.verification`).
+  - Without an agent wallet of its own, or with a read-only one, nothing is paid (policy check
+    `agent_wallet`). An old agent-wallet row without a phrase (PayLorya AI's shared wallet) does
+    not count and shows an error.
+  - Custody: the server holds these keys. Preprod test tADA only; the dialog warns never to paste
+    a wallet with real funds. A mainnet product would need a custody assessment (MiCAR).
+- **tADA payouts signed by the owner (optional).** If the account's own Cardano wallet is set to
+  read & write, tADA payouts leave from it instead of the agent wallet, and the owner signs each
+  one; the agent wallet still pays the verification. Every step is stored, so a restart (a deploy,
+  the container waking up) loses nothing:
+  1. **Check on Cardano.** On approval the account's agent buys the x402 verification report on
+     Cardano Preprod (its agent wallet pays the fee) and routes to the verified payee. The payment then waits
      in `awaiting_signature`, with `cardano: {from, payTo, lovelace, verification}`; the report's
      transaction is linked on the payment.
   2. **Built from the wallet's funds, on click.** "Sign with Lace / Eternl" opens the wallet

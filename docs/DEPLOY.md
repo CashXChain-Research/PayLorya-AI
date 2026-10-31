@@ -31,7 +31,7 @@ Cloudflare docs, 2026-10-30). `wrangler deploy --dry-run` passes with this confi
 | --- | --- | --- |
 | `ANTHROPIC_API_KEY` | secret | `npx wrangler secret put` |
 | `BLOCKFROST_PROJECT_ID` | secret (cloud project) | `npx wrangler secret put` |
-| `BUYER_MNEMONIC` | secret (**buyer-cloud** wallet) | `npx wrangler secret put` |
+| `BUYER_MNEMONIC` | secret (**buyer-cloud** wallet): the public demo's buyer only. AI CFO accounts pay from their own agent wallet (recovery phrase, sealed with `BETTER_AUTH_SECRET`) | `npx wrangler secret put` |
 | `SELLER_ADDRESS` | secret | `npx wrangler secret put` |
 | `CASHXCHAIN_API_KEY` | secret, optional: CashXChain **sandbox** key for fiat payouts (see below) | `npx wrangler secret put` |
 | `APPROVE_TOKEN` | secret, **required for approvals** (fail-closed): only requests carrying it may approve or reject a draft; unset, approve/reject answer 503 and `/api/health` shows `approvals: "disabled"` | `npx wrangler secret put` |

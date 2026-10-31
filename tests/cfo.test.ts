@@ -2,6 +2,8 @@ import type { Server } from "node:http";
 import type Anthropic from "@anthropic-ai/sdk";
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import express from "express";
+import { generateMnemonic } from "@scure/bip39";
+import { wordlist } from "@scure/bip39/wordlists/english.js";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { BuyerAgent } from "../src/agent.js";
 import type { CashXChainClient } from "../src/cashxchain.js";
@@ -13,7 +15,18 @@ import { loadConfig } from "../src/config.js";
 import { RunStore, type Run } from "../src/runs.js";
 
 const LIMITS: AgentLimits = { perPaymentUsdMinor: 50_000, monthlyUsdMinor: 200_000, knownPayeesOnly: true };
-const facts = { requestedBy: "agent" as const, rail: "cashxchain" as const, usdMinor: 10_000, payeeKnown: true, hasAccount: true, railWritable: true, agentExecutedThisMonthUsdMinor: 0 };
+const facts = {
+  requestedBy: "agent" as const,
+  rail: "cashxchain" as const,
+  usdMinor: 10_000,
+  payeeKnown: true,
+  hasAccount: true,
+  railWritable: true,
+  agentWallet: "ready" as const,
+  agentExecutedThisMonthUsdMinor: 0,
+};
+// The account's own agent wallet (pays the verification on Cardano); the stub engine stands in for it.
+const AGENT_PHRASE = generateMnemonic(wordlist, 256);
 
 describe("agent permission policy", () => {
   it("guarded: executes alone only inside every rule", () => {
@@ -40,6 +53,13 @@ describe("agent permission policy", () => {
   it("nobody can pay without a write-enabled connection or a rail", () => {
     expect(decidePayment("full", LIMITS, { ...facts, railWritable: false }).decision).toBe("blocked");
     expect(decidePayment("full", LIMITS, { ...facts, rail: "manual" }).decision).toBe("blocked");
+  });
+
+  it("nobody can pay without the account's own agent wallet, read & write", () => {
+    const missing = decidePayment("full", LIMITS, { ...facts, agentWallet: "missing" });
+    expect(missing.decision).toBe("blocked");
+    expect(missing.checks.find(c => c.id === "agent_wallet")?.message).toMatch(/No agent wallet/);
+    expect(decidePayment("full", LIMITS, { ...facts, agentWallet: "read_only" }).checks.find(c => c.id === "agent_wallet")?.message).toMatch(/read-only/);
   });
 });
 
@@ -196,7 +216,7 @@ async function start(script: ScriptStep[] = [], agent?: BuyerAgent) {
   const config = loadConfig({ PUBLIC_BASE_URL: base, BETTER_AUTH_SECRET: "t".repeat(40), ANTHROPIC_API_KEY: "test", ...(dataUrl ? { CFO_DATA_URL: dataUrl } : {}) });
   const engine: PaymentEngine = { runs: new RunStore(), ...(agent ? { agent } : {}) };
   // Every key opens the fake account: the workspace's own CashXChain, connected by API key.
-  const deps = await createCfo(config, engine, { memory: true, cashxchainFor: () => fakeCxc as unknown as CashXChainClient });
+  const deps = await createCfo(config, engine, { memory: true, cashxchainFor: () => fakeCxc as unknown as CashXChainClient, ...(agent ? { agentFor: () => agent } : {}) });
   deps.extract = async () => statement;
   deps.connections = { acceptsApiKey: true };
   deps.chatClient = fakeClaude(script);
@@ -264,6 +284,7 @@ describe.each(["local", "cloudflare"] as const)("AI CFO API on %s storage", stor
     expect((await me("PATCH", "/api/v1/workspace", { autonomy: "full", confirm: "FULL ACCESS" })).json.autonomy).toBe("full");
 
     const cxc = await me("POST", "/api/v1/connections", { kind: "cashxchain", apiKey: CXC_KEY, access: "read_write" });
+    await me("POST", "/api/v1/connections", { kind: "cardano_agent_wallet", recoveryPhrase: AGENT_PHRASE, access: "read_write" });
     expect(cxc.json.access).toBe("read_write");
     expect(cxc.json.balances).toEqual([{ asset: "USD", amount: "25000.00", usdMinor: 2_500_000 }]);
     expect((await me("POST", "/api/v1/connections", { kind: "bank" })).status).toBe(400);
@@ -301,6 +322,7 @@ describe.each(["local", "cloudflare"] as const)("AI CFO API on %s storage", stor
     );
     const me = await user("erin@example.com");
     await me("POST", "/api/v1/connections", { kind: "cashxchain", apiKey: CXC_KEY, access: "read_write" });
+    await me("POST", "/api/v1/connections", { kind: "cardano_agent_wallet", recoveryPhrase: AGENT_PHRASE, access: "read_write" });
     await me("POST", "/api/v1/payees", { name: "Brenner GmbH", iban: "DE89370400440532013000" });
     const chat = (await me("POST", "/api/v1/chats")).json;
     const stream = await me("POST", `/api/v1/chats/${chat.id}/messages`, { text: "Pay the Brenner invoice" });
@@ -323,6 +345,7 @@ describe.each(["local", "cloudflare"] as const)("AI CFO API on %s storage", stor
     const me = await user("frank@example.com");
     await me("PATCH", "/api/v1/workspace", { autonomy: "full", confirm: "FULL ACCESS" });
     await me("POST", "/api/v1/connections", { kind: "cashxchain", apiKey: CXC_KEY, access: "read_write" });
+    await me("POST", "/api/v1/connections", { kind: "cardano_agent_wallet", recoveryPhrase: AGENT_PHRASE, access: "read_write" });
     const chat = (await me("POST", "/api/v1/chats")).json;
     await me("POST", `/api/v1/chats/${chat.id}/messages`, { text: "Process the attached invoice" });
     const [payment] = (await me("GET", "/api/v1/payments")).json;
@@ -338,6 +361,7 @@ describe.each(["local", "cloudflare"] as const)("AI CFO API on %s storage", stor
     const { user } = await start([{ tool: { name: "draft_payment", input: draft } }, { text: "Drafted." }], stubAgent());
     const me = await user("gina@example.com");
     await me("POST", "/api/v1/connections", { kind: "cashxchain", apiKey: CXC_KEY, access: "read_write" });
+    await me("POST", "/api/v1/connections", { kind: "cardano_agent_wallet", recoveryPhrase: AGENT_PHRASE, access: "read_write" });
     const chat = (await me("POST", "/api/v1/chats")).json;
     await me("POST", `/api/v1/chats/${chat.id}/messages`, { text: "Pay Nordlicht" });
     const [payment] = (await me("GET", "/api/v1/payments")).json;
@@ -355,6 +379,7 @@ describe.each(["local", "cloudflare"] as const)("AI CFO API on %s storage", stor
     const me = await user("hank@example.com");
     await me("PATCH", "/api/v1/workspace", { limits: { knownPayeesOnly: false } });
     await me("POST", "/api/v1/connections", { kind: "cashxchain", apiKey: CXC_KEY, access: "read_write" });
+    await me("POST", "/api/v1/connections", { kind: "cardano_agent_wallet", recoveryPhrase: AGENT_PHRASE, access: "read_write" });
     const chat = (await me("POST", "/api/v1/chats")).json;
     await me("POST", `/api/v1/chats/${chat.id}/messages`, { text: "Pay Nordlicht" });
     await settle(async () => (await me("GET", "/api/v1/payments")).json[0]?.status === "executed");
@@ -367,6 +392,7 @@ describe.each(["local", "cloudflare"] as const)("AI CFO API on %s storage", stor
     const me = await user("ivy@example.com");
     await me("PATCH", "/api/v1/workspace", { limits: { knownPayeesOnly: false } });
     await me("POST", "/api/v1/connections", { kind: "cashxchain", apiKey: CXC_KEY, access: "read_write" });
+    await me("POST", "/api/v1/connections", { kind: "cardano_agent_wallet", recoveryPhrase: AGENT_PHRASE, access: "read_write" });
     await me("POST", "/api/v1/payees", { name: "Brenner GmbH", iban: "DE89370400440532013000" });
     const chat = (await me("POST", "/api/v1/chats")).json;
     await me("POST", `/api/v1/chats/${chat.id}/messages`, { text: "Pay Brenner" });

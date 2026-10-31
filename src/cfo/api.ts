@@ -227,9 +227,14 @@ export function mountCfo(app: Express, deps: CfoDeps): void {
   // A connection with its own key reads that account; the others read what envFor gives.
   // A CashXChain connection without a key reads only a linked sub-account, never the shared one.
   const envForConnection = async (ws: string, c: ConnectionRow): Promise<ConnectionEnv> => {
+    // An agent wallet without its own recovery phrase is PayLorya AI's shared one: never shown to an account.
+    if (c.kind === "cardano_agent_wallet" && !c.credentialHint) {
+      throw new Error("This is PayLorya AI's shared wallet, not yours: remove it and connect your own agent wallet with its recovery phrase");
+    }
+    if (c.kind !== "cashxchain") return envFor(ws);
     if (!c.credentialHint) {
       const env = await envFor(ws);
-      if (c.kind === "cashxchain" && !env.linkedSubAccount) throw new Error("No API key on this connection: remove it and connect CashXChain again with your API key");
+      if (!env.linkedSubAccount) throw new Error("No API key on this connection: remove it and connect CashXChain again with your API key");
       return env;
     }
     if (!deps.keys) throw new Error("This server cannot use stored API keys");
@@ -306,12 +311,18 @@ export function mountCfo(app: Express, deps: CfoDeps): void {
     const ws = ctx(res).ws.id;
     const checked = prepareConnection(await envFor(ws), req.body ?? {});
     if ("error" in checked) throw new HttpError(400, checked.error);
-    const { apiKey, ...prepared } = checked;
-    const duplicate = (await store.connections(ws)).find(c => c.kind === prepared.kind && c.address === prepared.address);
+    const { apiKey, recoveryPhrase, ...prepared } = checked;
+    // One CashXChain account and one agent wallet per account; other kinds once per address.
+    const single = prepared.kind === "cashxchain" || prepared.kind === "cardano_agent_wallet";
+    const duplicate = (await store.connections(ws)).find(c => c.kind === prepared.kind && (single || c.address === prepared.address));
     if (duplicate) {
-      throw new HttpError(409, prepared.kind === "cashxchain" ? `${duplicate.label} is already connected: remove it first to connect another account` : `${duplicate.label} is already connected`);
+      throw new HttpError(409, single ? `${duplicate.label} is already connected: remove it first to connect another one` : `${duplicate.label} is already connected`);
     }
     let secret: { sealed: string; hint: string } | undefined;
+    if (recoveryPhrase) {
+      if (!deps.keys?.ready) throw new HttpError(400, "This server cannot store recovery phrases (BETTER_AUTH_SECRET is not set)");
+      secret = { sealed: deps.keys.seal(ws, recoveryPhrase), hint: `${recoveryPhrase.split(" ").length}-word recovery phrase` };
+    }
     if (apiKey) {
       if (!deps.keys) throw new HttpError(400, "This server cannot store API keys");
       try {

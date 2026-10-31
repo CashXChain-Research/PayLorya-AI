@@ -1,199 +1,2251 @@
-var fa={"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"},s=e=>String(e??"").replace(/[&<>"']/g,t=>fa[t]);var de=e=>e&&e.length>22?`${e.slice(0,12)}\u2026${e.slice(-6)}`:e||"",Ke=e=>e?`${e.slice(0,8)}\u2026${e.slice(-6)}`:"",va={JPY:0},ba=e=>e==="ADA"?6:va[e]??2;function gt(e,t){let a=ba(t);return(e/10**a).toLocaleString("en-US",{minimumFractionDigits:t==="ADA"?2:a,maximumFractionDigits:a})}function Ve(e,t){return e==null||!t?"":t==="ADA"?`${gt(e,t)} tADA`:`${t} ${gt(e,t)}`}var $a="cxc-theme",ft=matchMedia("(prefers-color-scheme: dark)");function Me(){let e=document.documentElement.dataset.theme;return e==="light"||e==="dark"?e:ft.matches?"dark":"light"}function Je(e){let t=document.documentElement;t.classList.add("theme-anim"),t.dataset.theme=e;try{localStorage.setItem($a,e)}catch{}window.setTimeout(()=>t.classList.remove("theme-anim"),450),Ge()}function Ge(){let e=Me()==="dark";for(let t of document.querySelectorAll("[data-theme-toggle]"))t.setAttribute("aria-pressed",String(e)),t.title=e?"Switch to light mode":"Switch to dark mode"}function vt(){for(let e of document.querySelectorAll("[data-theme-toggle]"))e.addEventListener("click",()=>Je(Me()==="dark"?"light":"dark"));ft.addEventListener("change",Ge),Ge()}var wa={home:'<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V9.5"/>',chat:'<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-4.6A8 8 0 1 1 21 12z"/>',doc:'<path d="M7 3h7l5 5v12a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M14 3v5h5M9 13h6M9 17h4"/>',pay:'<path d="M3 7h18v12H3z"/><path d="M3 11h18M7 15h3"/>',budget:'<path d="M21 12a9 9 0 1 1-9-9v9z"/><path d="M15 3.5A9 9 0 0 1 20.5 9H15z"/>',payees:'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.6 3.3-5.5 6.5-5.5s5.9 1.9 6.5 5.5"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18.5 14.8c1.7.8 2.8 2.5 3 5.2"/>',link:'<path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1"/>',shield:'<path d="M12 3l8 4v5c0 5-3.4 8.4-8 9-4.6-.6-8-4-8-9V7l8-4z"/>',shieldCheck:'<path d="M12 3l8 4v5c0 5-3.4 8.4-8 9-4.6-.6-8-4-8-9V7l8-4z"/><path d="M8.5 12l2.5 2.5 4.5-5"/>',activity:'<path d="M3 12h4l3-8 4 16 3-8h4"/>',settings:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',plus:'<path d="M12 5v14M5 12h14"/>',check:'<path d="M5 12.5l4.5 4.5L19 7.5"/>',x:'<path d="M6 6l12 12M18 6L6 18"/>',send:'<path d="M12 19V5M5 12l7-7 7 7"/>',stop:'<rect x="7" y="7" width="10" height="10" rx="2"/>',clip:'<path d="M21 11.5l-8.6 8.6a5.5 5.5 0 0 1-7.8-7.8l8.6-8.6a3.7 3.7 0 0 1 5.2 5.2l-8.6 8.6a1.8 1.8 0 0 1-2.6-2.6l7.9-7.9"/>',upload:'<path d="M12 16V4M6 10l6-6 6 6"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/>',download:'<path d="M12 4v12M6 10l6 6 6-6"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/>',trash:'<path d="M4 7h16M10 11v6M14 11v6"/><path d="M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13M9 7V4h6v3"/>',edit:'<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>',refresh:'<path d="M20 11a8 8 0 0 0-14.6-4.5L4 8"/><path d="M4 4v4h4M4 13a8 8 0 0 0 14.6 4.5L20 16"/><path d="M20 20v-4h-4"/>',copy:'<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a1 1 0 0 1 1-1h10"/>',external:'<path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>',chevron:'<path d="M9 6l6 6-6 6"/>',chevronDown:'<path d="M6 9l6 6 6-6"/>',chevronLeft:'<path d="M15 6l-6 6 6 6"/>',menu:'<path d="M4 7h16M4 12h16M4 17h16"/>',logout:'<path d="M15 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4"/><path d="M10 16l-4-4 4-4M6 12h10"/>',user:'<circle cx="12" cy="8" r="4"/><path d="M4 21c.8-4.2 4-6.5 8-6.5s7.2 2.3 8 6.5"/>',bot:'<rect x="4" y="8" width="16" height="12" rx="3"/><path d="M12 4v4M9 13v1.5M15 13v1.5M2 13v3M22 13v3"/>',cog:'<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/>',sparkle:'<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/>',wallet:'<path d="M4 7a2 2 0 0 1 2-2h12v4"/><path d="M4 7v11a2 2 0 0 0 2 2h14V9H6a2 2 0 0 1-2-2z"/><circle cx="16" cy="14.5" r="1.2"/>',bank:'<path d="M3 10l9-6 9 6M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 21h18"/>',globe:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 3.8 5.7 3.8 9s-1.3 6.3-3.8 9c-2.5-2.7-3.8-5.7-3.8-9S9.5 5.7 12 3z"/>',lock:'<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',eye:'<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',alert:'<path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18v.5"/>',info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/>',clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',search:'<circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/>',sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',moon:'<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>',calendar:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',trend:'<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>',image:'<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/>',file:'<path d="M7 3h7l5 5v12a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M14 3v5h5"/>',arrowRight:'<path d="M5 12h14M13 6l6 6-6 6"/>',arrowUp:'<path d="M7 17L17 7M9 7h8v8"/>',arrowDown:'<path d="M17 7L7 17M15 17H7V9"/>',more:'<circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/>',zap:'<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>'};function p(e,t=18,a=1.9){return`<svg class="i" width="${t}" height="${t}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${a}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${wa[e]??""}</svg>`}var Ca={JPY:0,ADA:6},wt=e=>Ca[e]??2;function T(e,t={}){let a=(e??0)/100,n=Math.abs(a),i;if(t.compact&&n>=1e3)i="$"+new Intl.NumberFormat("en-US",{notation:"compact",maximumFractionDigits:n>=1e5?0:1}).format(n);else{let l=t.cents===!1||t.compact&&n>=100?0:2;i="$"+n.toLocaleString("en-US",{minimumFractionDigits:l,maximumFractionDigits:l})}return a<0?`\u2212${i}`:t.sign&&a>0?`+${i}`:i}function z(e,t){if(e==null||!t)return"\u2014";if(t==="ADA")return Ve(e,"ADA");try{let a=wt(t);return new Intl.NumberFormat("en-US",{style:"currency",currency:t,minimumFractionDigits:a,maximumFractionDigits:a}).format(e/10**a)}catch{return Ve(e,t)}}function pe(e,t){let a=Number(String(e).replace(/[,\s]/g,""));return Number.isFinite(a)?Math.round(a*10**wt(t)):NaN}function xe(e){let t=Number(e.amount),a=/ADA|ETH|BTC/i.test(e.asset)?4:2;return`${Number.isFinite(t)?t.toLocaleString("en-US",{minimumFractionDigits:Math.min(2,a),maximumFractionDigits:a}):e.amount} ${e.asset}`}var Ct=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];function F(e,t){if(!e)return"\u2014";let a=e.length===10?new Date(`${e}T00:00:00`):new Date(e);if(Number.isNaN(a.getTime()))return e;let n=t??a.getFullYear()!==new Date().getFullYear();return`${Ct[a.getMonth()]} ${a.getDate()}${n?`, ${a.getFullYear()}`:""}`}function fe(e){if(!e)return"\u2014";let t=new Date(e);return Number.isNaN(t.getTime())?e:`${F(e)}, ${t.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"})}`}function le(e,t=!1){let[a,n]=e.split("-").map(Number),i=Ct[(n??1)-1]??e;return t?`${new Date(2e3,(n??1)-1,1).toLocaleString("en-US",{month:"long"})} ${a}`:i}function Pe(e){if(!e)return"";let t=(Date.now()-new Date(e).getTime())/1e3;return Number.isFinite(t)?t<45?"just now":t<3600?`${Math.round(t/60)} min ago`:t<86400?`${Math.round(t/3600)} h ago`:t<86400*7?`${Math.round(t/86400)} d ago`:F(e):""}function Ze(e){if(!e)return;let t=new Date(`${e}T00:00:00`),a=new Date;return a.setHours(0,0,0,0),Math.round((t.getTime()-a.getTime())/864e5)}function ke(e){let t=Ze(e);return t==null?{text:"No due date",tone:""}:t<0?{text:`${-t} d overdue`,tone:"t-bad"}:t===0?{text:"Due today",tone:"t-warn"}:t===1?{text:"Due tomorrow",tone:"t-warn"}:{text:`Due in ${t} d`,tone:t<=7?"t-warn":"t-neutral"}}var ve=e=>e<1024?`${e} B`:e<1024*1024?`${(e/1024).toFixed(0)} KB`:`${(e/1024/1024).toFixed(1)} MB`,Qe=e=>e.replace(/[_-]+/g," ").replace(/\b\w/g,t=>t.toUpperCase()),Ma=e=>e.split(/\s+/).filter(Boolean).slice(0,2).map(t=>t[0].toUpperCase()).join("")||"?",xa=e=>[...e].reduce((t,a)=>t+a.charCodeAt(0),0)%3,te=(e,t="")=>`<span class="av v${xa(e)} ${t}">${s(Ma(e))}</span>`,K={read_only:{name:"Read-only",short:"Read-only",tone:"t-ok"},guarded:{name:"Guarded",short:"Guarded",tone:"t-run"},full:{name:"Full access",short:"Full access",tone:"t-bad"}},bt={cardano_preprod:{name:"Cardano Preprod",note:"testnet \xB7 tADA"},cashxchain:{name:"CashXChain",note:"sandbox rail"},manual:{name:"Manual",note:"paid outside"}},et=e=>`<span class="rail rail-${e}"><b>${s(bt[e]?.name??e)}</b><span>${s(bt[e]?.note??"")}</span></span>`,ka={pending_approval:["Needs approval","t-warn"],approved:["Approved","t-run"],executing:["Executing","t-run"],awaiting_signature:["Sign in wallet","t-warn"],executed:["Paid","t-ok"],rejected:["Rejected","t-neutral"],failed:["Failed","t-bad"],blocked:["Blocked","t-bad"]};function De(e){let[t,a]=ka[e]??[e,"t-neutral"];return`<span class="pill ${a}">${e==="executing"?'<i class="live"></i>':""}${s(t)}</span>`}var ue={invoice:"Invoice",receipt:"Receipt",bank_statement:"Bank statement",contract:"Contract",payroll:"Payroll",tax:"Tax",other:"Other"},$t=0;function S(e,t="info"){let a=document.getElementById("toast");a||(a=document.createElement("div"),a.id="toast",a.className="toast",a.setAttribute("role","status"),a.setAttribute("aria-live","polite"),document.body.append(a)),a.className=`toast ${t}`,a.innerHTML=`${p(t==="error"?"alert":t==="ok"?"check":"info",16,2.2)}<span>${s(e)}</span>`,a.offsetWidth,a.classList.add("show"),window.clearTimeout($t),$t=window.setTimeout(()=>a.classList.remove("show"),t==="error"?5200:3200)}function Z(e){return new Promise(t=>{let a=document.createElement("dialog");a.className=`dlg${e.wide?" wide":""}`,a.innerHTML=`<form method="dialog" class="dlg-form" novalidate>
-      <header class="dlg-head"><h2>${s(e.title)}</h2><button type="button" class="icon-btn" data-close aria-label="Close">${p("x")}</button></header>
+var Ya={"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"},s=e=>String(e??"").replace(/[&<>"']/g,t=>Ya[t]);var pe=e=>e&&e.length>22?`${e.slice(0,12)}\u2026${e.slice(-6)}`:e||"",et=e=>e?`${e.slice(0,8)}\u2026${e.slice(-6)}`:"",Ga={JPY:0},Xa=e=>e==="ADA"?6:Ga[e]??2;function Tt(e,t){let a=Xa(t);return(e/10**a).toLocaleString("en-US",{minimumFractionDigits:t==="ADA"?2:a,maximumFractionDigits:a})}function tt(e,t){return e==null||!t?"":t==="ADA"?`${Tt(e,t)} tADA`:`${t} ${Tt(e,t)}`}var Ka="cxc-theme",At=matchMedia("(prefers-color-scheme: dark)");function Me(){let e=document.documentElement.dataset.theme;return e==="light"||e==="dark"?e:At.matches?"dark":"light"}function nt(e){let t=document.documentElement;t.classList.add("theme-anim"),t.dataset.theme=e;try{localStorage.setItem(Ka,e)}catch{}window.setTimeout(()=>t.classList.remove("theme-anim"),450),at()}function at(){let e=Me()==="dark";for(let t of document.querySelectorAll("[data-theme-toggle]"))t.setAttribute("aria-pressed",String(e)),t.title=e?"Switch to light mode":"Switch to dark mode"}function St(){for(let e of document.querySelectorAll("[data-theme-toggle]"))e.addEventListener("click",()=>nt(Me()==="dark"?"light":"dark"));At.addEventListener("change",at),at()}var Va={home:'<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V9.5"/>',chat:'<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-4.6A8 8 0 1 1 21 12z"/>',doc:'<path d="M7 3h7l5 5v12a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M14 3v5h5M9 13h6M9 17h4"/>',pay:'<path d="M3 7h18v12H3z"/><path d="M3 11h18M7 15h3"/>',budget:'<path d="M21 12a9 9 0 1 1-9-9v9z"/><path d="M15 3.5A9 9 0 0 1 20.5 9H15z"/>',payees:'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.6 3.3-5.5 6.5-5.5s5.9 1.9 6.5 5.5"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18.5 14.8c1.7.8 2.8 2.5 3 5.2"/>',link:'<path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1"/>',shield:'<path d="M12 3l8 4v5c0 5-3.4 8.4-8 9-4.6-.6-8-4-8-9V7l8-4z"/>',shieldCheck:'<path d="M12 3l8 4v5c0 5-3.4 8.4-8 9-4.6-.6-8-4-8-9V7l8-4z"/><path d="M8.5 12l2.5 2.5 4.5-5"/>',activity:'<path d="M3 12h4l3-8 4 16 3-8h4"/>',settings:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',plus:'<path d="M12 5v14M5 12h14"/>',check:'<path d="M5 12.5l4.5 4.5L19 7.5"/>',x:'<path d="M6 6l12 12M18 6L6 18"/>',send:'<path d="M12 19V5M5 12l7-7 7 7"/>',stop:'<rect x="7" y="7" width="10" height="10" rx="2"/>',clip:'<path d="M21 11.5l-8.6 8.6a5.5 5.5 0 0 1-7.8-7.8l8.6-8.6a3.7 3.7 0 0 1 5.2 5.2l-8.6 8.6a1.8 1.8 0 0 1-2.6-2.6l7.9-7.9"/>',upload:'<path d="M12 16V4M6 10l6-6 6 6"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/>',download:'<path d="M12 4v12M6 10l6 6 6-6"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/>',trash:'<path d="M4 7h16M10 11v6M14 11v6"/><path d="M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13M9 7V4h6v3"/>',edit:'<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>',refresh:'<path d="M20 11a8 8 0 0 0-14.6-4.5L4 8"/><path d="M4 4v4h4M4 13a8 8 0 0 0 14.6 4.5L20 16"/><path d="M20 20v-4h-4"/>',copy:'<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a1 1 0 0 1 1-1h10"/>',external:'<path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>',chevron:'<path d="M9 6l6 6-6 6"/>',chevronDown:'<path d="M6 9l6 6 6-6"/>',chevronLeft:'<path d="M15 6l-6 6 6 6"/>',menu:'<path d="M4 7h16M4 12h16M4 17h16"/>',logout:'<path d="M15 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4"/><path d="M10 16l-4-4 4-4M6 12h10"/>',user:'<circle cx="12" cy="8" r="4"/><path d="M4 21c.8-4.2 4-6.5 8-6.5s7.2 2.3 8 6.5"/>',bot:'<rect x="4" y="8" width="16" height="12" rx="3"/><path d="M12 4v4M9 13v1.5M15 13v1.5M2 13v3M22 13v3"/>',cog:'<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/>',sparkle:'<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/>',wallet:'<path d="M4 7a2 2 0 0 1 2-2h12v4"/><path d="M4 7v11a2 2 0 0 0 2 2h14V9H6a2 2 0 0 1-2-2z"/><circle cx="16" cy="14.5" r="1.2"/>',bank:'<path d="M3 10l9-6 9 6M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 21h18"/>',globe:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 3.8 5.7 3.8 9s-1.3 6.3-3.8 9c-2.5-2.7-3.8-5.7-3.8-9S9.5 5.7 12 3z"/>',lock:'<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',eye:'<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',alert:'<path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18v.5"/>',info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/>',clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',search:'<circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/>',sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',moon:'<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>',calendar:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',trend:'<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>',image:'<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/>',file:'<path d="M7 3h7l5 5v12a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M14 3v5h5"/>',arrowRight:'<path d="M5 12h14M13 6l6 6-6 6"/>',arrowUp:'<path d="M7 17L17 7M9 7h8v8"/>',arrowDown:'<path d="M17 7L7 17M15 17H7V9"/>',more:'<circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/>',zap:'<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>'};function u(e,t=18,a=1.9){return`<svg class="i" width="${t}" height="${t}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${a}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${Va[e]??""}</svg>`}var Ja={JPY:0,ADA:6},Dt=e=>Ja[e]??2;function T(e,t={}){let a=(e??0)/100,n=Math.abs(a),r;if(t.compact&&n>=1e3)r="$"+new Intl.NumberFormat("en-US",{notation:"compact",maximumFractionDigits:n>=1e5?0:1}).format(n);else{let i=t.cents===!1||t.compact&&n>=100?0:2;r="$"+n.toLocaleString("en-US",{minimumFractionDigits:i,maximumFractionDigits:i})}return a<0?`\u2212${r}`:t.sign&&a>0?`+${r}`:r}function G(e,t){if(e==null||!t)return"\u2014";if(t==="ADA")return tt(e,"ADA");try{let a=Dt(t);return new Intl.NumberFormat("en-US",{style:"currency",currency:t,minimumFractionDigits:a,maximumFractionDigits:a}).format(e/10**a)}catch{return tt(e,t)}}function me(e,t){let a=Number(String(e).replace(/[,\s]/g,""));return Number.isFinite(a)?Math.round(a*10**Dt(t)):NaN}function Le(e){let t=Number(e.amount),a=/ADA|ETH|BTC/i.test(e.asset)?4:2;return`${Number.isFinite(t)?t.toLocaleString("en-US",{minimumFractionDigits:Math.min(2,a),maximumFractionDigits:a}):e.amount} ${e.asset}`}var Ut=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];function F(e,t){if(!e)return"\u2014";let a=e.length===10?new Date(`${e}T00:00:00`):new Date(e);if(Number.isNaN(a.getTime()))return e;let n=t??a.getFullYear()!==new Date().getFullYear();return`${Ut[a.getMonth()]} ${a.getDate()}${n?`, ${a.getFullYear()}`:""}`}function ve(e){if(!e)return"\u2014";let t=new Date(e);return Number.isNaN(t.getTime())?e:`${F(e)}, ${t.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"})}`}function le(e,t=!1){let[a,n]=e.split("-").map(Number),r=Ut[(n??1)-1]??e;return t?`${new Date(2e3,(n??1)-1,1).toLocaleString("en-US",{month:"long"})} ${a}`:r}function Ie(e){if(!e)return"";let t=(Date.now()-new Date(e).getTime())/1e3;return Number.isFinite(t)?t<45?"just now":t<3600?`${Math.round(t/60)} min ago`:t<86400?`${Math.round(t/3600)} h ago`:t<86400*7?`${Math.round(t/86400)} d ago`:F(e):""}function st(e){if(!e)return;let t=new Date(`${e}T00:00:00`),a=new Date;return a.setHours(0,0,0,0),Math.round((t.getTime()-a.getTime())/864e5)}function Ee(e){let t=st(e);return t==null?{text:"No due date",tone:""}:t<0?{text:`${-t} d overdue`,tone:"t-bad"}:t===0?{text:"Due today",tone:"t-warn"}:t===1?{text:"Due tomorrow",tone:"t-warn"}:{text:`Due in ${t} d`,tone:t<=7?"t-warn":"t-neutral"}}var we=e=>e<1024?`${e} B`:e<1024*1024?`${(e/1024).toFixed(0)} KB`:`${(e/1024/1024).toFixed(1)} MB`,ot=e=>e.replace(/[_-]+/g," ").replace(/\b\w/g,t=>t.toUpperCase()),Za=e=>e.split(/\s+/).filter(Boolean).slice(0,2).map(t=>t[0].toUpperCase()).join("")||"?",Qa=e=>[...e].reduce((t,a)=>t+a.charCodeAt(0),0)%3,te=(e,t="")=>`<span class="av v${Qa(e)} ${t}">${s(Za(e))}</span>`,X={read_only:{name:"Read-only",short:"Read-only",tone:"t-ok"},guarded:{name:"Guarded",short:"Guarded",tone:"t-run"},full:{name:"Full access",short:"Full access",tone:"t-bad"}},Ht={cardano_preprod:{name:"Cardano Preprod",note:"testnet \xB7 tADA"},cashxchain:{name:"CashXChain",note:"sandbox rail"},manual:{name:"Manual",note:"paid outside"}},rt=e=>`<span class="rail rail-${e}"><b>${s(Ht[e]?.name??e)}</b><span>${s(Ht[e]?.note??"")}</span></span>`,en={pending_approval:["Needs approval","t-warn"],approved:["Approved","t-run"],executing:["Executing","t-run"],awaiting_signature:["Sign in wallet","t-warn"],executed:["Paid","t-ok"],rejected:["Rejected","t-neutral"],failed:["Failed","t-bad"],blocked:["Blocked","t-bad"]};function Be(e){let[t,a]=en[e]??[e,"t-neutral"];return`<span class="pill ${a}">${e==="executing"?'<i class="live"></i>':""}${s(t)}</span>`}var he={invoice:"Invoice",receipt:"Receipt",bank_statement:"Bank statement",contract:"Contract",payroll:"Payroll",tax:"Tax",other:"Other"},Pt=0;function S(e,t="info"){let a=document.getElementById("toast");a||(a=document.createElement("div"),a.id="toast",a.className="toast",a.setAttribute("role","status"),a.setAttribute("aria-live","polite"),document.body.append(a)),a.className=`toast ${t}`,a.innerHTML=`${u(t==="error"?"alert":t==="ok"?"check":"info",16,2.2)}<span>${s(e)}</span>`,a.offsetWidth,a.classList.add("show"),window.clearTimeout(Pt),Pt=window.setTimeout(()=>a.classList.remove("show"),t==="error"?5200:3200)}function Z(e){return new Promise(t=>{let a=document.createElement("dialog");a.className=`dlg${e.wide?" wide":""}`,a.innerHTML=`<form method="dialog" class="dlg-form" novalidate>
+      <header class="dlg-head"><h2>${s(e.title)}</h2><button type="button" class="icon-btn" data-close aria-label="Close">${u("x")}</button></header>
       <div class="dlg-body">${e.body}</div>
       <footer class="dlg-foot">
         <button type="button" class="btn ghost sm" data-close>${e.submit?"Cancel":"Close"}</button>
         ${e.submit?`<button type="submit" class="btn sm ${e.danger?"danger":"primary"}" data-submit>${s(e.submit)}</button>`:""}
-      </footer></form>`,document.body.append(a);let n=a.querySelector("form"),i=!1,o=()=>a.close();a.addEventListener("close",()=>{a.remove(),t(i)});let l=c=>{let u=a.getBoundingClientRect();return c.clientX<u.left||c.clientX>u.right||c.clientY<u.top||c.clientY>u.bottom},d=!1;a.addEventListener("pointerdown",c=>{d=c.target===a&&l(c)}),a.addEventListener("click",c=>{d&&c.target===a&&l(c)&&o(),d=!1});for(let c of a.querySelectorAll("[data-close]"))c.addEventListener("click",o);n.addEventListener("submit",async c=>{c.preventDefault();let u=n.querySelector("[data-submit]");if(!(!u||u.disabled)){u.disabled=!0,u.classList.add("loading");try{(e.onSubmit?await e.onSubmit(n):!0)!==!1&&(i=!0,o())}catch{}finally{u.disabled=!1,u.classList.remove("loading")}}}),a.showModal();let r=document.activeElement;e.onOpen?.(n,o),document.activeElement===r&&n.querySelector("input:not([type=hidden]):not([disabled]), select, textarea")?.focus()})}function ae(e,t,a="Confirm",n=!1){return Z({title:e,body:`<p class="dlg-text">${s(t)}</p>`,submit:a,danger:n})}function B(e,t,a){let n=e.elements.namedItem(t),i=n?.closest(".field");i?.classList.add("invalid");let o=i?.querySelector(".field-err");return i&&!o&&(o=document.createElement("span"),o.className="field-err",i.append(o)),o&&(o.textContent=a),n?.focus(),n?.addEventListener("input",()=>i?.classList.remove("invalid"),{once:!0}),!1}var N=(e,t)=>(e.elements.namedItem(t)?.value??"").trim(),I=(e="100%",t=14,a=8)=>`<span class="sk" style="width:${e};height:${t}px;border-radius:${a}px"></span>`,G=e=>Array.from({length:e},(t,a)=>`<div class="sk-row">${I("36px",36,12)}<div class="sk-col">${I(`${60-a%3*12}%`)}${I(`${35+a%2*10}%`,11)}</div>${I("70px")}</div>`).join(""),me=(e=220)=>`<div class="card sk-card">${I("40%",18)}<div style="height:18px"></div>${I("100%",e-60,14)}</div>`;function j(e){return`<div class="empty-state"><div class="empty-ill">${p(e.icon,26,1.8)}</div><b>${s(e.title)}</b><p>${s(e.text)}</p>${e.action??""}</div>`}function _(e,t,a=""){return`<header class="page-head"><div class="page-title"><h1>${s(e)}</h1>${t?`<p>${t}</p>`:""}</div>${a?`<div class="page-actions">${a}</div>`:""}</header>`}async function Ie(e){try{await navigator.clipboard.writeText(e),S("Copied to clipboard","ok")}catch{S("Copy failed. Select the text and copy it manually.","error")}}function Ue(e){return new Promise((t,a)=>{let n=new FileReader;n.onload=()=>{let i=String(n.result??"");t(i.slice(i.indexOf(",")+1))},n.onerror=()=>a(n.error??new Error("Could not read file")),n.readAsDataURL(e)})}var Ne=15*1024*1024,Be="image/*,application/pdf,text/csv,text/plain,.csv,.txt,.pdf";function be(e){return e.startsWith("image/")?"image":e==="application/pdf"?"doc":"file"}function Le(e){if(e.type)return e.type;let t=e.name.split(".").pop()?.toLowerCase();return t==="csv"?"text/csv":t==="txt"?"text/plain":t==="pdf"?"application/pdf":"application/octet-stream"}var Q=class extends Error{constructor(a,n){super(a);this.status=n}status};function tt(){let e=location.pathname+location.search;throw location.href=`/login?next=${encodeURIComponent(e)}`,new Q("Signed out",401)}async function Mt(e){try{let t=await e.json();if(typeof t?.error=="string"&&t.error)return t.error}catch{}return`Request failed (${e.status})`}async function qe(e,t={}){let a=t.method??(t.body===void 0?"GET":"POST"),n;try{n=await fetch(e,{method:a,credentials:"same-origin",headers:t.body===void 0?{accept:"application/json"}:{"content-type":"application/json",accept:"application/json"},body:t.body===void 0?void 0:JSON.stringify(t.body),signal:t.signal})}catch(o){if(o.name==="AbortError")throw o;let l="Network error. Check your connection and try again.";throw t.quiet||S(l,"error"),new Q(l,0)}if(n.status===401&&tt(),!n.ok){let o=await Mt(n);throw t.quiet||S(o,"error"),new Q(o,n.status)}if(n.status===204)return;let i=await n.text();return i?JSON.parse(i):void 0}var U=(e,t=!1)=>qe(e,{quiet:t}),O=(e,t={})=>qe(e,{method:"POST",body:t}),J=(e,t)=>qe(e,{method:"PATCH",body:t}),se=e=>qe(e,{method:"DELETE"});function xt(e,t,a){return new Promise((n,i)=>{let o=new XMLHttpRequest;o.open("POST",e),o.withCredentials=!0,o.setRequestHeader("content-type","application/json"),o.setRequestHeader("accept","application/json"),o.upload.onprogress=l=>{l.lengthComputable&&a(l.loaded/l.total)},o.onerror=()=>i(new Q("Network error during upload.",0)),o.onload=()=>{if(o.status===401){try{tt()}catch(d){i(d)}return}let l;try{l=o.responseText?JSON.parse(o.responseText):void 0}catch{l=void 0}if(o.status<200||o.status>=300){let d=l?.error||`Upload failed (${o.status})`;i(new Q(d,o.status));return}n(l)},o.send(JSON.stringify(t))})}async function kt(e,t,a,n){let i=await fetch(e,{method:"POST",credentials:"same-origin",headers:{"content-type":"application/json",accept:"text/event-stream"},body:JSON.stringify(t),signal:n});if(i.status===401&&tt(),!i.ok||!i.body)throw new Q(await Mt(i),i.status);let o=i.body.getReader(),l=new TextDecoder,d="",r=c=>{let u="",y=[];for(let m of c.split(`
-`)){let v=m.replace(/\r$/,"");v.startsWith(":")||(v.startsWith("event:")?u=v.slice(6).trim():v.startsWith("data:")&&y.push(v.slice(5).replace(/^ /,"")))}if(!y.length)return;let h;try{h=JSON.parse(y.join(`
-`))}catch{return}!h.type&&u&&(h.type=u),a(h)};for(;;){let{value:c,done:u}=await o.read();if(u)break;d+=l.decode(c,{stream:!0});let y;for(;(y=d.search(/\r?\n\r?\n/))>=0;){let h=d.slice(0,y);d=d.slice(y).replace(/^\r?\n\r?\n/,""),r(h)}}d+=l.decode(),d.trim()&&r(d)}var La={user:["user","You"],agent:["bot","AI CFO agent"],system:["cog","System"]};function Ea(e){let t=e.ref;if(!t)return null;let a=encodeURIComponent(t.id);switch(t.type){case"document":return`/app/documents/${a}`;case"payment":return`/app/payments?id=${a}`;case"chat":return`/app/chat/${a}`;case"budget":return"/app/budgets";case"connection":return"/app/connections";case"payee":return"/app/payees";case"workspace":return"/app/agent"}return null}async function Lt(e,t){let a=[],n="all",i="";e.innerHTML=`${_("Activity","Audit log of everything you, the agent and the system did. Nothing is hidden.")}
+      </footer></form>`,document.body.append(a);let n=a.querySelector("form"),r=!1,o=()=>a.close();a.addEventListener("close",()=>{a.remove(),t(r)});let i=d=>{let p=a.getBoundingClientRect();return d.clientX<p.left||d.clientX>p.right||d.clientY<p.top||d.clientY>p.bottom},l=!1;a.addEventListener("pointerdown",d=>{l=d.target===a&&i(d)}),a.addEventListener("click",d=>{l&&d.target===a&&i(d)&&o(),l=!1});for(let d of a.querySelectorAll("[data-close]"))d.addEventListener("click",o);n.addEventListener("submit",async d=>{d.preventDefault();let p=n.querySelector("[data-submit]");if(!(!p||p.disabled)){p.disabled=!0,p.classList.add("loading");try{(e.onSubmit?await e.onSubmit(n):!0)!==!1&&(r=!0,o())}catch{}finally{p.disabled=!1,p.classList.remove("loading")}}}),a.showModal();let c=document.activeElement;e.onOpen?.(n,o),document.activeElement===c&&n.querySelector("input:not([type=hidden]):not([disabled]), select, textarea")?.focus()})}function ae(e,t,a="Confirm",n=!1){return Z({title:e,body:`<p class="dlg-text">${s(t)}</p>`,submit:a,danger:n})}function I(e,t,a){let n=e.elements.namedItem(t),r=n?.closest(".field");r?.classList.add("invalid");let o=r?.querySelector(".field-err");return r&&!o&&(o=document.createElement("span"),o.className="field-err",r.append(o)),o&&(o.textContent=a),n?.focus(),n?.addEventListener("input",()=>r?.classList.remove("invalid"),{once:!0}),!1}var B=(e,t)=>(e.elements.namedItem(t)?.value??"").trim(),U=(e="100%",t=14,a=8)=>`<span class="sk" style="width:${e};height:${t}px;border-radius:${a}px"></span>`,V=e=>Array.from({length:e},(t,a)=>`<div class="sk-row">${U("36px",36,12)}<div class="sk-col">${U(`${60-a%3*12}%`)}${U(`${35+a%2*10}%`,11)}</div>${U("70px")}</div>`).join(""),fe=(e=220)=>`<div class="card sk-card">${U("40%",18)}<div style="height:18px"></div>${U("100%",e-60,14)}</div>`;function R(e){return`<div class="empty-state"><div class="empty-ill">${u(e.icon,26,1.8)}</div><b>${s(e.title)}</b><p>${s(e.text)}</p>${e.action??""}</div>`}function _(e,t,a=""){return`<header class="page-head"><div class="page-title"><h1>${s(e)}</h1>${t?`<p>${t}</p>`:""}</div>${a?`<div class="page-actions">${a}</div>`:""}</header>`}async function Ne(e){try{await navigator.clipboard.writeText(e),S("Copied to clipboard","ok")}catch{S("Copy failed. Select the text and copy it manually.","error")}}function qe(e){return new Promise((t,a)=>{let n=new FileReader;n.onload=()=>{let r=String(n.result??"");t(r.slice(r.indexOf(",")+1))},n.onerror=()=>a(n.error??new Error("Could not read file")),n.readAsDataURL(e)})}var je=15*1024*1024,Fe="image/*,application/pdf,text/csv,text/plain,.csv,.txt,.pdf";function $e(e){return e.startsWith("image/")?"image":e==="application/pdf"?"doc":"file"}function Te(e){if(e.type)return e.type;let t=e.name.split(".").pop()?.toLowerCase();return t==="csv"?"text/csv":t==="txt"?"text/plain":t==="pdf"?"application/pdf":"application/octet-stream"}var Q=class extends Error{constructor(a,n){super(a);this.status=n}status};function it(){let e=location.pathname+location.search;throw location.href=`/login?next=${encodeURIComponent(e)}`,new Q("Signed out",401)}async function It(e){try{let t=await e.json();if(typeof t?.error=="string"&&t.error)return t.error}catch{}return`Request failed (${e.status})`}async function Re(e,t={}){let a=t.method??(t.body===void 0?"GET":"POST"),n;try{n=await fetch(e,{method:a,credentials:"same-origin",headers:t.body===void 0?{accept:"application/json"}:{"content-type":"application/json",accept:"application/json"},body:t.body===void 0?void 0:JSON.stringify(t.body),signal:t.signal})}catch(o){if(o.name==="AbortError")throw o;let i="Network error. Check your connection and try again.";throw t.quiet||S(i,"error"),new Q(i,0)}if(n.status===401&&it(),!n.ok){let o=await It(n);throw t.quiet||S(o,"error"),new Q(o,n.status)}if(n.status===204)return;let r=await n.text();return r?JSON.parse(r):void 0}var N=(e,t=!1)=>Re(e,{quiet:t}),O=(e,t={})=>Re(e,{method:"POST",body:t}),J=(e,t)=>Re(e,{method:"PATCH",body:t}),oe=e=>Re(e,{method:"DELETE"});function Bt(e,t,a){return new Promise((n,r)=>{let o=new XMLHttpRequest;o.open("POST",e),o.withCredentials=!0,o.setRequestHeader("content-type","application/json"),o.setRequestHeader("accept","application/json"),o.upload.onprogress=i=>{i.lengthComputable&&a(i.loaded/i.total)},o.onerror=()=>r(new Q("Network error during upload.",0)),o.onload=()=>{if(o.status===401){try{it()}catch(l){r(l)}return}let i;try{i=o.responseText?JSON.parse(o.responseText):void 0}catch{i=void 0}if(o.status<200||o.status>=300){let l=i?.error||`Upload failed (${o.status})`;r(new Q(l,o.status));return}n(i)},o.send(JSON.stringify(t))})}async function Nt(e,t,a,n){let r=await fetch(e,{method:"POST",credentials:"same-origin",headers:{"content-type":"application/json",accept:"text/event-stream"},body:JSON.stringify(t),signal:n});if(r.status===401&&it(),!r.ok||!r.body)throw new Q(await It(r),r.status);let o=r.body.getReader(),i=new TextDecoder,l="",c=d=>{let p="",h=[];for(let m of d.split(`
+`)){let b=m.replace(/\r$/,"");b.startsWith(":")||(b.startsWith("event:")?p=b.slice(6).trim():b.startsWith("data:")&&h.push(b.slice(5).replace(/^ /,"")))}if(!h.length)return;let f;try{f=JSON.parse(h.join(`
+`))}catch{return}!f.type&&p&&(f.type=p),a(f)};for(;;){let{value:d,done:p}=await o.read();if(p)break;l+=i.decode(d,{stream:!0});let h;for(;(h=l.search(/\r?\n\r?\n/))>=0;){let f=l.slice(0,h);l=l.slice(h).replace(/^\r?\n\r?\n/,""),c(f)}}l+=i.decode(),l.trim()&&c(l)}var tn={user:["user","You"],agent:["bot","AI CFO agent"],system:["cog","System"]};function an(e){let t=e.ref;if(!t)return null;let a=encodeURIComponent(t.id);switch(t.type){case"document":return`/app/documents/${a}`;case"payment":return`/app/payments?id=${a}`;case"chat":return`/app/chat/${a}`;case"budget":return"/app/budgets";case"connection":return"/app/connections";case"payee":return"/app/payees";case"workspace":return"/app/agent"}return null}async function qt(e,t){let a=[],n="all",r="";e.innerHTML=`${_("Activity","Audit log of everything you, the agent and the system did. Nothing is hidden.")}
     <section class="card list-card">
-      <div class="list-head"><div class="chips" id="a-filter"></div><label class="search">${p("search",16)}<input id="a-q" placeholder="Search activity" aria-label="Search activity"></label></div>
-      <div id="a-list"><div class="pad">${G(7)}</div></div>
-    </section>`;let o=e.querySelector("#a-list"),l=()=>{let d={all:a.length,user:0,agent:0,system:0};for(let h of a)d[h.actor]=(d[h.actor]??0)+1;e.querySelector("#a-filter").innerHTML=["all","user","agent","system"].map(h=>`<button data-a="${h}" class="${n===h?"on":""}">${h==="all"?"All":h==="user"?"You":h==="agent"?"Agent":"System"} <em>${d[h]??0}</em></button>`).join("");let r=i.toLowerCase(),c=a.filter(h=>(n==="all"||h.actor===n)&&(!r||`${h.action} ${h.detail}`.toLowerCase().includes(r)));if(!c.length){o.innerHTML=j({icon:"activity",title:a.length?"No matching activity":"No activity yet",text:a.length?"Try another filter.":"Uploads, payments, approvals and setting changes are recorded here."});return}let u="",y="";for(let h of c){let m=h.at.slice(0,10);if(m!==y){y&&(u+="</ol>");let x=new Date().toISOString().slice(0,10),L=new Date(Date.now()-864e5).toISOString().slice(0,10);u+=`<h3 class="tl-day">${m===x?"Today":m===L?"Yesterday":s(F(m,!0))}</h3><ol class="timeline">`,y=m}let[v,b]=La[h.actor]??["info",h.actor],C=Ea(h);u+=`<li class="tl tl-${h.actor}"><span class="tl-ic" title="${s(b)}">${p(v,15)}</span><div class="tl-body"><p><b>${s(b)}</b> ${s(h.action)}</p>${h.detail?`<span class="tl-detail">${s(h.detail)}</span>`:""}</div><div class="tl-r"><time datetime="${s(h.at)}">${s(new Date(h.at).toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"}))}</time>${C?`<a class="link-sm" href="${C}">View${p("chevron",13)}</a>`:""}</div></li>`}o.innerHTML=u+"</ol>"};e.querySelector("#a-filter").addEventListener("click",d=>{let r=d.target.closest("[data-a]");r&&(n=r.dataset.a,l())}),e.querySelector("#a-q").addEventListener("input",d=>{i=d.target.value.trim(),l()}),a=await U("/api/v1/activity?limit=100"),t.alive()&&(a.sort((d,r)=>r.at.localeCompare(d.at)),l())}var q={me:null,approvals:0},Et=e=>{location.href=e},oe=(e,t)=>Et(e,t);function Tt(e){Et=e}var at=null;function Ee(e){at={text:e},oe("/app/chat")}function At(){let e=at?.text??null;return at=null,e}var nt=new Set;function St(e){return nt.add(e),()=>nt.delete(e)}function ie(){for(let e of nt)e()}async function Te(){try{let e=await U("/api/v1/payments",!0);q.approvals=e.filter(t=>t.status==="pending_approval"||t.status==="awaiting_signature").length,ie()}catch{}}async function Re(){try{await fetch("/api/auth/sign-out",{method:"POST",credentials:"same-origin",headers:{"content-type":"application/json"},body:"{}"})}finally{location.href="/"}}var Ht=[{id:"read_only",icon:"eye",title:"Read-only",lead:"Analyses, plans and drafts. Never moves money.",can:["Read documents, balances and history","Summarise, forecast and plan budgets","Draft payments for you to approve"],cannot:["Execute any payment"]},{id:"guarded",icon:"shieldCheck",title:"Guarded",lead:"Pays routine bills alone, inside the limits you set.",can:["Everything in read-only","Execute payments within the per-payment limit and monthly budget","Pay only payees in your directory"],cannot:["Go over a limit or pay a new payee without your approval"]},{id:"full",icon:"alert",title:"Full access",lead:"Pays without asking you. Use with care.",can:["Execute any payment from read & write connections","No per-payment or monthly caps"],cannot:["Bypass hard policy blocks (invalid details, blocked payees)"]}];function Ta(e,t){if(e.status!=="active")return{tone:"muted",text:"Not active. The agent cannot use it."};if(!e.supports.write)return{tone:"read",text:"Reads balances and history. Watch-only, cannot pay from it."};if(e.access==="read")return{tone:"read",text:"Reads balances and history. Cannot pay from it (read-only access)."};let a=t.limits,n=a.knownPayeesOnly?" to payees in your directory":"";return t.autonomy==="read_only"?{tone:"draft",text:"Reads and drafts payments. Every payment waits for your approval."}:t.autonomy==="guarded"?{tone:"guard",text:`Pays on its own${n} up to ${T(a.perPaymentUsdMinor,{cents:!1})} per payment and ${T(a.monthlyUsdMinor,{cents:!1})} per month. Everything else waits for your approval.`}:{tone:"full",text:`Pays without approval${n}. Only hard policy blocks stop it.`}}async function Pt(e,t){e.innerHTML=`${_("Agent access","Decide what your AI CFO may do on its own.")}
+      <div class="list-head"><div class="chips" id="a-filter"></div><label class="search">${u("search",16)}<input id="a-q" placeholder="Search activity" aria-label="Search activity"></label></div>
+      <div id="a-list"><div class="pad">${V(7)}</div></div>
+    </section>`;let o=e.querySelector("#a-list"),i=()=>{let l={all:a.length,user:0,agent:0,system:0};for(let f of a)l[f.actor]=(l[f.actor]??0)+1;e.querySelector("#a-filter").innerHTML=["all","user","agent","system"].map(f=>`<button data-a="${f}" class="${n===f?"on":""}">${f==="all"?"All":f==="user"?"You":f==="agent"?"Agent":"System"} <em>${l[f]??0}</em></button>`).join("");let c=r.toLowerCase(),d=a.filter(f=>(n==="all"||f.actor===n)&&(!c||`${f.action} ${f.detail}`.toLowerCase().includes(c)));if(!d.length){o.innerHTML=R({icon:"activity",title:a.length?"No matching activity":"No activity yet",text:a.length?"Try another filter.":"Uploads, payments, approvals and setting changes are recorded here."});return}let p="",h="";for(let f of d){let m=f.at.slice(0,10);if(m!==h){h&&(p+="</ol>");let k=new Date().toISOString().slice(0,10),L=new Date(Date.now()-864e5).toISOString().slice(0,10);p+=`<h3 class="tl-day">${m===k?"Today":m===L?"Yesterday":s(F(m,!0))}</h3><ol class="timeline">`,h=m}let[b,v]=tn[f.actor]??["info",f.actor],x=an(f);p+=`<li class="tl tl-${f.actor}"><span class="tl-ic" title="${s(v)}">${u(b,15)}</span><div class="tl-body"><p><b>${s(v)}</b> ${s(f.action)}</p>${f.detail?`<span class="tl-detail">${s(f.detail)}</span>`:""}</div><div class="tl-r"><time datetime="${s(f.at)}">${s(new Date(f.at).toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"}))}</time>${x?`<a class="link-sm" href="${x}">View${u("chevron",13)}</a>`:""}</div></li>`}o.innerHTML=p+"</ol>"};e.querySelector("#a-filter").addEventListener("click",l=>{let c=l.target.closest("[data-a]");c&&(n=c.dataset.a,i())}),e.querySelector("#a-q").addEventListener("input",l=>{r=l.target.value.trim(),i()}),a=await N("/api/v1/activity?limit=100"),t.alive()&&(a.sort((l,c)=>c.at.localeCompare(l.at)),i())}var q={me:null,approvals:0},jt=e=>{location.href=e},re=(e,t)=>jt(e,t);function Ft(e){jt=e}var ct=null;function Ae(e){ct={text:e},re("/app/chat")}function Rt(){let e=ct?.text??null;return ct=null,e}var lt=new Set;function Ot(e){return lt.add(e),()=>lt.delete(e)}function ie(){for(let e of lt)e()}async function Se(){try{let e=await N("/api/v1/payments",!0);q.approvals=e.filter(t=>t.status==="pending_approval"||t.status==="awaiting_signature").length,ie()}catch{}}async function Oe(){try{await fetch("/api/auth/sign-out",{method:"POST",credentials:"same-origin",headers:{"content-type":"application/json"},body:"{}"})}finally{location.href="/"}}var _t=[{id:"read_only",icon:"eye",title:"Read-only",lead:"Analyses, plans and drafts. Never moves money.",can:["Read documents, balances and history","Summarise, forecast and plan budgets","Draft payments for you to approve"],cannot:["Execute any payment"]},{id:"guarded",icon:"shieldCheck",title:"Guarded",lead:"Pays routine bills alone, inside the limits you set.",can:["Everything in read-only","Execute payments within the per-payment limit and monthly budget","Pay only payees in your directory"],cannot:["Go over a limit or pay a new payee without your approval"]},{id:"full",icon:"alert",title:"Full access",lead:"Pays without asking you. Use with care.",can:["Execute any payment from read & write connections","No per-payment or monthly caps"],cannot:["Bypass hard policy blocks (invalid details, blocked payees)"]}];function nn(e,t){if(e.status!=="active")return{tone:"muted",text:"Not active. The agent cannot use it."};if(!e.supports.write)return{tone:"read",text:"Reads balances and history. Watch-only, cannot pay from it."};if(e.access==="read")return{tone:"read",text:"Reads balances and history. Cannot pay from it (read-only access)."};let a=t.limits,n=a.knownPayeesOnly?" to payees in your directory":"";return t.autonomy==="read_only"?{tone:"draft",text:"Reads and drafts payments. Every payment waits for your approval."}:t.autonomy==="guarded"?{tone:"guard",text:`Pays on its own${n} up to ${T(a.perPaymentUsdMinor,{cents:!1})} per payment and ${T(a.monthlyUsdMinor,{cents:!1})} per month. Everything else waits for your approval.`}:{tone:"full",text:`Pays without approval${n}. Only hard policy blocks stop it.`}}async function Wt(e,t){e.innerHTML=`${_("Agent access","Decide what your AI CFO may do on its own.")}
     <div class="trust">
-      <div>${p("eye",18)}<span><b>Claude reads.</b> It sees documents and balances, never keys.</span></div>
-      <div>${p("shield",18)}<span><b>Code decides.</b> Limits and payee checks run outside the model.</span></div>
-      <div>${p("check",18,2.4)}<span><b>You approve.</b> Anything outside your rules waits for you.</span></div>
+      <div>${u("eye",18)}<span><b>Claude reads.</b> It sees documents and balances, never keys.</span></div>
+      <div>${u("shield",18)}<span><b>Code decides.</b> Limits and payee checks run outside the model.</span></div>
+      <div>${u("check",18,2.4)}<span><b>You approve.</b> Anything outside your rules waits for you.</span></div>
     </div>
-    <div id="ag-body"><div class="levels">${Ht.map(()=>`<div class="card">${I("40%",20)}<div style="height:14px"></div>${I("90%",12)}<div style="height:8px"></div>${I("70%",12)}</div>`).join("")}</div></div>`;let[a,n,i]=await Promise.all([U("/api/v1/me"),U("/api/v1/connections",!0).catch(()=>[]),U("/api/v1/overview",!0).catch(()=>null)]);if(!t.alive())return;let o=a.workspace;q.me=a,ie();let l=e.querySelector("#ag-body"),d=()=>{let u=o.limits,y=i?.agent.executedThisMonthUsdMinor??0,h=u.monthlyUsdMinor?Math.min(100,y/u.monthlyUsdMinor*100):0;l.innerHTML=`
-    <div class="levels" role="radiogroup" aria-label="Autonomy level">${Ht.map(m=>`<button type="button" class="card level lv-${m.id}${o.autonomy===m.id?" on":""}" role="radio" aria-checked="${o.autonomy===m.id}" data-level="${m.id}">
-        <span class="lv-top"><span class="lv-ic">${p(m.icon,20)}</span><span class="lv-radio"></span></span>
+    <div id="ag-body"><div class="levels">${_t.map(()=>`<div class="card">${U("40%",20)}<div style="height:14px"></div>${U("90%",12)}<div style="height:8px"></div>${U("70%",12)}</div>`).join("")}</div></div>`;let[a,n,r]=await Promise.all([N("/api/v1/me"),N("/api/v1/connections",!0).catch(()=>[]),N("/api/v1/overview",!0).catch(()=>null)]);if(!t.alive())return;let o=a.workspace;q.me=a,ie();let i=e.querySelector("#ag-body"),l=()=>{let p=o.limits,h=r?.agent.executedThisMonthUsdMinor??0,f=p.monthlyUsdMinor?Math.min(100,h/p.monthlyUsdMinor*100):0;i.innerHTML=`
+    <div class="levels" role="radiogroup" aria-label="Autonomy level">${_t.map(m=>`<button type="button" class="card level lv-${m.id}${o.autonomy===m.id?" on":""}" role="radio" aria-checked="${o.autonomy===m.id}" data-level="${m.id}">
+        <span class="lv-top"><span class="lv-ic">${u(m.icon,20)}</span><span class="lv-radio"></span></span>
         <b class="lv-t">${m.title}${m.id==="full"?'<span class="pill t-bad">Dangerous</span>':m.id==="guarded"?'<span class="pill t-neutral">Recommended</span>':""}</b>
         <span class="lv-lead">${m.lead}</span>
-        <ul>${m.can.map(v=>`<li class="yes">${p("check",13,2.6)}${s(v)}</li>`).join("")}${m.cannot.map(v=>`<li class="no">${p("x",13,2.6)}${s(v)}</li>`).join("")}</ul>
+        <ul>${m.can.map(b=>`<li class="yes">${u("check",13,2.6)}${s(b)}</li>`).join("")}${m.cannot.map(b=>`<li class="no">${u("x",13,2.6)}${s(b)}</li>`).join("")}</ul>
       </button>`).join("")}</div>
 
     <div class="ag-grid">
       <form class="card" id="limits" novalidate>
         <div class="card-head"><div><h2>Limits</h2><p class="muted small">${o.autonomy==="guarded"?"Active now. The agent executes alone only within these.":o.autonomy==="full"?"Caps are not applied in full access. Known payees still applies.":"Used when you switch to guarded mode."}</p></div></div>
         <div class="grid2">
-          <div class="field"><label for="l-per">Per-payment limit</label><div class="affix"><span>$</span><input id="l-per" name="per" inputmode="decimal" value="${u.perPaymentUsdMinor/100}"></div><span class="hint">Largest single payment it may execute alone</span></div>
-          <div class="field"><label for="l-mon">Monthly limit</label><div class="affix"><span>$</span><input id="l-mon" name="mon" inputmode="decimal" value="${u.monthlyUsdMinor/100}"></div><span class="hint">Total it may execute alone per calendar month</span></div>
+          <div class="field"><label for="l-per">Per-payment limit</label><div class="affix"><span>$</span><input id="l-per" name="per" inputmode="decimal" value="${p.perPaymentUsdMinor/100}"></div><span class="hint">Largest single payment it may execute alone</span></div>
+          <div class="field"><label for="l-mon">Monthly limit</label><div class="affix"><span>$</span><input id="l-mon" name="mon" inputmode="decimal" value="${p.monthlyUsdMinor/100}"></div><span class="hint">Total it may execute alone per calendar month</span></div>
         </div>
-        <label class="switch-row"><span><b>Known payees only</b><span>Only pay payees saved in your <a href="/app/payees">payee directory</a>.</span></span><input type="checkbox" name="known" class="switch" ${u.knownPayeesOnly?"checked":""}></label>
+        <label class="switch-row"><span><b>Known payees only</b><span>Only pay payees saved in your <a href="/app/payees">payee directory</a>.</span></span><input type="checkbox" name="known" class="switch" ${p.knownPayeesOnly?"checked":""}></label>
         <div class="form-foot"><span class="muted small" id="l-dirty"></span><button class="btn primary sm" type="submit" id="l-save" disabled>Save limits</button></div>
       </form>
       <section class="card">
-        <div class="card-head"><h2>This month</h2><span class="pill ${K[o.autonomy].tone}">${K[o.autonomy].name}</span></div>
-        <div class="usage"><b>${s(T(y,{cents:!1}))}</b><span>executed by the agent on its own</span></div>
-        <div class="meter lg ${h>=90?"hot":""}"><i style="width:${h.toFixed(1)}%"></i></div>
-        <div class="usage-foot"><span>${Math.round(h)}% of ${s(T(u.monthlyUsdMinor,{cents:!1}))}</span><span>${s(T(Math.max(0,u.monthlyUsdMinor-y),{cents:!1}))} left</span></div>
+        <div class="card-head"><h2>This month</h2><span class="pill ${X[o.autonomy].tone}">${X[o.autonomy].name}</span></div>
+        <div class="usage"><b>${s(T(h,{cents:!1}))}</b><span>executed by the agent on its own</span></div>
+        <div class="meter lg ${f>=90?"hot":""}"><i style="width:${f.toFixed(1)}%"></i></div>
+        <div class="usage-foot"><span>${Math.round(f)}% of ${s(T(p.monthlyUsdMinor,{cents:!1}))}</span><span>${s(T(Math.max(0,p.monthlyUsdMinor-h),{cents:!1}))} left</span></div>
         <p class="fine">Payments you approve yourself don't count toward this limit.</p>
       </section>
     </div>
 
     <section class="card">
-      <div class="card-head"><div><h2>What the agent can do, per connection</h2><p class="muted small">From each connection's access and the autonomy level above.</p></div><a class="link-sm" href="/app/connections">Connections${p("chevron",14)}</a></div>
-      ${n.length?`<ul class="perms">${n.map(m=>{let v=Ta(m,o);return`<li><span class="perm-ic p-${v.tone}">${p(v.tone==="read"||v.tone==="muted"?"eye":v.tone==="draft"?"edit":v.tone==="full"?"zap":"shieldCheck",16)}</span><div><b>${s(m.label)}</b><span class="perm-meta">${m.access==="read_write"&&m.supports.write?"Read &amp; write":"Read-only"} \xB7 ${s(m.network)}</span></div><p>${s(v.text)}</p></li>`}).join("")}</ul>`:j({icon:"link",title:"No connections",text:"Connect a wallet or account to see what the agent may do with it."})}
-    </section>`,c()},r=async u=>{if(u!==o.autonomy){if(u==="full")await Z({title:"Turn on full access?",submit:"Enable full access",danger:!0,body:`<div class="callout bad">${p("alert",16)}<span><b>The agent will pay without asking you.</b> No per-payment or monthly caps. Only hard policy blocks stop a payment. Testnet and sandbox rails only in this environment.</span></div>
-          <div class="field"><label for="fa">Type <b class="mono">FULL ACCESS</b> to confirm</label><input id="fa" name="confirm" autocomplete="off" spellcheck="false" placeholder="FULL ACCESS"></div>`,onOpen:y=>{let h=y.elements.namedItem("confirm"),m=y.querySelector("[data-submit]");m.disabled=!0,h.addEventListener("input",()=>m.disabled=h.value.trim()!=="FULL ACCESS")},onSubmit:async y=>{let h=N(y,"confirm");return h!=="FULL ACCESS"?B(y,"confirm","Type FULL ACCESS exactly."):(o=await J("/api/v1/workspace",{autonomy:"full",confirm:h}),!0)}});else try{o=await J("/api/v1/workspace",{autonomy:u})}catch{return}o.autonomy===u&&S(`Agent autonomy: ${K[u].name}`,u==="full"?"info":"ok"),q.me&&(q.me={...q.me,workspace:o}),ie(),d()}},c=()=>{let u=l.querySelector("#limits"),y=u.querySelector("#l-save"),h=()=>({perPaymentUsdMinor:pe(N(u,"per"),"USD"),monthlyUsdMinor:pe(N(u,"mon"),"USD"),knownPayeesOnly:u.elements.namedItem("known").checked}),m=()=>{let v=h(),b=v.perPaymentUsdMinor!==o.limits.perPaymentUsdMinor||v.monthlyUsdMinor!==o.limits.monthlyUsdMinor||v.knownPayeesOnly!==o.limits.knownPayeesOnly;y.disabled=!b,u.querySelector("#l-dirty").textContent=b?"Unsaved changes":""};u.addEventListener("input",m),u.addEventListener("change",m),u.addEventListener("submit",async v=>{v.preventDefault();let b=h();if(!Number.isFinite(b.perPaymentUsdMinor)||b.perPaymentUsdMinor<0)return void B(u,"per","Enter an amount.");if(!Number.isFinite(b.monthlyUsdMinor)||b.monthlyUsdMinor<0)return void B(u,"mon","Enter an amount.");if(b.perPaymentUsdMinor>b.monthlyUsdMinor)return void B(u,"per","Can't be higher than the monthly limit.");y.disabled=!0,y.classList.add("loading");try{o=await J("/api/v1/workspace",{limits:b}),q.me&&(q.me={...q.me,workspace:o}),ie(),S("Limits saved","ok"),d()}catch{y.disabled=!1,y.classList.remove("loading")}})};l.addEventListener("click",u=>{let y=u.target.closest("[data-level]");y&&r(y.dataset.level)}),d()}function Ae(e,t,a){let n=0,i=()=>{let l=Math.floor(e.clientWidth);!l||l===n||(n=l,e.innerHTML=t(l),a?.(e))};i();let o=new ResizeObserver(()=>i());return o.observe(e),()=>o.disconnect()}function Dt(e,t=0,a=4){let i=Math.max(1,e-t)/a,o=10**Math.floor(Math.log10(i)),l=([1,2,2.5,5,10].find(u=>u*o>=i)??10)*o,d=Math.floor(t/l)*l,r=Math.ceil(e/l)*l,c=[];for(let u=d;u<=r+l/2;u+=l)c.push(Math.round(u));return c}function It(e){return t=>{let n={l:52,r:8,t:12,b:28},i=Math.max(1,...e.flatMap(m=>[m.inUsdMinor,m.outUsdMinor])),o=Dt(i),l=o[o.length-1],d=t-n.l-n.r,r=240-n.t-n.b,c=m=>n.t+r-m/l*r,u=d/Math.max(1,e.length),y=Math.min(22,u*.28),h=`<svg width="${t}" height="240" viewBox="0 0 ${t} 240" role="img" aria-label="Money in and out, last ${e.length} months">`;for(let m of o)h+=`<line class="grid" x1="${n.l}" x2="${t-n.r}" y1="${c(m)}" y2="${c(m)}"/><text class="axis" x="${n.l-10}" y="${c(m)+4}" text-anchor="end">${s(T(m,{compact:!0}))}</text>`;return e.forEach((m,v)=>{let b=n.l+u*v+u/2,C=Math.max(m.inUsdMinor?2:0,m.inUsdMinor/l*r),x=Math.max(m.outUsdMinor?2:0,m.outUsdMinor/l*r),L=m.inUsdMinor-m.outUsdMinor;h+=`<g class="bar-g" tabindex="0"><title>${s(le(m.month,!0))}: in ${s(T(m.inUsdMinor))}, out ${s(T(m.outUsdMinor))}, net ${s(T(L,{sign:!0}))}</title>
-        <rect class="hit" x="${b-u/2}" y="${n.t}" width="${u}" height="${r}"/>
-        <rect class="bar-in" x="${b-y-2}" y="${n.t+r-C}" width="${y}" height="${C}" rx="${Math.min(5,y/3)}"/>
-        <rect class="bar-out" x="${b+2}" y="${n.t+r-x}" width="${y}" height="${x}" rx="${Math.min(5,y/3)}"/>
-        <text class="axis" x="${b}" y="232" text-anchor="middle">${s(le(m.month))}</text></g>`}),h+"</svg>"}}function Fe(e,t=260){let a=e.points,n=null;return{draw:l=>{let d=t,r={l:56,r:12,t:16,b:30};if(a.length<2)return'<div class="chart-empty"><span>No forecast yet. <a href="/app/connections">Connect a wallet</a> and <a href="/app/documents">upload invoices</a> to see where your cash is heading.</span></div>';let c=a.map(M=>M.balanceUsdMinor),u=Dt(Math.max(...c,0),Math.min(...c,0)),y=u[0],h=u[u.length-1],m=l-r.l-r.r,v=d-r.t-r.b,b=M=>r.l+M/(a.length-1)*m,C=M=>r.t+v-(M-y)/Math.max(1,h-y)*v;n={x:b,y:C,l:r.l,r:l-r.r,t:r.t,b:r.t+v};let x=`<svg width="${l}" height="${d}" viewBox="0 0 ${l} ${d}" role="img" aria-label="Cash forecast, next ${e.days} days">
-      <defs><linearGradient id="fc-fill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" class="fc-stop-a"/><stop offset="1" class="fc-stop-b"/></linearGradient></defs>`;for(let M of u)x+=`<line class="grid${M===0&&y<0?" zero":""}" x1="${r.l}" x2="${l-r.r}" y1="${C(M)}" y2="${C(M)}"/><text class="axis" x="${r.l-10}" y="${C(M)+4}" text-anchor="end">${s(T(M,{compact:!0}))}</text>`;let L=Math.max(1,Math.round(a.length/Math.max(2,Math.floor(m/90))));for(let M=0;M<a.length;M+=L)x+=`<text class="axis" x="${b(M)}" y="${d-8}" text-anchor="${M===0?"start":"middle"}">${s(F(a[M].date,!1))}</text>`;let A=a.map((M,H)=>`${H?"L":"M"}${b(H).toFixed(1)},${C(M.balanceUsdMinor).toFixed(1)}`).join(""),f=C(Math.max(y,0));x+=`<path class="fc-area" d="${A}L${b(a.length-1)},${f}L${b(0)},${f}Z" fill="url(#fc-fill)"/>`,x+=`<path class="fc-line" d="${A}" pathLength="1"/>`;let g=new Map(a.map((M,H)=>[M.date,H]));for(let M of e.events){let H=g.get(M.date);if(H==null)continue;let k=C(a[H].balanceUsdMinor);x+=`<g class="fc-ev ${M.usdMinor<0?"out":"in"}"><title>${s(F(M.date))} \xB7 ${s(M.label)} \xB7 ${s(T(M.usdMinor,{sign:!0}))}</title><line x1="${b(H)}" x2="${b(H)}" y1="${k}" y2="${r.t+v}"/><circle cx="${b(H)}" cy="${k}" r="4.5"/></g>`}return x+=`<g class="fc-hover" style="display:none"><line class="fc-cross" y1="${r.t}" y2="${r.t+v}"/><circle class="fc-dot" r="5"/></g>`,x+"</svg>"},wire:l=>{let d=l.querySelector("svg");if(!d||!n)return;let r=l.parentElement?.querySelector(".chart-tip");r||(r=document.createElement("div"),r.className="chart-tip",l.parentElement?.append(r));let c=d.querySelector(".fc-hover"),u=c.querySelector("line"),y=c.querySelector("circle"),h=v=>{if(!n)return;let b=d.getBoundingClientRect(),C=v-b.left,x=Math.max(0,Math.min(a.length-1,Math.round((C-n.l)/(n.r-n.l)*(a.length-1)))),L=a[x],A=n.x(x),f=n.y(L.balanceUsdMinor);c.style.display="",u.setAttribute("x1",String(A)),u.setAttribute("x2",String(A)),y.setAttribute("cx",String(A)),y.setAttribute("cy",String(f));let g=e.events.filter(k=>k.date===L.date);r.innerHTML=`<span>${s(F(L.date))}</span><b>${s(T(L.balanceUsdMinor))}</b>${g.map(k=>`<em class="${k.usdMinor<0?"out":"in"}">${s(k.label)} ${s(T(k.usdMinor,{sign:!0}))}</em>`).join("")}`,r.style.opacity="1";let M=r.offsetWidth,H=Math.min(Math.max(A-M/2,0),b.width-M);r.style.transform=`translate(${H}px, ${Math.max(0,f-76)}px)`},m=()=>{c.style.display="none",r.style.opacity="0"};d.addEventListener("pointermove",v=>h(v.clientX)),d.addEventListener("pointerleave",m)}}}function Ut(e,t=6){let a=[...e].filter(d=>d.usdMinor>0).sort((d,r)=>r.usdMinor-d.usdMinor),n=a.slice(0,t),i=a.slice(t).reduce((d,r)=>d+r.usdMinor,0);i>0&&n.push({category:`Other (${a.length-t})`,usdMinor:i});let o=a.reduce((d,r)=>d+r.usdMinor,0)||1,l=Math.max(1,...n.map(d=>d.usdMinor));return`<ul class="hbars">${n.map((d,r)=>`<li style="--d:${r*50}ms"><div class="hb-top"><span>${s(d.category)}</span><b>${s(T(d.usdMinor,{cents:!1}))}</b><em>${Math.round(d.usdMinor/o*100)}%</em></div>
-      <div class="hb-track"><i style="width:${Math.max(2,d.usdMinor/l*100).toFixed(1)}%"></i></div></li>`).join("")}</ul>`}var Aa=["Software","Payroll","Rent","Marketing","Travel","Hosting","Contractors","Office","Legal & accounting","Taxes"];async function Nt(e,t){let a=null,n=[...new Set([...t,...Aa])].sort();return await Z({title:e?"Edit budget":"New budget",submit:e?"Save budget":"Create budget",body:`<div class="field"><label for="b-name">Name</label><input id="b-name" name="name" value="${s(e?.name??"")}" placeholder="Software subscriptions" autocomplete="off"></div>
+      <div class="card-head"><div><h2>What the agent can do, per connection</h2><p class="muted small">From each connection's access and the autonomy level above.</p></div><a class="link-sm" href="/app/connections">Connections${u("chevron",14)}</a></div>
+      ${n.length?`<ul class="perms">${n.map(m=>{let b=nn(m,o);return`<li><span class="perm-ic p-${b.tone}">${u(b.tone==="read"||b.tone==="muted"?"eye":b.tone==="draft"?"edit":b.tone==="full"?"zap":"shieldCheck",16)}</span><div><b>${s(m.label)}</b><span class="perm-meta">${m.access==="read_write"&&m.supports.write?"Read &amp; write":"Read-only"} \xB7 ${s(m.network)}</span></div><p>${s(b.text)}</p></li>`}).join("")}</ul>`:R({icon:"link",title:"No connections",text:"Connect a wallet or account to see what the agent may do with it."})}
+    </section>`,d()},c=async p=>{if(p!==o.autonomy){if(p==="full")await Z({title:"Turn on full access?",submit:"Enable full access",danger:!0,body:`<div class="callout bad">${u("alert",16)}<span><b>The agent will pay without asking you.</b> No per-payment or monthly caps. Only hard policy blocks stop a payment. Testnet and sandbox rails only in this environment.</span></div>
+          <div class="field"><label for="fa">Type <b class="mono">FULL ACCESS</b> to confirm</label><input id="fa" name="confirm" autocomplete="off" spellcheck="false" placeholder="FULL ACCESS"></div>`,onOpen:h=>{let f=h.elements.namedItem("confirm"),m=h.querySelector("[data-submit]");m.disabled=!0,f.addEventListener("input",()=>m.disabled=f.value.trim()!=="FULL ACCESS")},onSubmit:async h=>{let f=B(h,"confirm");return f!=="FULL ACCESS"?I(h,"confirm","Type FULL ACCESS exactly."):(o=await J("/api/v1/workspace",{autonomy:"full",confirm:f}),!0)}});else try{o=await J("/api/v1/workspace",{autonomy:p})}catch{return}o.autonomy===p&&S(`Agent autonomy: ${X[p].name}`,p==="full"?"info":"ok"),q.me&&(q.me={...q.me,workspace:o}),ie(),l()}},d=()=>{let p=i.querySelector("#limits"),h=p.querySelector("#l-save"),f=()=>({perPaymentUsdMinor:me(B(p,"per"),"USD"),monthlyUsdMinor:me(B(p,"mon"),"USD"),knownPayeesOnly:p.elements.namedItem("known").checked}),m=()=>{let b=f(),v=b.perPaymentUsdMinor!==o.limits.perPaymentUsdMinor||b.monthlyUsdMinor!==o.limits.monthlyUsdMinor||b.knownPayeesOnly!==o.limits.knownPayeesOnly;h.disabled=!v,p.querySelector("#l-dirty").textContent=v?"Unsaved changes":""};p.addEventListener("input",m),p.addEventListener("change",m),p.addEventListener("submit",async b=>{b.preventDefault();let v=f();if(!Number.isFinite(v.perPaymentUsdMinor)||v.perPaymentUsdMinor<0)return void I(p,"per","Enter an amount.");if(!Number.isFinite(v.monthlyUsdMinor)||v.monthlyUsdMinor<0)return void I(p,"mon","Enter an amount.");if(v.perPaymentUsdMinor>v.monthlyUsdMinor)return void I(p,"per","Can't be higher than the monthly limit.");h.disabled=!0,h.classList.add("loading");try{o=await J("/api/v1/workspace",{limits:v}),q.me&&(q.me={...q.me,workspace:o}),ie(),S("Limits saved","ok"),l()}catch{h.disabled=!1,h.classList.remove("loading")}})};i.addEventListener("click",p=>{let h=p.target.closest("[data-level]");h&&c(h.dataset.level)}),l()}function He(e,t,a){let n=0,r=()=>{let i=Math.floor(e.clientWidth);!i||i===n||(n=i,e.innerHTML=t(i),a?.(e))};r();let o=new ResizeObserver(()=>r());return o.observe(e),()=>o.disconnect()}function zt(e,t=0,a=4){let r=Math.max(1,e-t)/a,o=10**Math.floor(Math.log10(r)),i=([1,2,2.5,5,10].find(p=>p*o>=r)??10)*o,l=Math.floor(t/i)*i,c=Math.ceil(e/i)*i,d=[];for(let p=l;p<=c+i/2;p+=i)d.push(Math.round(p));return d}function Yt(e){return t=>{let n={l:52,r:8,t:12,b:28},r=Math.max(1,...e.flatMap(m=>[m.inUsdMinor,m.outUsdMinor])),o=zt(r),i=o[o.length-1],l=t-n.l-n.r,c=240-n.t-n.b,d=m=>n.t+c-m/i*c,p=l/Math.max(1,e.length),h=Math.min(22,p*.28),f=`<svg width="${t}" height="240" viewBox="0 0 ${t} 240" role="img" aria-label="Money in and out, last ${e.length} months">`;for(let m of o)f+=`<line class="grid" x1="${n.l}" x2="${t-n.r}" y1="${d(m)}" y2="${d(m)}"/><text class="axis" x="${n.l-10}" y="${d(m)+4}" text-anchor="end">${s(T(m,{compact:!0}))}</text>`;return e.forEach((m,b)=>{let v=n.l+p*b+p/2,x=Math.max(m.inUsdMinor?2:0,m.inUsdMinor/i*c),k=Math.max(m.outUsdMinor?2:0,m.outUsdMinor/i*c),L=m.inUsdMinor-m.outUsdMinor;f+=`<g class="bar-g" tabindex="0"><title>${s(le(m.month,!0))}: in ${s(T(m.inUsdMinor))}, out ${s(T(m.outUsdMinor))}, net ${s(T(L,{sign:!0}))}</title>
+        <rect class="hit" x="${v-p/2}" y="${n.t}" width="${p}" height="${c}"/>
+        <rect class="bar-in" x="${v-h-2}" y="${n.t+c-x}" width="${h}" height="${x}" rx="${Math.min(5,h/3)}"/>
+        <rect class="bar-out" x="${v+2}" y="${n.t+c-k}" width="${h}" height="${k}" rx="${Math.min(5,h/3)}"/>
+        <text class="axis" x="${v}" y="232" text-anchor="middle">${s(le(m.month))}</text></g>`}),f+"</svg>"}}function _e(e,t=260){let a=e.points,n=null;return{draw:i=>{let l=t,c={l:56,r:12,t:16,b:30};if(a.length<2)return'<div class="chart-empty"><span>No forecast yet. <a href="/app/connections">Connect a wallet</a> and <a href="/app/documents">upload invoices</a> to see where your cash is heading.</span></div>';let d=a.map(C=>C.balanceUsdMinor),p=zt(Math.max(...d,0),Math.min(...d,0)),h=p[0],f=p[p.length-1],m=i-c.l-c.r,b=l-c.t-c.b,v=C=>c.l+C/(a.length-1)*m,x=C=>c.t+b-(C-h)/Math.max(1,f-h)*b;n={x:v,y:x,l:c.l,r:i-c.r,t:c.t,b:c.t+b};let k=`<svg width="${i}" height="${l}" viewBox="0 0 ${i} ${l}" role="img" aria-label="Cash forecast, next ${e.days} days">
+      <defs><linearGradient id="fc-fill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" class="fc-stop-a"/><stop offset="1" class="fc-stop-b"/></linearGradient></defs>`;for(let C of p)k+=`<line class="grid${C===0&&h<0?" zero":""}" x1="${c.l}" x2="${i-c.r}" y1="${x(C)}" y2="${x(C)}"/><text class="axis" x="${c.l-10}" y="${x(C)+4}" text-anchor="end">${s(T(C,{compact:!0}))}</text>`;let L=Math.max(1,Math.round(a.length/Math.max(2,Math.floor(m/90))));for(let C=0;C<a.length;C+=L)k+=`<text class="axis" x="${v(C)}" y="${l-8}" text-anchor="${C===0?"start":"middle"}">${s(F(a[C].date,!1))}</text>`;let A=a.map((C,H)=>`${H?"L":"M"}${v(H).toFixed(1)},${x(C.balanceUsdMinor).toFixed(1)}`).join(""),g=x(Math.max(h,0));k+=`<path class="fc-area" d="${A}L${v(a.length-1)},${g}L${v(0)},${g}Z" fill="url(#fc-fill)"/>`,k+=`<path class="fc-line" d="${A}" pathLength="1"/>`;let y=new Map(a.map((C,H)=>[C.date,H]));for(let C of e.events){let H=y.get(C.date);if(H==null)continue;let M=x(a[H].balanceUsdMinor);k+=`<g class="fc-ev ${C.usdMinor<0?"out":"in"}"><title>${s(F(C.date))} \xB7 ${s(C.label)} \xB7 ${s(T(C.usdMinor,{sign:!0}))}</title><line x1="${v(H)}" x2="${v(H)}" y1="${M}" y2="${c.t+b}"/><circle cx="${v(H)}" cy="${M}" r="4.5"/></g>`}return k+=`<g class="fc-hover" style="display:none"><line class="fc-cross" y1="${c.t}" y2="${c.t+b}"/><circle class="fc-dot" r="5"/></g>`,k+"</svg>"},wire:i=>{let l=i.querySelector("svg");if(!l||!n)return;let c=i.parentElement?.querySelector(".chart-tip");c||(c=document.createElement("div"),c.className="chart-tip",i.parentElement?.append(c));let d=l.querySelector(".fc-hover"),p=d.querySelector("line"),h=d.querySelector("circle"),f=b=>{if(!n)return;let v=l.getBoundingClientRect(),x=b-v.left,k=Math.max(0,Math.min(a.length-1,Math.round((x-n.l)/(n.r-n.l)*(a.length-1)))),L=a[k],A=n.x(k),g=n.y(L.balanceUsdMinor);d.style.display="",p.setAttribute("x1",String(A)),p.setAttribute("x2",String(A)),h.setAttribute("cx",String(A)),h.setAttribute("cy",String(g));let y=e.events.filter(M=>M.date===L.date);c.innerHTML=`<span>${s(F(L.date))}</span><b>${s(T(L.balanceUsdMinor))}</b>${y.map(M=>`<em class="${M.usdMinor<0?"out":"in"}">${s(M.label)} ${s(T(M.usdMinor,{sign:!0}))}</em>`).join("")}`,c.style.opacity="1";let C=c.offsetWidth,H=Math.min(Math.max(A-C/2,0),v.width-C);c.style.transform=`translate(${H}px, ${Math.max(0,g-76)}px)`},m=()=>{d.style.display="none",c.style.opacity="0"};l.addEventListener("pointermove",b=>f(b.clientX)),l.addEventListener("pointerleave",m)}}}function Gt(e,t=6){let a=[...e].filter(l=>l.usdMinor>0).sort((l,c)=>c.usdMinor-l.usdMinor),n=a.slice(0,t),r=a.slice(t).reduce((l,c)=>l+c.usdMinor,0);r>0&&n.push({category:`Other (${a.length-t})`,usdMinor:r});let o=a.reduce((l,c)=>l+c.usdMinor,0)||1,i=Math.max(1,...n.map(l=>l.usdMinor));return`<ul class="hbars">${n.map((l,c)=>`<li style="--d:${c*50}ms"><div class="hb-top"><span>${s(l.category)}</span><b>${s(T(l.usdMinor,{cents:!1}))}</b><em>${Math.round(l.usdMinor/o*100)}%</em></div>
+      <div class="hb-track"><i style="width:${Math.max(2,l.usdMinor/i*100).toFixed(1)}%"></i></div></li>`).join("")}</ul>`}var sn=["Software","Payroll","Rent","Marketing","Travel","Hosting","Contractors","Office","Legal & accounting","Taxes"];async function Xt(e,t){let a=null,n=[...new Set([...t,...sn])].sort();return await Z({title:e?"Edit budget":"New budget",submit:e?"Save budget":"Create budget",body:`<div class="field"><label for="b-name">Name</label><input id="b-name" name="name" value="${s(e?.name??"")}" placeholder="Software subscriptions" autocomplete="off"></div>
       <div class="grid2">
-        <div class="field"><label for="b-cat">Category</label><input id="b-cat" name="category" list="b-cats" value="${s(e?.category??"")}" placeholder="Software" autocomplete="off"><datalist id="b-cats">${n.map(i=>`<option value="${s(i)}">`).join("")}</datalist></div>
+        <div class="field"><label for="b-cat">Category</label><input id="b-cat" name="category" list="b-cats" value="${s(e?.category??"")}" placeholder="Software" autocomplete="off"><datalist id="b-cats">${n.map(r=>`<option value="${s(r)}">`).join("")}</datalist></div>
         <div class="field"><label for="b-limit">Monthly limit (USD)</label><div class="affix"><span>$</span><input id="b-limit" name="limit" inputmode="decimal" value="${e?e.limitUsdMinor/100:""}" placeholder="2,000"></div></div>
       </div>
-      <p class="fine">Spending is matched by transaction category. The AI CFO warns you before a payment would push a budget over.</p>`,onSubmit:async i=>{let o=N(i,"name"),l=N(i,"category"),d=pe(N(i,"limit"),"USD");if(!o)return B(i,"name","Give the budget a name.");if(!l)return B(i,"category","Choose a category.");if(!Number.isFinite(d)||d<=0)return B(i,"limit","Enter a monthly limit above zero.");let r={name:o,category:l,limitUsdMinor:d};return a=e?await J(`/api/v1/budgets/${encodeURIComponent(e.id)}`,r):await O("/api/v1/budgets",r),S(e?"Budget saved":"Budget created","ok"),!0}}),a}function Sa(e,t){let a=e.limitUsdMinor?e.spentUsdMinor/e.limitUsdMinor*100:0,n=a>100,i=!n&&a>=85,o=e.limitUsdMinor-e.spentUsdMinor;return`<article class="card bud-card reveal ${n?"over":i?"warn":""}" style="--d:${t*40}ms">
+      <p class="fine">Spending is matched by transaction category. The AI CFO warns you before a payment would push a budget over.</p>`,onSubmit:async r=>{let o=B(r,"name"),i=B(r,"category"),l=me(B(r,"limit"),"USD");if(!o)return I(r,"name","Give the budget a name.");if(!i)return I(r,"category","Choose a category.");if(!Number.isFinite(l)||l<=0)return I(r,"limit","Enter a monthly limit above zero.");let c={name:o,category:i,limitUsdMinor:l};return a=e?await J(`/api/v1/budgets/${encodeURIComponent(e.id)}`,c):await O("/api/v1/budgets",c),S(e?"Budget saved":"Budget created","ok"),!0}}),a}function on(e,t){let a=e.limitUsdMinor?e.spentUsdMinor/e.limitUsdMinor*100:0,n=a>100,r=!n&&a>=85,o=e.limitUsdMinor-e.spentUsdMinor;return`<article class="card bud-card reveal ${n?"over":r?"warn":""}" style="--d:${t*40}ms">
     <div class="bc-head"><div><h3>${s(e.name)}</h3>${e.category.toLowerCase()===e.name.toLowerCase()?'<span class="muted small">Monthly budget</span>':`<span class="cat">${s(e.category)}</span>`}</div>
-      <div class="bc-act"><button class="icon-btn" type="button" data-edit="${s(e.id)}" aria-label="Edit ${s(e.name)}">${p("edit",16)}</button><button class="icon-btn danger-h" type="button" data-del="${s(e.id)}" aria-label="Delete ${s(e.name)}">${p("trash",16)}</button></div></div>
+      <div class="bc-act"><button class="icon-btn" type="button" data-edit="${s(e.id)}" aria-label="Edit ${s(e.name)}">${u("edit",16)}</button><button class="icon-btn danger-h" type="button" data-del="${s(e.id)}" aria-label="Delete ${s(e.name)}">${u("trash",16)}</button></div></div>
     <div class="bc-num"><b>${s(T(e.spentUsdMinor,{cents:!1}))}</b><span>of ${s(T(e.limitUsdMinor,{cents:!1}))} this month</span></div>
     <div class="meter lg"><i style="width:${Math.min(100,a).toFixed(1)}%"></i></div>
-    <div class="bc-foot">${n?`<span class="over-l">${p("alert",13,2.4)}Over budget by ${s(T(-o,{cents:!1}))}</span>`:i?`<span class="warn-l">${p("alert",13,2.4)}${Math.round(a)}% used \xB7 ${s(T(o,{cents:!1}))} left</span>`:`<span>${Math.round(a)}% used</span><span>${s(T(o,{cents:!1}))} left</span>`}</div>
-  </article>`}async function Bt(e,t){let a=new Date,n=`${a.getFullYear()}-${String(a.getMonth()+1).padStart(2,"0")}`,i=n,o=[],l=[];e.innerHTML=`${_("Budgets & planning","Monthly limits per category, where the money went, and where your cash is heading.",`<button class="btn primary sm" type="button" id="b-new">${p("plus",16,2.4)}New budget</button>`)}
-    <section class="stat-row" id="b-stats">${Array.from({length:3},()=>`<div class="stat-card">${I("50%",12)}<div style="height:10px"></div>${I("60%",26)}</div>`).join("")}</section>
-    <section class="bud-grid" id="b-grid">${me(160)}${me(160)}${me(160)}</section>
-    <section class="card chart-card"><div class="card-head"><div><h2>Cash forecast</h2><p class="muted small">Next 90 days \xB7 indicative USD</p></div><div class="fc-legend"><span class="lg-in">Inflow</span><span class="lg-out">Outflow</span></div></div><div class="chart-wrap"><div class="chart" id="b-fc">${I("100%",240,14)}</div></div></section>
+    <div class="bc-foot">${n?`<span class="over-l">${u("alert",13,2.4)}Over budget by ${s(T(-o,{cents:!1}))}</span>`:r?`<span class="warn-l">${u("alert",13,2.4)}${Math.round(a)}% used \xB7 ${s(T(o,{cents:!1}))} left</span>`:`<span>${Math.round(a)}% used</span><span>${s(T(o,{cents:!1}))} left</span>`}</div>
+  </article>`}async function Kt(e,t){let a=new Date,n=`${a.getFullYear()}-${String(a.getMonth()+1).padStart(2,"0")}`,r=n,o=[],i=[];e.innerHTML=`${_("Budgets & planning","Monthly limits per category, where the money went, and where your cash is heading.",`<button class="btn primary sm" type="button" id="b-new">${u("plus",16,2.4)}New budget</button>`)}
+    <section class="stat-row" id="b-stats">${Array.from({length:3},()=>`<div class="stat-card">${U("50%",12)}<div style="height:10px"></div>${U("60%",26)}</div>`).join("")}</section>
+    <section class="bud-grid" id="b-grid">${fe(160)}${fe(160)}${fe(160)}</section>
+    <section class="card chart-card"><div class="card-head"><div><h2>Cash forecast</h2><p class="muted small">Next 90 days \xB7 indicative USD</p></div><div class="fc-legend"><span class="lg-in">Inflow</span><span class="lg-out">Outflow</span></div></div><div class="chart-wrap"><div class="chart" id="b-fc">${U("100%",240,14)}</div></div></section>
     <section class="card">
       <div class="card-head"><div><h2>Transactions by category</h2><p class="muted small" id="tx-sub">&nbsp;</p></div>
-        <div class="month-nav"><button class="icon-btn" type="button" id="m-prev" aria-label="Previous month">${p("chevronLeft",16)}</button><b id="m-label"></b><button class="icon-btn" type="button" id="m-next" aria-label="Next month">${p("chevron",16)}</button></div></div>
-      <div id="tx-groups">${G(5)}</div>
-    </section>`;let d=()=>{let b=e.querySelector("#b-grid"),C=o.reduce((A,f)=>A+f.limitUsdMinor,0),x=o.reduce((A,f)=>A+f.spentUsdMinor,0),L=o.filter(A=>A.spentUsdMinor>A.limitUsdMinor);e.querySelector("#b-stats").innerHTML=`
-      <div class="stat-card"><span class="label">Budgeted this month</span><b>${s(T(C,{cents:!1}))}</b><span class="sub">${o.length} budget${o.length===1?"":"s"}</span></div>
-      <div class="stat-card"><span class="label">Spent against budgets</span><b>${s(T(x,{cents:!1}))}</b><div class="meter ${x>C?"hot":""}"><i style="width:${C?Math.min(100,x/C*100).toFixed(1):0}%"></i></div></div>
-      <div class="stat-card ${L.length?"attn-bad":""}"><span class="label">Over budget</span><b>${L.length}</b><span class="sub">${L.length?s(L.map(A=>A.name).join(", ")):"Everything on track"}</span></div>`,b.innerHTML=o.length?o.map(Sa).join(""):`<div class="card wide-empty">${j({icon:"budget",title:"No budgets yet",text:"Set a monthly limit per category. Your AI CFO tracks spending against it and warns before a payment would go over.",action:`<button class="btn primary sm" type="button" data-new>${p("plus",15,2.4)}Create your first budget</button>`})}</div>`},r=()=>{e.querySelector("#m-label").textContent=le(n,!0),e.querySelector("#m-next").disabled=n>=i;let b=e.querySelector("#tx-groups"),C=l.filter(g=>g.usdMinor<0).reduce((g,M)=>g-M.usdMinor,0),x=l.filter(g=>g.usdMinor>0).reduce((g,M)=>g+M.usdMinor,0);if(e.querySelector("#tx-sub").innerHTML=l.length?`${l.length} transactions \xB7 <b class="pos">${s(T(x,{sign:!0,cents:!1}))}</b> in \xB7 <b>${s(T(-C,{cents:!1}))}</b> out`:"No transactions",!l.length){b.innerHTML=j({icon:"activity",title:`Nothing recorded in ${le(n,!0)}`,text:"Transactions come from processed documents, payments and connected accounts."});return}let L=new Map;for(let g of l)L.set(g.category,[...L.get(g.category)??[],g]);let A=new Map(o.map(g=>[g.category.toLowerCase(),g])),f=[...L.entries()].sort((g,M)=>g[1].reduce((H,k)=>H+k.usdMinor,0)-M[1].reduce((H,k)=>H+k.usdMinor,0));b.innerHTML=`<div class="tx-groups">${f.map(([g,M])=>{let H=M.reduce((P,Y)=>P+Y.usdMinor,0),k=A.get(g.toLowerCase());return`<details class="txg"${f.length<=3?" open":""}><summary><span class="chev">${p("chevron",14)}</span><b>${s(g)}</b><em>${M.length}</em>${k&&n===i?`<span class="pill ${k.spentUsdMinor>k.limitUsdMinor?"t-bad":"t-neutral"}">Budget ${s(T(k.limitUsdMinor,{cents:!1}))}</span>`:""}<span class="txg-sum ${H>0?"pos":""}">${s(T(H,{sign:H>0}))}</span></summary>
-          <ul>${M.sort((P,Y)=>Y.date.localeCompare(P.date)).map(P=>`<li><span class="tx-d">${s(F(P.date))}</span><span class="tx-desc"><b>${s(P.description)}</b>${P.counterparty?`<span>${s(P.counterparty)}</span>`:""}</span>${P.documentId?`<a class="tx-doc" href="/app/documents/${s(P.documentId)}" title="Open source document">${p("doc",14)}</a>`:`<span class="tx-src">${s(P.source)}</span>`}<span class="tx-amt ${P.amountMinor>0?"pos":""}">${s(z(P.amountMinor,P.currency))}${P.currency!=="USD"?`<em>\u2248 ${s(T(P.usdMinor))}</em>`:""}</span></li>`).join("")}</ul></details>`}).join("")}</div>`},c=async()=>{e.querySelector("#tx-groups").innerHTML=G(4),l=await U(`/api/v1/transactions?month=${n}`),t.alive()&&r()},u=b=>{let[C,x]=n.split("-").map(Number),L=new Date(C,x-1+b,1);n=`${L.getFullYear()}-${String(L.getMonth()+1).padStart(2,"0")}`,c().catch(()=>{})};e.querySelector("#m-prev").addEventListener("click",()=>u(-1)),e.querySelector("#m-next").addEventListener("click",()=>u(1));let y=()=>[...new Set([...l.map(b=>b.category),...o.map(b=>b.category)])];e.addEventListener("click",async b=>{let C=b.target;if(C.closest("#b-new, [data-new]")){let A=await Nt(null,y());A&&t.alive()&&(o.push(A),d())}let x=C.closest("[data-edit]");if(x){let A=o.find(g=>g.id===x.dataset.edit),f=A&&await Nt(A,y());f&&t.alive()&&(o=o.map(g=>g.id===f.id?f:g),d())}let L=C.closest("[data-del]");if(L){let A=o.find(f=>f.id===L.dataset.del);if(!A||!await ae("Delete budget?",`\u201C${A.name}\u201D will be removed. Transactions are not affected.`,"Delete",!0))return;try{await se(`/api/v1/budgets/${encodeURIComponent(A.id)}`),o=o.filter(f=>f.id!==A.id),d(),S("Budget deleted","ok")}catch{}}});let[h,,m]=await Promise.all([U("/api/v1/budgets"),c(),U("/api/v1/forecast?days=90",!0).catch(()=>null)]);if(!t.alive())return;o=h,d(),r();let v=e.querySelector("#b-fc");if(m){let b=Fe(m,240);t.onCleanup(Ae(v,b.draw,b.wire))}else v.innerHTML='<div class="chart-empty">Forecast unavailable right now.</div>'}function $e(e){let t=s(e),a=[];return t=t.replace(/`([^`]+)`/g,(n,i)=>(a.push(`<code>${i}</code>`),`\0${a.length-1}\0`)),t=t.replace(/\*\*([^*]+)\*\*/g,"<strong>$1</strong>").replace(/(^|[^*])\*([^*\s][^*]*)\*/g,"$1<em>$2</em>").replace(/\[([^\]]+)\]\(((?:https?:\/\/|\/)[^\s)]+)\)/g,(n,i,o)=>{let l=o.startsWith("http");return`<a href="${o}"${l?' target="_blank" rel="noopener noreferrer"':""}>${i}</a>`}),t.replace(/\u0000(\d+)\u0000/g,(n,i)=>a[Number(i)]??"")}var st=e=>/^\s*\|.*\|\s*$/.test(e),qt=e=>/^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/.test(e),ot=e=>e.trim().replace(/^\|/,"").replace(/\|$/,"").split("|").map(t=>t.trim());function we(e){let t=e.replace(/\r/g,"").split(`
-`),a=[],n=0;for(;n<t.length;){let i=t[n];if(!i.trim()){n++;continue}if(/^```/.test(i)){let d=[];for(n++;n<t.length&&!/^```/.test(t[n]);)d.push(t[n++]);n++,a.push(`<pre><code>${s(d.join(`
-`))}</code></pre>`);continue}let o=/^(#{1,4})\s+(.*)$/.exec(i);if(o){let d=Math.min(4,o[1].length+2);a.push(`<h${d}>${$e(o[2])}</h${d}>`),n++;continue}if(st(i)&&n+1<t.length&&qt(t[n+1])){let d=ot(i),r=ot(t[n+1]).map(y=>/:$/.test(y)?"num":"");n+=2;let c=[];for(;n<t.length&&st(t[n]);)c.push(ot(t[n++]));let u=(y,h)=>r[h]==="num"||/^[-−+]?\s?(?:[A-Z]{3}\s)?[$€£]?\s?[\d,.]+\s?(?:%|k|m|tADA|ADA|[A-Z]{3})?$/.test(y);a.push(`<div class="md-table"><table><thead><tr>${d.map((y,h)=>`<th${r[h]?' class="num"':""}>${$e(y)}</th>`).join("")}</tr></thead><tbody>${c.map(y=>`<tr>${d.map((h,m)=>`<td${u(y[m]??"",m)?' class="num"':""}>${$e(y[m]??"")}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`);continue}if(/^\s*([-*•]|\d+[.)])\s+/.test(i)){let d=/^\s*\d+[.)]/.test(i),r=[];for(;n<t.length&&/^\s*([-*•]|\d+[.)])\s+/.test(t[n]);){let c=t[n].replace(/^\s*([-*•]|\d+[.)])\s+/,"");for(n++;n<t.length&&/^\s{2,}\S/.test(t[n])&&!/^\s*([-*•]|\d+[.)])\s+/.test(t[n]);)c+=" "+t[n++].trim();r.push(`<li>${$e(c)}</li>`)}a.push(d?`<ol>${r.join("")}</ol>`:`<ul>${r.join("")}</ul>`);continue}if(/^>\s?/.test(i)){let d=[];for(;n<t.length&&/^>\s?/.test(t[n]);)d.push(t[n++].replace(/^>\s?/,""));a.push(`<blockquote>${$e(d.join(" "))}</blockquote>`);continue}let l=[];for(;n<t.length&&t[n].trim()&&!/^(#{1,4}\s|```|>\s?)/.test(t[n])&&!/^\s*([-*•]|\d+[.)])\s+/.test(t[n])&&!(st(t[n])&&n+1<t.length&&qt(t[n+1]));)l.push(t[n++]);a.push(`<p>${l.map($e).join("<br>")}</p>`)}return a.join("")}var Ha=[["budget","Summarise my spending this month"],["calendar","Which invoices are due in the next 14 days?"],["shield","Create a budget for software at $2,000/month"],["pay","Draft payment for the latest invoice"],["trend","Forecast my cash for the next 90 days"]],Pa=/^(image\/|application\/pdf$|text\/csv$|text\/plain$|application\/vnd\.ms-excel$)/;function Da(e){let t=new Date(e),a=new Date;a.setHours(0,0,0,0);let n=(a.getTime()-new Date(t.getFullYear(),t.getMonth(),t.getDate()).getTime())/864e5;return n<=0?"Today":n<=1?"Yesterday":n<=7?"Previous 7 days":n<=30?"Previous 30 days":"Older"}var je=(e,t,a="")=>`<span class="tool ${t?"run":"done"}" data-tool="${s(a)}">${t?'<i class="spin"></i>':p("check",12,2.8)}<span>${s(e)}</span></span>`;function it(e,t){let a=e.attachments?.length?e.attachments.map(n=>`<a class="file-chip" href="/app/documents/${s(n.documentId)}">${p("doc",14)}<span>${s(n.filename)}</span></a>`).join(""):(t??[]).map(n=>`<span class="file-chip">${p(be(n.mime),14)}<span>${s(n.file.name)}</span></span>`).join("");return`<div class="msg user">${a?`<div class="att-row">${a}</div>`:""}${e.text?`<div class="bubble">${s(e.text)}</div>`:""}</div>`}function rt(e){return`<div class="msg bot"><span class="bot-av" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 64 64"><path d="M36.3 38.6C36.1 38.6 36.1 38.6 36.5 38.5C37.4 38.3 38.5 37.9 39.3 37.3C40.1 36.7 40.8 35.9 41.2 35.2C41.6 34.5 42 33.5 42.2 32.7C42.5 31.8 42.5 30.6 42.5 28.3C42.4 26.7 42.4 26.5 42.2 25.8C41.9 25.1 41.3 24.1 40.7 23.6C40.2 23.1 39.4 22.6 38.5 22.3C37.6 22 38.3 22 29.8 22C24.2 22 22.2 22 22.1 21.9C20.7 21.5 20 20.8 19.6 19.6C19.5 19.2 19.5 18.6 19.5 15.8C19.5 12.7 19.5 12.6 19.8 12.2C20.1 11.8 20.6 11.4 21.1 11.2C21.3 11.2 23.6 11.2 30 11.2C34.7 11.2 38.8 11.2 39.1 11.2C41.1 11.3 43.5 12.1 45.3 13.2C46.6 14 47.4 14.7 48.5 15.7C50.3 17.5 51.8 20 52.5 22.6C53 24.2 53.1 25.7 53 27.4C53 28.1 52.9 28.6 52.7 29.5C52.5 30.4 52 31.6 51.5 32.5C50.5 34.2 49 35.7 47.4 36.8C47 37 46 37.5 45.7 37.6C45.6 37.7 45.4 37.8 45.3 37.8C44.1 38.3 43 38.5 41.5 38.6C40.9 38.7 36.7 38.7 36.3 38.6Z" fill="#faf8f5"/><path d="M9.7 56.2C9.4 56.1 9.1 55.8 9 55.5C8.9 55.3 8.9 46.1 9 44.8C9 43.8 9.1 42.8 9.2 42.2C9.3 41.7 9.5 41 9.6 40.7C9.6 40.6 9.7 40.4 9.7 40.2C9.8 40 9.8 39.9 9.9 39.8C9.9 39.8 9.9 39.6 10 39.5C10 39.4 10.1 39.2 10.1 39.2C10.1 39.2 10.2 39 10.2 38.9C10.2 38.8 10.3 38.7 10.3 38.6C10.4 38.5 10.4 38.4 10.5 38.3C10.6 38.1 10.8 37.6 10.9 37.4C11.6 36.2 11.8 35.9 12.3 35.2C13.1 34 14.4 32.7 15.4 31.9C16.1 31.4 17 30.7 17.1 30.7C17.1 30.7 17.1 30.7 17.2 30.6C17.3 30.5 17.4 30.4 17.5 30.4C17.6 30.4 17.8 30.2 18 30.1C18.3 30 19.3 29.5 19.7 29.3C19.8 29.3 20 29.2 20.2 29.1C20.4 29 20.6 28.9 20.6 28.9C20.7 28.9 20.8 28.9 20.8 28.9C20.9 28.9 20.9 28.8 21 28.8C21.2 28.8 21.8 28.6 22.2 28.4C22.7 28.3 23.6 28.1 23.9 28.1C23.9 28.1 24.1 28.1 24.1 28.1C24.2 28.1 24.7 28 25.3 28C26.2 27.9 26.8 27.9 34.4 27.9L42.4 27.9L42.5 29C42.5 31.5 42.3 32.9 41.7 34.3C41.3 35 41.1 35.4 40.8 35.9C40.4 36.4 39.8 36.9 39.3 37.3C38.5 37.9 37.4 38.4 36.5 38.5C36.3 38.6 36.1 38.6 36.1 38.6C36 38.6 33.6 38.6 30.7 38.7C26.1 38.7 25.5 38.7 25.2 38.8C24.6 38.9 24.4 39 23.8 39.2C22.1 39.9 20.8 41.1 20.1 42.8C19.8 43.6 19.6 44.2 19.6 45C19.5 46.7 19.4 46.9 19.3 47.5C19.1 48.7 18.8 49.6 18.1 50.8C17.4 52 16.2 53.3 14.9 54.2C14.5 54.5 13.8 54.9 13.2 55.2C12 55.8 10.2 56.3 9.7 56.2Z" fill="#fd7b5d"/></svg></span><div class="msg-body">${e?.tools?.length?`<div class="tools">${e.tools.map(a=>je(a.summary,!1,a.name)).join("")}</div>`:'<div class="tools"></div>'}<div class="md">${e?we(e.text):'<span class="typing"><i></i><i></i><i></i></span>'}</div></div></div>`}async function Rt(e,t){let a=t.params[0]||null,n=[],i=[],o=0,l=null,d=q.me?.workspace.autonomy;e.innerHTML=`<div class="chat">
+        <div class="month-nav"><button class="icon-btn" type="button" id="m-prev" aria-label="Previous month">${u("chevronLeft",16)}</button><b id="m-label"></b><button class="icon-btn" type="button" id="m-next" aria-label="Next month">${u("chevron",16)}</button></div></div>
+      <div id="tx-groups">${V(5)}</div>
+    </section>`;let l=()=>{let v=e.querySelector("#b-grid"),x=o.reduce((A,g)=>A+g.limitUsdMinor,0),k=o.reduce((A,g)=>A+g.spentUsdMinor,0),L=o.filter(A=>A.spentUsdMinor>A.limitUsdMinor);e.querySelector("#b-stats").innerHTML=`
+      <div class="stat-card"><span class="label">Budgeted this month</span><b>${s(T(x,{cents:!1}))}</b><span class="sub">${o.length} budget${o.length===1?"":"s"}</span></div>
+      <div class="stat-card"><span class="label">Spent against budgets</span><b>${s(T(k,{cents:!1}))}</b><div class="meter ${k>x?"hot":""}"><i style="width:${x?Math.min(100,k/x*100).toFixed(1):0}%"></i></div></div>
+      <div class="stat-card ${L.length?"attn-bad":""}"><span class="label">Over budget</span><b>${L.length}</b><span class="sub">${L.length?s(L.map(A=>A.name).join(", ")):"Everything on track"}</span></div>`,v.innerHTML=o.length?o.map(on).join(""):`<div class="card wide-empty">${R({icon:"budget",title:"No budgets yet",text:"Set a monthly limit per category. Your AI CFO tracks spending against it and warns before a payment would go over.",action:`<button class="btn primary sm" type="button" data-new>${u("plus",15,2.4)}Create your first budget</button>`})}</div>`},c=()=>{e.querySelector("#m-label").textContent=le(n,!0),e.querySelector("#m-next").disabled=n>=r;let v=e.querySelector("#tx-groups"),x=i.filter(y=>y.usdMinor<0).reduce((y,C)=>y-C.usdMinor,0),k=i.filter(y=>y.usdMinor>0).reduce((y,C)=>y+C.usdMinor,0);if(e.querySelector("#tx-sub").innerHTML=i.length?`${i.length} transactions \xB7 <b class="pos">${s(T(k,{sign:!0,cents:!1}))}</b> in \xB7 <b>${s(T(-x,{cents:!1}))}</b> out`:"No transactions",!i.length){v.innerHTML=R({icon:"activity",title:`Nothing recorded in ${le(n,!0)}`,text:"Transactions come from processed documents, payments and connected accounts."});return}let L=new Map;for(let y of i)L.set(y.category,[...L.get(y.category)??[],y]);let A=new Map(o.map(y=>[y.category.toLowerCase(),y])),g=[...L.entries()].sort((y,C)=>y[1].reduce((H,M)=>H+M.usdMinor,0)-C[1].reduce((H,M)=>H+M.usdMinor,0));v.innerHTML=`<div class="tx-groups">${g.map(([y,C])=>{let H=C.reduce((P,z)=>P+z.usdMinor,0),M=A.get(y.toLowerCase());return`<details class="txg"${g.length<=3?" open":""}><summary><span class="chev">${u("chevron",14)}</span><b>${s(y)}</b><em>${C.length}</em>${M&&n===r?`<span class="pill ${M.spentUsdMinor>M.limitUsdMinor?"t-bad":"t-neutral"}">Budget ${s(T(M.limitUsdMinor,{cents:!1}))}</span>`:""}<span class="txg-sum ${H>0?"pos":""}">${s(T(H,{sign:H>0}))}</span></summary>
+          <ul>${C.sort((P,z)=>z.date.localeCompare(P.date)).map(P=>`<li><span class="tx-d">${s(F(P.date))}</span><span class="tx-desc"><b>${s(P.description)}</b>${P.counterparty?`<span>${s(P.counterparty)}</span>`:""}</span>${P.documentId?`<a class="tx-doc" href="/app/documents/${s(P.documentId)}" title="Open source document">${u("doc",14)}</a>`:`<span class="tx-src">${s(P.source)}</span>`}<span class="tx-amt ${P.amountMinor>0?"pos":""}">${s(G(P.amountMinor,P.currency))}${P.currency!=="USD"?`<em>\u2248 ${s(T(P.usdMinor))}</em>`:""}</span></li>`).join("")}</ul></details>`}).join("")}</div>`},d=async()=>{e.querySelector("#tx-groups").innerHTML=V(4),i=await N(`/api/v1/transactions?month=${n}`),t.alive()&&c()},p=v=>{let[x,k]=n.split("-").map(Number),L=new Date(x,k-1+v,1);n=`${L.getFullYear()}-${String(L.getMonth()+1).padStart(2,"0")}`,d().catch(()=>{})};e.querySelector("#m-prev").addEventListener("click",()=>p(-1)),e.querySelector("#m-next").addEventListener("click",()=>p(1));let h=()=>[...new Set([...i.map(v=>v.category),...o.map(v=>v.category)])];e.addEventListener("click",async v=>{let x=v.target;if(x.closest("#b-new, [data-new]")){let A=await Xt(null,h());A&&t.alive()&&(o.push(A),l())}let k=x.closest("[data-edit]");if(k){let A=o.find(y=>y.id===k.dataset.edit),g=A&&await Xt(A,h());g&&t.alive()&&(o=o.map(y=>y.id===g.id?g:y),l())}let L=x.closest("[data-del]");if(L){let A=o.find(g=>g.id===L.dataset.del);if(!A||!await ae("Delete budget?",`\u201C${A.name}\u201D will be removed. Transactions are not affected.`,"Delete",!0))return;try{await oe(`/api/v1/budgets/${encodeURIComponent(A.id)}`),o=o.filter(g=>g.id!==A.id),l(),S("Budget deleted","ok")}catch{}}});let[f,,m]=await Promise.all([N("/api/v1/budgets"),d(),N("/api/v1/forecast?days=90",!0).catch(()=>null)]);if(!t.alive())return;o=f,l(),c();let b=e.querySelector("#b-fc");if(m){let v=_e(m,240);t.onCleanup(He(b,v.draw,v.wire))}else b.innerHTML='<div class="chart-empty">Forecast unavailable right now.</div>'}function xe(e){let t=s(e),a=[];return t=t.replace(/`([^`]+)`/g,(n,r)=>(a.push(`<code>${r}</code>`),`\0${a.length-1}\0`)),t=t.replace(/\*\*([^*]+)\*\*/g,"<strong>$1</strong>").replace(/(^|[^*])\*([^*\s][^*]*)\*/g,"$1<em>$2</em>").replace(/\[([^\]]+)\]\(((?:https?:\/\/|\/)[^\s)]+)\)/g,(n,r,o)=>{let i=o.startsWith("http");return`<a href="${o}"${i?' target="_blank" rel="noopener noreferrer"':""}>${r}</a>`}),t.replace(/\u0000(\d+)\u0000/g,(n,r)=>a[Number(r)]??"")}var dt=e=>/^\s*\|.*\|\s*$/.test(e),Vt=e=>/^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/.test(e),ut=e=>e.trim().replace(/^\|/,"").replace(/\|$/,"").split("|").map(t=>t.trim());function Ce(e){let t=e.replace(/\r/g,"").split(`
+`),a=[],n=0;for(;n<t.length;){let r=t[n];if(!r.trim()){n++;continue}if(/^```/.test(r)){let l=[];for(n++;n<t.length&&!/^```/.test(t[n]);)l.push(t[n++]);n++,a.push(`<pre><code>${s(l.join(`
+`))}</code></pre>`);continue}let o=/^(#{1,4})\s+(.*)$/.exec(r);if(o){let l=Math.min(4,o[1].length+2);a.push(`<h${l}>${xe(o[2])}</h${l}>`),n++;continue}if(dt(r)&&n+1<t.length&&Vt(t[n+1])){let l=ut(r),c=ut(t[n+1]).map(h=>/:$/.test(h)?"num":"");n+=2;let d=[];for(;n<t.length&&dt(t[n]);)d.push(ut(t[n++]));let p=(h,f)=>c[f]==="num"||/^[-−+]?\s?(?:[A-Z]{3}\s)?[$€£]?\s?[\d,.]+\s?(?:%|k|m|tADA|ADA|[A-Z]{3})?$/.test(h);a.push(`<div class="md-table"><table><thead><tr>${l.map((h,f)=>`<th${c[f]?' class="num"':""}>${xe(h)}</th>`).join("")}</tr></thead><tbody>${d.map(h=>`<tr>${l.map((f,m)=>`<td${p(h[m]??"",m)?' class="num"':""}>${xe(h[m]??"")}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`);continue}if(/^\s*([-*•]|\d+[.)])\s+/.test(r)){let l=/^\s*\d+[.)]/.test(r),c=[];for(;n<t.length&&/^\s*([-*•]|\d+[.)])\s+/.test(t[n]);){let d=t[n].replace(/^\s*([-*•]|\d+[.)])\s+/,"");for(n++;n<t.length&&/^\s{2,}\S/.test(t[n])&&!/^\s*([-*•]|\d+[.)])\s+/.test(t[n]);)d+=" "+t[n++].trim();c.push(`<li>${xe(d)}</li>`)}a.push(l?`<ol>${c.join("")}</ol>`:`<ul>${c.join("")}</ul>`);continue}if(/^>\s?/.test(r)){let l=[];for(;n<t.length&&/^>\s?/.test(t[n]);)l.push(t[n++].replace(/^>\s?/,""));a.push(`<blockquote>${xe(l.join(" "))}</blockquote>`);continue}let i=[];for(;n<t.length&&t[n].trim()&&!/^(#{1,4}\s|```|>\s?)/.test(t[n])&&!/^\s*([-*•]|\d+[.)])\s+/.test(t[n])&&!(dt(t[n])&&n+1<t.length&&Vt(t[n+1]));)i.push(t[n++]);a.push(`<p>${i.map(xe).join("<br>")}</p>`)}return a.join("")}var rn=[["budget","Summarise my spending this month"],["calendar","Which invoices are due in the next 14 days?"],["shield","Create a budget for software at $2,000/month"],["pay","Draft payment for the latest invoice"],["trend","Forecast my cash for the next 90 days"]],cn=/^(image\/|application\/pdf$|text\/csv$|text\/plain$|application\/vnd\.ms-excel$)/;function ln(e){let t=new Date(e),a=new Date;a.setHours(0,0,0,0);let n=(a.getTime()-new Date(t.getFullYear(),t.getMonth(),t.getDate()).getTime())/864e5;return n<=0?"Today":n<=1?"Yesterday":n<=7?"Previous 7 days":n<=30?"Previous 30 days":"Older"}var We=(e,t,a="")=>`<span class="tool ${t?"run":"done"}" data-tool="${s(a)}">${t?'<i class="spin"></i>':u("check",12,2.8)}<span>${s(e)}</span></span>`;function pt(e,t){let a=e.attachments?.length?e.attachments.map(n=>`<a class="file-chip" href="/app/documents/${s(n.documentId)}">${u("doc",14)}<span>${s(n.filename)}</span></a>`).join(""):(t??[]).map(n=>`<span class="file-chip">${u($e(n.mime),14)}<span>${s(n.file.name)}</span></span>`).join("");return`<div class="msg user">${a?`<div class="att-row">${a}</div>`:""}${e.text?`<div class="bubble">${s(e.text)}</div>`:""}</div>`}function mt(e){return`<div class="msg bot"><span class="bot-av" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 64 64"><path d="M36.3 38.6C36.1 38.6 36.1 38.6 36.5 38.5C37.4 38.3 38.5 37.9 39.3 37.3C40.1 36.7 40.8 35.9 41.2 35.2C41.6 34.5 42 33.5 42.2 32.7C42.5 31.8 42.5 30.6 42.5 28.3C42.4 26.7 42.4 26.5 42.2 25.8C41.9 25.1 41.3 24.1 40.7 23.6C40.2 23.1 39.4 22.6 38.5 22.3C37.6 22 38.3 22 29.8 22C24.2 22 22.2 22 22.1 21.9C20.7 21.5 20 20.8 19.6 19.6C19.5 19.2 19.5 18.6 19.5 15.8C19.5 12.7 19.5 12.6 19.8 12.2C20.1 11.8 20.6 11.4 21.1 11.2C21.3 11.2 23.6 11.2 30 11.2C34.7 11.2 38.8 11.2 39.1 11.2C41.1 11.3 43.5 12.1 45.3 13.2C46.6 14 47.4 14.7 48.5 15.7C50.3 17.5 51.8 20 52.5 22.6C53 24.2 53.1 25.7 53 27.4C53 28.1 52.9 28.6 52.7 29.5C52.5 30.4 52 31.6 51.5 32.5C50.5 34.2 49 35.7 47.4 36.8C47 37 46 37.5 45.7 37.6C45.6 37.7 45.4 37.8 45.3 37.8C44.1 38.3 43 38.5 41.5 38.6C40.9 38.7 36.7 38.7 36.3 38.6Z" fill="#faf8f5"/><path d="M9.7 56.2C9.4 56.1 9.1 55.8 9 55.5C8.9 55.3 8.9 46.1 9 44.8C9 43.8 9.1 42.8 9.2 42.2C9.3 41.7 9.5 41 9.6 40.7C9.6 40.6 9.7 40.4 9.7 40.2C9.8 40 9.8 39.9 9.9 39.8C9.9 39.8 9.9 39.6 10 39.5C10 39.4 10.1 39.2 10.1 39.2C10.1 39.2 10.2 39 10.2 38.9C10.2 38.8 10.3 38.7 10.3 38.6C10.4 38.5 10.4 38.4 10.5 38.3C10.6 38.1 10.8 37.6 10.9 37.4C11.6 36.2 11.8 35.9 12.3 35.2C13.1 34 14.4 32.7 15.4 31.9C16.1 31.4 17 30.7 17.1 30.7C17.1 30.7 17.1 30.7 17.2 30.6C17.3 30.5 17.4 30.4 17.5 30.4C17.6 30.4 17.8 30.2 18 30.1C18.3 30 19.3 29.5 19.7 29.3C19.8 29.3 20 29.2 20.2 29.1C20.4 29 20.6 28.9 20.6 28.9C20.7 28.9 20.8 28.9 20.8 28.9C20.9 28.9 20.9 28.8 21 28.8C21.2 28.8 21.8 28.6 22.2 28.4C22.7 28.3 23.6 28.1 23.9 28.1C23.9 28.1 24.1 28.1 24.1 28.1C24.2 28.1 24.7 28 25.3 28C26.2 27.9 26.8 27.9 34.4 27.9L42.4 27.9L42.5 29C42.5 31.5 42.3 32.9 41.7 34.3C41.3 35 41.1 35.4 40.8 35.9C40.4 36.4 39.8 36.9 39.3 37.3C38.5 37.9 37.4 38.4 36.5 38.5C36.3 38.6 36.1 38.6 36.1 38.6C36 38.6 33.6 38.6 30.7 38.7C26.1 38.7 25.5 38.7 25.2 38.8C24.6 38.9 24.4 39 23.8 39.2C22.1 39.9 20.8 41.1 20.1 42.8C19.8 43.6 19.6 44.2 19.6 45C19.5 46.7 19.4 46.9 19.3 47.5C19.1 48.7 18.8 49.6 18.1 50.8C17.4 52 16.2 53.3 14.9 54.2C14.5 54.5 13.8 54.9 13.2 55.2C12 55.8 10.2 56.3 9.7 56.2Z" fill="#fd7b5d"/></svg></span><div class="msg-body">${e?.tools?.length?`<div class="tools">${e.tools.map(a=>We(a.summary,!1,a.name)).join("")}</div>`:'<div class="tools"></div>'}<div class="md">${e?Ce(e.text):'<span class="typing"><i></i><i></i><i></i></span>'}</div></div></div>`}async function Jt(e,t){let a=t.params[0]||null,n=[],r=[],o=0,i=null,l=q.me?.workspace.autonomy;e.innerHTML=`<div class="chat">
     <aside class="threads" id="threads">
-      <div class="threads-head"><button class="btn primary sm block" type="button" id="new-chat">${p("plus",16,2.4)}New chat</button></div>
-      <div class="thread-list" id="thread-list">${Array.from({length:6},()=>`<div class="th-sk">${I("80%",12)}${I("40%",10)}</div>`).join("")}</div>
+      <div class="threads-head"><button class="btn primary sm block" type="button" id="new-chat">${u("plus",16,2.4)}New chat</button></div>
+      <div class="thread-list" id="thread-list">${Array.from({length:6},()=>`<div class="th-sk">${U("80%",12)}${U("40%",10)}</div>`).join("")}</div>
     </aside>
     <div class="threads-scrim" id="threads-scrim"></div>
     <section class="convo" id="convo">
       <header class="convo-head">
-        <button class="icon-btn threads-btn" type="button" id="threads-btn" aria-label="Show chats">${p("chat",18)}</button>
+        <button class="icon-btn threads-btn" type="button" id="threads-btn" aria-label="Show chats">${u("chat",18)}</button>
         <div class="convo-title"><b id="chat-title">New chat</b><span>AI CFO \xB7 Claude</span></div>
-        ${d?`<a class="pill ${K[d].tone}" href="/app/agent" title="Agent autonomy">${p("shield",12,2.2)}${K[d].name}</a>`:""}
+        ${l?`<a class="pill ${X[l].tone}" href="/app/agent" title="Agent autonomy">${u("shield",12,2.2)}${X[l].name}</a>`:""}
       </header>
       <div class="msgs" id="msgs"><div class="msgs-in" id="msgs-in"></div></div>
       <form class="composer" id="composer">
         <div class="att-chips" id="att-chips"></div>
         <textarea id="input" rows="1" placeholder="Ask about cash, invoices, budgets, or ask it to draft a payment\u2026" aria-label="Message"></textarea>
         <div class="comp-bar">
-          <button type="button" class="icon-btn" id="attach" aria-label="Attach files" title="Attach files (PDF, images, CSV, text)">${p("clip",18)}</button>
-          <input type="file" id="file" multiple accept="${Be}" hidden>
+          <button type="button" class="icon-btn" id="attach" aria-label="Attach files" title="Attach files (PDF, images, CSV, text)">${u("clip",18)}</button>
+          <input type="file" id="file" multiple accept="${Fe}" hidden>
           <span class="comp-hint">Shift + Enter for a new line</span>
-          <button type="submit" class="send" id="send" aria-label="Send" disabled>${p("send",18,2.4)}</button>
+          <button type="submit" class="send" id="send" aria-label="Send" disabled>${u("send",18,2.4)}</button>
         </div>
       </form>
       <p class="comp-fine">Claude reads. Code decides. You approve. Payments run on Cardano Preprod (testnet) and the CashXChain sandbox.</p>
-      <div class="drop-over" id="drop-over"><div>${p("upload",26)}<b>Drop files to attach</b><span>PDF, images, CSV or text \xB7 up to 15 MB each</span></div></div>
+      <div class="drop-over" id="drop-over"><div>${u("upload",26)}<b>Drop files to attach</b><span>PDF, images, CSV or text \xB7 up to 15 MB each</span></div></div>
     </section>
-  </div>`;let r=$=>e.querySelector(`#${$}`),c=r("msgs"),u=r("msgs-in"),y=r("input"),h=r("send"),m=r("thread-list"),v=()=>c.scrollHeight-c.scrollTop-c.clientHeight<120,b=($=!1)=>{($||v())&&(c.scrollTop=c.scrollHeight)},C=()=>{if(l){h.disabled=!1,h.classList.add("stop"),h.innerHTML=p("stop",16,2.2),h.setAttribute("aria-label","Stop");return}h.classList.remove("stop"),h.innerHTML=p("send",18,2.4),h.setAttribute("aria-label","Send"),h.disabled=!y.value.trim()&&!i.length},x=()=>{y.style.height="auto",y.style.height=`${Math.min(200,y.scrollHeight)}px`,C()},L=()=>{if(!n.length){m.innerHTML='<p class="threads-empty">Your conversations appear here.</p>';return}let $="",w="";for(let D of n){let X=Da(D.updatedAt);X!==w&&($+=`<div class="th-group">${X}</div>`),w=X,$+=`<div class="th${D.id===a?" on":""}"><a href="/app/chat/${s(D.id)}" title="${s(D.title)}"><span>${s(D.title||"New chat")}</span><em>${s(Pe(D.updatedAt))}</em></a><button type="button" class="icon-btn th-del" data-del="${s(D.id)}" aria-label="Delete chat">${p("trash",15)}</button></div>`}m.innerHTML=$},A=async()=>{if(n=await U("/api/v1/chats",!0).catch(()=>n),!t.alive())return;n.sort((w,D)=>D.updatedAt.localeCompare(w.updatedAt)),L();let $=n.find(w=>w.id===a);$&&(r("chat-title").textContent=$.title||"New chat")},f=()=>{u.innerHTML=`<div class="chat-empty">
-      <div class="ce-mark">${p("sparkle",26)}</div>
+  </div>`;let c=w=>e.querySelector(`#${w}`),d=c("msgs"),p=c("msgs-in"),h=c("input"),f=c("send"),m=c("thread-list"),b=()=>d.scrollHeight-d.scrollTop-d.clientHeight<120,v=(w=!1)=>{(w||b())&&(d.scrollTop=d.scrollHeight)},x=()=>{if(i){f.disabled=!1,f.classList.add("stop"),f.innerHTML=u("stop",16,2.2),f.setAttribute("aria-label","Stop");return}f.classList.remove("stop"),f.innerHTML=u("send",18,2.4),f.setAttribute("aria-label","Send"),f.disabled=!h.value.trim()&&!r.length},k=()=>{h.style.height="auto",h.style.height=`${Math.min(200,h.scrollHeight)}px`,x()},L=()=>{if(!n.length){m.innerHTML='<p class="threads-empty">Your conversations appear here.</p>';return}let w="",$="";for(let D of n){let Y=ln(D.updatedAt);Y!==$&&(w+=`<div class="th-group">${Y}</div>`),$=Y,w+=`<div class="th${D.id===a?" on":""}"><a href="/app/chat/${s(D.id)}" title="${s(D.title)}"><span>${s(D.title||"New chat")}</span><em>${s(Ie(D.updatedAt))}</em></a><button type="button" class="icon-btn th-del" data-del="${s(D.id)}" aria-label="Delete chat">${u("trash",15)}</button></div>`}m.innerHTML=w},A=async()=>{if(n=await N("/api/v1/chats",!0).catch(()=>n),!t.alive())return;n.sort(($,D)=>D.updatedAt.localeCompare($.updatedAt)),L();let w=n.find($=>$.id===a);w&&(c("chat-title").textContent=w.title||"New chat")},g=()=>{p.innerHTML=`<div class="chat-empty">
+      <div class="ce-mark">${u("sparkle",26)}</div>
       <h2>How can I help with your finances?</h2>
       <p>I can read your documents and connected accounts, plan budgets and draft payments. Code checks every payment against your policy, and you approve what moves.</p>
-      <div class="suggest">${Ha.map(([$,w])=>`<button type="button" data-suggest="${s(w)}">${p($,16)}<span>${s(w)}</span></button>`).join("")}</div>
-    </div>`},g=()=>{let $=r("att-chips");$.innerHTML=i.map(w=>`<span class="att">${w.url?`<img src="${w.url}" alt="">`:`<span class="att-ic">${p(be(w.mime),16)}</span>`}<span class="att-t"><b>${s(w.file.name)}</b><em>${s(ve(w.file.size))}</em></span><button type="button" class="att-x" data-rm="${w.id}" aria-label="Remove ${s(w.file.name)}">${p("x",12,2.6)}</button></span>`).join(""),$.classList.toggle("has",i.length>0),C()},M=$=>{for(let w of Array.from($)){let D=Le(w);if(!Pa.test(D)){S(`${w.name}: only images, PDF, CSV and text files are supported.`,"error");continue}if(w.size>Ne){S(`${w.name} is larger than 15 MB.`,"error");continue}i.push({id:++o,file:w,mime:D,url:D.startsWith("image/")?URL.createObjectURL(w):void 0})}g(),y.focus()},H=$=>{if($)for(let w of i)w.url&&URL.revokeObjectURL(w.url);i=[],g()};t.onCleanup(()=>{l?.abort(),H(!0)});let k=async $=>{if(l||!$&&!i.length)return;let w=i;i=[],g(),y.value="",x(),u.querySelector(".chat-empty")?.remove(),l=new AbortController,C();let D=document.createElement("div");D.innerHTML=it({text:$},w),u.append(D.firstElementChild);let X=document.createElement("div");X.innerHTML=rt();let W=X.firstElementChild;u.append(W),W.classList.add("streaming"),b(!0);let he=W.querySelector(".tools"),Ce=W.querySelector(".md"),ee="",ne=0,ga=()=>{ne=0,Ce.innerHTML=we(ee)+'<span class="caret"></span>',b()};try{if(!a){let R=await O("/api/v1/chats",{});a=R.id,n.unshift(R),L(),oe(`/app/chat/${encodeURIComponent(R.id)}`,{silent:!0})}let ye=[];for(let R of w)ye.push({filename:R.file.name,mimeType:R.mime,dataBase64:await Ue(R.file)});for(let R of w)R.url&&URL.revokeObjectURL(R.url);let ge=l.signal;await kt(`/api/v1/chats/${encodeURIComponent(a)}/messages`,ye.length?{text:$,attachments:ye}:{text:$},R=>{if(t.alive())switch(R.type){case"user":{let re=document.createElement("div");re.innerHTML=it(R.message);let ce=W.previousElementSibling;ce?.classList.contains("user")&&ce.replaceWith(re.firstElementChild);break}case"text":ee+=R.delta,ne||(ne=requestAnimationFrame(ga));break;case"tool":{let re=[...he.querySelectorAll(".tool.run")].find(ce=>ce.dataset.tool===R.name);R.status==="start"?he.insertAdjacentHTML("beforeend",je(R.summary,!0,R.name)):re?re.outerHTML=je(R.summary,!1,R.name):he.insertAdjacentHTML("beforeend",je(R.summary,!1,R.name)),ee||(Ce.innerHTML='<span class="typing"><i></i><i></i><i></i></span>'),b();break}case"done":{ne&&cancelAnimationFrame(ne),ne=0;let re=document.createElement("div");re.innerHTML=rt({...R.message,text:R.message.text||ee});let ce=re.firstElementChild;!R.message.tools?.length&&he.children.length&&ce.querySelector(".tools").replaceWith(he),W.replaceWith(ce),ee="";break}case"error":throw new Error(R.message||"The AI CFO could not answer.")}},ge),W.isConnected&&(ne&&cancelAnimationFrame(ne),W.classList.remove("streaming"),Ce.innerHTML=ee?we(ee):'<p class="muted">No reply.</p>')}catch(ye){ne&&cancelAnimationFrame(ne),W.classList.remove("streaming");for(let ge of he.querySelectorAll(".tool.run"))ge.classList.replace("run","stopped");if(ye.name==="AbortError")Ce.innerHTML=(ee?we(ee):"")+`<p class="stopped-note">${p("stop",12,2.4)}Stopped</p>`;else{let ge=ye.message||"Something went wrong.";Ce.innerHTML=(ee?we(ee):"")+`<div class="callout bad">${p("alert",15)}<span>${s(ge)}</span></div>`,S(ge,"error")}}finally{l=null,C(),t.alive()&&(A(),y.focus())}};r("composer").addEventListener("submit",$=>{if($.preventDefault(),l){l.abort();return}k(y.value.trim())}),y.addEventListener("input",x),y.addEventListener("keydown",$=>{$.key==="Enter"&&!$.shiftKey&&!$.isComposing&&($.preventDefault(),l||k(y.value.trim()))}),y.addEventListener("paste",$=>{let w=$.clipboardData?.files;w&&w.length&&($.preventDefault(),M(w))}),r("attach").addEventListener("click",()=>r("file").click()),r("file").addEventListener("change",$=>{let w=$.target;w.files&&M(w.files),w.value=""}),r("att-chips").addEventListener("click",$=>{let w=$.target.closest("[data-rm]");if(!w)return;let D=Number(w.dataset.rm),X=i.find(W=>W.id===D);X?.url&&URL.revokeObjectURL(X.url),i=i.filter(W=>W.id!==D),g()});let P=r("convo"),Y=0;P.addEventListener("dragenter",$=>{$.dataTransfer?.types.includes("Files")&&($.preventDefault(),Y++,P.classList.add("dragging"))}),P.addEventListener("dragover",$=>{$.dataTransfer?.types.includes("Files")&&$.preventDefault()}),P.addEventListener("dragleave",()=>{Y=Math.max(0,Y-1),Y||P.classList.remove("dragging")}),P.addEventListener("drop",$=>{$.preventDefault(),Y=0,P.classList.remove("dragging"),$.dataTransfer?.files.length&&M($.dataTransfer.files)}),u.addEventListener("click",$=>{let w=$.target.closest("[data-suggest]");w&&k(w.dataset.suggest)}),r("new-chat").addEventListener("click",()=>oe("/app/chat"));let V=()=>e.querySelector(".chat").classList.remove("show-threads");r("threads-btn").addEventListener("click",()=>e.querySelector(".chat").classList.toggle("show-threads")),r("threads-scrim").addEventListener("click",V),m.addEventListener("click",async $=>{let w=$.target.closest("[data-del]");if(!w)return;$.preventDefault();let D=w.dataset.del,X=n.find(W=>W.id===D);if(await ae("Delete chat?",`\u201C${X?.title||"This chat"}\u201D and its messages will be deleted. Documents attached in it stay in your library.`,"Delete chat",!0)){try{await se(`/api/v1/chats/${encodeURIComponent(D)}`)}catch{return}n=n.filter(W=>W.id!==D),S("Chat deleted","ok"),D===a?oe("/app/chat",{replace:!0}):L()}});let E=At();if(a?u.innerHTML=`<div class="msg bot"><span class="bot-av" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 64 64"><path d="M36.3 38.6C36.1 38.6 36.1 38.6 36.5 38.5C37.4 38.3 38.5 37.9 39.3 37.3C40.1 36.7 40.8 35.9 41.2 35.2C41.6 34.5 42 33.5 42.2 32.7C42.5 31.8 42.5 30.6 42.5 28.3C42.4 26.7 42.4 26.5 42.2 25.8C41.9 25.1 41.3 24.1 40.7 23.6C40.2 23.1 39.4 22.6 38.5 22.3C37.6 22 38.3 22 29.8 22C24.2 22 22.2 22 22.1 21.9C20.7 21.5 20 20.8 19.6 19.6C19.5 19.2 19.5 18.6 19.5 15.8C19.5 12.7 19.5 12.6 19.8 12.2C20.1 11.8 20.6 11.4 21.1 11.2C21.3 11.2 23.6 11.2 30 11.2C34.7 11.2 38.8 11.2 39.1 11.2C41.1 11.3 43.5 12.1 45.3 13.2C46.6 14 47.4 14.7 48.5 15.7C50.3 17.5 51.8 20 52.5 22.6C53 24.2 53.1 25.7 53 27.4C53 28.1 52.9 28.6 52.7 29.5C52.5 30.4 52 31.6 51.5 32.5C50.5 34.2 49 35.7 47.4 36.8C47 37 46 37.5 45.7 37.6C45.6 37.7 45.4 37.8 45.3 37.8C44.1 38.3 43 38.5 41.5 38.6C40.9 38.7 36.7 38.7 36.3 38.6Z" fill="#faf8f5"/><path d="M9.7 56.2C9.4 56.1 9.1 55.8 9 55.5C8.9 55.3 8.9 46.1 9 44.8C9 43.8 9.1 42.8 9.2 42.2C9.3 41.7 9.5 41 9.6 40.7C9.6 40.6 9.7 40.4 9.7 40.2C9.8 40 9.8 39.9 9.9 39.8C9.9 39.8 9.9 39.6 10 39.5C10 39.4 10.1 39.2 10.1 39.2C10.1 39.2 10.2 39 10.2 38.9C10.2 38.8 10.3 38.7 10.3 38.6C10.4 38.5 10.4 38.4 10.5 38.3C10.6 38.1 10.8 37.6 10.9 37.4C11.6 36.2 11.8 35.9 12.3 35.2C13.1 34 14.4 32.7 15.4 31.9C16.1 31.4 17 30.7 17.1 30.7C17.1 30.7 17.1 30.7 17.2 30.6C17.3 30.5 17.4 30.4 17.5 30.4C17.6 30.4 17.8 30.2 18 30.1C18.3 30 19.3 29.5 19.7 29.3C19.8 29.3 20 29.2 20.2 29.1C20.4 29 20.6 28.9 20.6 28.9C20.7 28.9 20.8 28.9 20.8 28.9C20.9 28.9 20.9 28.8 21 28.8C21.2 28.8 21.8 28.6 22.2 28.4C22.7 28.3 23.6 28.1 23.9 28.1C23.9 28.1 24.1 28.1 24.1 28.1C24.2 28.1 24.7 28 25.3 28C26.2 27.9 26.8 27.9 34.4 27.9L42.4 27.9L42.5 29C42.5 31.5 42.3 32.9 41.7 34.3C41.3 35 41.1 35.4 40.8 35.9C40.4 36.4 39.8 36.9 39.3 37.3C38.5 37.9 37.4 38.4 36.5 38.5C36.3 38.6 36.1 38.6 36.1 38.6C36 38.6 33.6 38.6 30.7 38.7C26.1 38.7 25.5 38.7 25.2 38.8C24.6 38.9 24.4 39 23.8 39.2C22.1 39.9 20.8 41.1 20.1 42.8C19.8 43.6 19.6 44.2 19.6 45C19.5 46.7 19.4 46.9 19.3 47.5C19.1 48.7 18.8 49.6 18.1 50.8C17.4 52 16.2 53.3 14.9 54.2C14.5 54.5 13.8 54.9 13.2 55.2C12 55.8 10.2 56.3 9.7 56.2Z" fill="#fd7b5d"/></svg></span><div class="msg-body">${I("70%",14)}<div style="height:8px"></div>${I("50%",14)}</div></div>`:f(),A(),a)try{let $=await U(`/api/v1/chats/${encodeURIComponent(a)}`);if(!t.alive())return;r("chat-title").textContent=$.chat.title||"New chat",u.innerHTML=$.messages.map(w=>w.role==="user"?it(w):rt(w)).join(""),$.messages.length||f(),b(!0)}catch{if(!t.alive())return;u.innerHTML='<div class="chat-empty"><h2>Chat not found</h2><p>It may have been deleted.</p><a class="btn primary sm" href="/app/chat">Start a new chat</a></div>';return}C(),E?k(E):matchMedia("(min-width: 900px)").matches&&y.focus()}var lt;function Ia(){let e=window;return e.Stripe?Promise.resolve(e.Stripe):(lt??=new Promise((t,a)=>{let n=document.createElement("script");n.src="https://js.stripe.com/v3/",n.onload=()=>e.Stripe?t(e.Stripe):a(new Error("Stripe.js did not load")),n.onerror=()=>{lt=void 0,a(new Error("Could not load Stripe.js. Check your connection or ad blocker."))},document.head.append(n)}),lt)}async function Ft(){let[e,t]=await Promise.all([Ia(),O("/api/v1/connections/bank/session")]),a=await e(t.publishableKey).collectFinancialConnectionsAccounts({clientSecret:t.clientSecret});if(a.error)throw new Error(a.error.message??"Stripe could not link the account");return a.financialConnectionsSession?.accounts.length?O("/api/v1/connections/bank/complete",{sessionId:t.sessionId}):[]}var Ua="qpzry9x8gf2tvdw0s3jn54khce6mua7l",Na=[996825010,642813549,513874426,1027748829,705979059];function Ba(e){let t=1;for(let a of e){let n=t>>>25;t=(t&33554431)<<5^a;for(let i=0;i<5;i++)n>>>i&1&&(t^=Na[i])}return t}function qa(e){let t=[...e].map(a=>a.charCodeAt(0));return[...t.map(a=>a>>5),0,...t.map(a=>a&31)]}function Ra(e){let t=[],a=0,n=0;for(let i of e)for(a=(a<<8|i)&4095,n+=8;n>=5;)n-=5,t.push(a>>>n&31);return n>0&&t.push(a<<5-n&31),t}function jt(e,t){let a=Ra(t),n=Ba([...qa(e),...a,0,0,0,0,0,0])^1,i=Array.from({length:6},(o,l)=>n>>>5*(5-l)&31);return`${e}1${[...a,...i].map(o=>Ua[o]).join("")}`}function Fa(e){if(!/^(?:[0-9a-fA-F]{2})+$/.test(e))throw new Error("not hex");return Uint8Array.from(e.match(/../g),t=>parseInt(t,16))}function ct(e){let t=Fa(e);t[0]===88&&t[1]===t.length-2&&(t=t.subarray(2));let a=t[0];if(a===void 0)throw new Error("empty address");let n=a>>4,i=(a&15)===0;if(n<=7)return jt(i?"addr_test":"addr",t);if(n===14||n===15)return jt(i?"stake_test":"stake",t);throw new Error("unsupported Cardano address type")}var Oe=()=>window;function _e(){let e=Oe().cardano;if(!e||typeof e!="object")return[];let t=new Set,a=[];for(let[n,i]of Object.entries(e)){if(!i||typeof i.enable!="function"||typeof i.name!="string"||t.has(i.name))continue;t.add(i.name);let o=typeof i.icon=="string"&&/^(data:image\/|https:)/.test(i.icon)?i.icon:void 0;a.push({id:n,name:i.name,...o?{icon:o}:{}})}return a}var Ot=()=>typeof Oe().ethereum?.request=="function";async function _t(e){let t=Oe().cardano?.[e];if(!t?.enable)throw new Error("That wallet is no longer available in this browser.");let a;try{a=await t.enable()}catch{throw new Error("The wallet did not allow the connection.")}if(await a.getNetworkId()!==0)throw new Error("The wallet is on mainnet. Switch it to Preprod (testnet) and try again.");return a}async function Wt(e){let t=await _t(e),a=await t.getUsedAddresses().catch(()=>[]),n=ct(a[0]??await t.getChangeAddress());if(!n.startsWith("addr_test1"))throw new Error("The wallet returned no payment address.");return n}async function Yt(e,t){let a=await _t(e),n=await a.getUsedAddresses().catch(()=>[]),i=await a.getChangeAddress();if(![...n,i].map(d=>{try{return ct(d)}catch{return""}}).includes(t))throw new Error(`This wallet does not hold ${t.slice(0,20)}\u2026, the wallet connected for payments. Open that wallet.`);let l=await a.getUtxos().catch(()=>null)??[];if(!l.length)throw new Error("This wallet has no funds on Cardano Preprod. Top it up from the Preprod faucet.");return{funds:{utxos:l,changeAddress:i,addresses:n},async sign(d){try{return await a.signTx(d,!0)}catch{throw new Error("Not signed in the wallet: nothing was sent. Sign again, or cancel the payment.")}}}}async function Xt(){let e=Oe().ethereum;if(!e)throw new Error("No browser wallet found.");let t;try{t=await e.request({method:"eth_requestAccounts"})}catch{throw new Error("The wallet did not allow the connection.")}let a=Array.isArray(t)?t[0]:void 0;if(typeof a!="string"||!/^0x[0-9a-fA-F]{40}$/.test(a))throw new Error("The wallet returned no account.");return a}var Vt={cardano_agent_wallet:"bot",cardano_wallet:"wallet",evm_wallet:"globe",cashxchain:"zap",bank:"bank"},ja={"cardano:preprod":["Cardano Preprod","testnet"],"cardano:mainnet":["Cardano",""],ethereum:["Ethereum",""],"cashxchain:sandbox":["CashXChain","sandbox"],bank:["Bank",""]},Oa={cardano_wallet:"addr_test1\u2026",evm_wallet:"0x\u2026"},_a=/^cxc_(sk|rk)_sandbox_[A-Za-z0-9]+$/,dt=!1;function Wa(e){return e.kind!=="cashxchain"?"":e.keyHint?`<div class="addr-row owner"><span class="muted small">Your account \xB7 key</span><span class="mono" title="Stored encrypted">${s(e.keyHint)}</span></div>`:`<div class="addr-row owner"><span class="muted small">${dt?"Your linked CashXChain sub-account \xB7 payouts need your API key":"No API key: remove and connect again with your key"}</span></div>`}function Ya(e){if(e!=="cardano_wallet"&&e!=="evm_wallet")return"";let t=e==="cardano_wallet"?_e():Ot()?[{id:"ethereum",name:"browser wallet"}]:[];if(!t.length){let a=e==="cardano_wallet"?"a Cardano wallet such as Lace or Eternl":"an EVM wallet such as MetaMask";return`<p class="fine">${p("info",13)} No browser wallet found. Install ${a} to connect with one click, or paste the address.</p>`}return`<div class="field"><span class="lbl">Connect a wallet</span><div class="wallet-pick">${t.map(a=>`<button type="button" class="btn ghost sm" data-wallet="${s(a.id)}">${a.icon?`<img src="${s(a.icon)}" alt="" width="18" height="18">`:p("wallet",16)}Connect ${s(a.name)}</button>`).join("")}</div><span class="fine">Your wallet asks for permission and shares this address only. The AI CFO never holds your keys: with read &amp; write, you sign each payment in your wallet.</span></div>`}function Xa(e){let[t,a]=ja[e]??[e,""];return`<span class="net">${s(t)}${a?`<em>${s(a)}</em>`:""}</span>`}function zt(e,t){let a=e.balances.reduce((i,o)=>i+(o.usdMinor??0),0),n=e.balances.some(i=>i.usdMinor!=null);return`<article class="card conn reveal ${e.status}" data-id="${s(e.id)}" style="--d:${t*40}ms">
+      <div class="suggest">${rn.map(([w,$])=>`<button type="button" data-suggest="${s($)}">${u(w,16)}<span>${s($)}</span></button>`).join("")}</div>
+    </div>`},y=()=>{let w=c("att-chips");w.innerHTML=r.map($=>`<span class="att">${$.url?`<img src="${$.url}" alt="">`:`<span class="att-ic">${u($e($.mime),16)}</span>`}<span class="att-t"><b>${s($.file.name)}</b><em>${s(we($.file.size))}</em></span><button type="button" class="att-x" data-rm="${$.id}" aria-label="Remove ${s($.file.name)}">${u("x",12,2.6)}</button></span>`).join(""),w.classList.toggle("has",r.length>0),x()},C=w=>{for(let $ of Array.from(w)){let D=Te($);if(!cn.test(D)){S(`${$.name}: only images, PDF, CSV and text files are supported.`,"error");continue}if($.size>je){S(`${$.name} is larger than 15 MB.`,"error");continue}r.push({id:++o,file:$,mime:D,url:D.startsWith("image/")?URL.createObjectURL($):void 0})}y(),h.focus()},H=w=>{if(w)for(let $ of r)$.url&&URL.revokeObjectURL($.url);r=[],y()};t.onCleanup(()=>{i?.abort(),H(!0)});let M=async w=>{if(i||!w&&!r.length)return;let $=r;r=[],y(),h.value="",k(),p.querySelector(".chat-empty")?.remove(),i=new AbortController,x();let D=document.createElement("div");D.innerHTML=pt({text:w},$),p.append(D.firstElementChild);let Y=document.createElement("div");Y.innerHTML=mt();let W=Y.firstElementChild;p.append(W),W.classList.add("streaming"),v(!0);let ye=W.querySelector(".tools"),ke=W.querySelector(".md"),ee="",se=0,za=()=>{se=0,ke.innerHTML=Ce(ee)+'<span class="caret"></span>',v()};try{if(!a){let j=await O("/api/v1/chats",{});a=j.id,n.unshift(j),L(),re(`/app/chat/${encodeURIComponent(j.id)}`,{silent:!0})}let ge=[];for(let j of $)ge.push({filename:j.file.name,mimeType:j.mime,dataBase64:await qe(j.file)});for(let j of $)j.url&&URL.revokeObjectURL(j.url);let be=i.signal;await Nt(`/api/v1/chats/${encodeURIComponent(a)}/messages`,ge.length?{text:w,attachments:ge}:{text:w},j=>{if(t.alive())switch(j.type){case"user":{let ce=document.createElement("div");ce.innerHTML=pt(j.message);let ue=W.previousElementSibling;ue?.classList.contains("user")&&ue.replaceWith(ce.firstElementChild);break}case"text":ee+=j.delta,se||(se=requestAnimationFrame(za));break;case"tool":{let ce=[...ye.querySelectorAll(".tool.run")].find(ue=>ue.dataset.tool===j.name);j.status==="start"?ye.insertAdjacentHTML("beforeend",We(j.summary,!0,j.name)):ce?ce.outerHTML=We(j.summary,!1,j.name):ye.insertAdjacentHTML("beforeend",We(j.summary,!1,j.name)),ee||(ke.innerHTML='<span class="typing"><i></i><i></i><i></i></span>'),v();break}case"done":{se&&cancelAnimationFrame(se),se=0;let ce=document.createElement("div");ce.innerHTML=mt({...j.message,text:j.message.text||ee});let ue=ce.firstElementChild;!j.message.tools?.length&&ye.children.length&&ue.querySelector(".tools").replaceWith(ye),W.replaceWith(ue),ee="";break}case"error":throw new Error(j.message||"The AI CFO could not answer.")}},be),W.isConnected&&(se&&cancelAnimationFrame(se),W.classList.remove("streaming"),ke.innerHTML=ee?Ce(ee):'<p class="muted">No reply.</p>')}catch(ge){se&&cancelAnimationFrame(se),W.classList.remove("streaming");for(let be of ye.querySelectorAll(".tool.run"))be.classList.replace("run","stopped");if(ge.name==="AbortError")ke.innerHTML=(ee?Ce(ee):"")+`<p class="stopped-note">${u("stop",12,2.4)}Stopped</p>`;else{let be=ge.message||"Something went wrong.";ke.innerHTML=(ee?Ce(ee):"")+`<div class="callout bad">${u("alert",15)}<span>${s(be)}</span></div>`,S(be,"error")}}finally{i=null,x(),t.alive()&&(A(),h.focus())}};c("composer").addEventListener("submit",w=>{if(w.preventDefault(),i){i.abort();return}M(h.value.trim())}),h.addEventListener("input",k),h.addEventListener("keydown",w=>{w.key==="Enter"&&!w.shiftKey&&!w.isComposing&&(w.preventDefault(),i||M(h.value.trim()))}),h.addEventListener("paste",w=>{let $=w.clipboardData?.files;$&&$.length&&(w.preventDefault(),C($))}),c("attach").addEventListener("click",()=>c("file").click()),c("file").addEventListener("change",w=>{let $=w.target;$.files&&C($.files),$.value=""}),c("att-chips").addEventListener("click",w=>{let $=w.target.closest("[data-rm]");if(!$)return;let D=Number($.dataset.rm),Y=r.find(W=>W.id===D);Y?.url&&URL.revokeObjectURL(Y.url),r=r.filter(W=>W.id!==D),y()});let P=c("convo"),z=0;P.addEventListener("dragenter",w=>{w.dataTransfer?.types.includes("Files")&&(w.preventDefault(),z++,P.classList.add("dragging"))}),P.addEventListener("dragover",w=>{w.dataTransfer?.types.includes("Files")&&w.preventDefault()}),P.addEventListener("dragleave",()=>{z=Math.max(0,z-1),z||P.classList.remove("dragging")}),P.addEventListener("drop",w=>{w.preventDefault(),z=0,P.classList.remove("dragging"),w.dataTransfer?.files.length&&C(w.dataTransfer.files)}),p.addEventListener("click",w=>{let $=w.target.closest("[data-suggest]");$&&M($.dataset.suggest)}),c("new-chat").addEventListener("click",()=>re("/app/chat"));let K=()=>e.querySelector(".chat").classList.remove("show-threads");c("threads-btn").addEventListener("click",()=>e.querySelector(".chat").classList.toggle("show-threads")),c("threads-scrim").addEventListener("click",K),m.addEventListener("click",async w=>{let $=w.target.closest("[data-del]");if(!$)return;w.preventDefault();let D=$.dataset.del,Y=n.find(W=>W.id===D);if(await ae("Delete chat?",`\u201C${Y?.title||"This chat"}\u201D and its messages will be deleted. Documents attached in it stay in your library.`,"Delete chat",!0)){try{await oe(`/api/v1/chats/${encodeURIComponent(D)}`)}catch{return}n=n.filter(W=>W.id!==D),S("Chat deleted","ok"),D===a?re("/app/chat",{replace:!0}):L()}});let E=Rt();if(a?p.innerHTML=`<div class="msg bot"><span class="bot-av" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 64 64"><path d="M36.3 38.6C36.1 38.6 36.1 38.6 36.5 38.5C37.4 38.3 38.5 37.9 39.3 37.3C40.1 36.7 40.8 35.9 41.2 35.2C41.6 34.5 42 33.5 42.2 32.7C42.5 31.8 42.5 30.6 42.5 28.3C42.4 26.7 42.4 26.5 42.2 25.8C41.9 25.1 41.3 24.1 40.7 23.6C40.2 23.1 39.4 22.6 38.5 22.3C37.6 22 38.3 22 29.8 22C24.2 22 22.2 22 22.1 21.9C20.7 21.5 20 20.8 19.6 19.6C19.5 19.2 19.5 18.6 19.5 15.8C19.5 12.7 19.5 12.6 19.8 12.2C20.1 11.8 20.6 11.4 21.1 11.2C21.3 11.2 23.6 11.2 30 11.2C34.7 11.2 38.8 11.2 39.1 11.2C41.1 11.3 43.5 12.1 45.3 13.2C46.6 14 47.4 14.7 48.5 15.7C50.3 17.5 51.8 20 52.5 22.6C53 24.2 53.1 25.7 53 27.4C53 28.1 52.9 28.6 52.7 29.5C52.5 30.4 52 31.6 51.5 32.5C50.5 34.2 49 35.7 47.4 36.8C47 37 46 37.5 45.7 37.6C45.6 37.7 45.4 37.8 45.3 37.8C44.1 38.3 43 38.5 41.5 38.6C40.9 38.7 36.7 38.7 36.3 38.6Z" fill="#faf8f5"/><path d="M9.7 56.2C9.4 56.1 9.1 55.8 9 55.5C8.9 55.3 8.9 46.1 9 44.8C9 43.8 9.1 42.8 9.2 42.2C9.3 41.7 9.5 41 9.6 40.7C9.6 40.6 9.7 40.4 9.7 40.2C9.8 40 9.8 39.9 9.9 39.8C9.9 39.8 9.9 39.6 10 39.5C10 39.4 10.1 39.2 10.1 39.2C10.1 39.2 10.2 39 10.2 38.9C10.2 38.8 10.3 38.7 10.3 38.6C10.4 38.5 10.4 38.4 10.5 38.3C10.6 38.1 10.8 37.6 10.9 37.4C11.6 36.2 11.8 35.9 12.3 35.2C13.1 34 14.4 32.7 15.4 31.9C16.1 31.4 17 30.7 17.1 30.7C17.1 30.7 17.1 30.7 17.2 30.6C17.3 30.5 17.4 30.4 17.5 30.4C17.6 30.4 17.8 30.2 18 30.1C18.3 30 19.3 29.5 19.7 29.3C19.8 29.3 20 29.2 20.2 29.1C20.4 29 20.6 28.9 20.6 28.9C20.7 28.9 20.8 28.9 20.8 28.9C20.9 28.9 20.9 28.8 21 28.8C21.2 28.8 21.8 28.6 22.2 28.4C22.7 28.3 23.6 28.1 23.9 28.1C23.9 28.1 24.1 28.1 24.1 28.1C24.2 28.1 24.7 28 25.3 28C26.2 27.9 26.8 27.9 34.4 27.9L42.4 27.9L42.5 29C42.5 31.5 42.3 32.9 41.7 34.3C41.3 35 41.1 35.4 40.8 35.9C40.4 36.4 39.8 36.9 39.3 37.3C38.5 37.9 37.4 38.4 36.5 38.5C36.3 38.6 36.1 38.6 36.1 38.6C36 38.6 33.6 38.6 30.7 38.7C26.1 38.7 25.5 38.7 25.2 38.8C24.6 38.9 24.4 39 23.8 39.2C22.1 39.9 20.8 41.1 20.1 42.8C19.8 43.6 19.6 44.2 19.6 45C19.5 46.7 19.4 46.9 19.3 47.5C19.1 48.7 18.8 49.6 18.1 50.8C17.4 52 16.2 53.3 14.9 54.2C14.5 54.5 13.8 54.9 13.2 55.2C12 55.8 10.2 56.3 9.7 56.2Z" fill="#fd7b5d"/></svg></span><div class="msg-body">${U("70%",14)}<div style="height:8px"></div>${U("50%",14)}</div></div>`:g(),A(),a)try{let w=await N(`/api/v1/chats/${encodeURIComponent(a)}`);if(!t.alive())return;c("chat-title").textContent=w.chat.title||"New chat",p.innerHTML=w.messages.map($=>$.role==="user"?pt($):mt($)).join(""),w.messages.length||g(),v(!0)}catch{if(!t.alive())return;p.innerHTML='<div class="chat-empty"><h2>Chat not found</h2><p>It may have been deleted.</p><a class="btn primary sm" href="/app/chat">Start a new chat</a></div>';return}x(),E?M(E):matchMedia("(min-width: 900px)").matches&&h.focus()}var ht;function dn(){let e=window;return e.Stripe?Promise.resolve(e.Stripe):(ht??=new Promise((t,a)=>{let n=document.createElement("script");n.src="https://js.stripe.com/v3/",n.onload=()=>e.Stripe?t(e.Stripe):a(new Error("Stripe.js did not load")),n.onerror=()=>{ht=void 0,a(new Error("Could not load Stripe.js. Check your connection or ad blocker."))},document.head.append(n)}),ht)}async function Zt(){let[e,t]=await Promise.all([dn(),O("/api/v1/connections/bank/session")]),a=await e(t.publishableKey).collectFinancialConnectionsAccounts({clientSecret:t.clientSecret});if(a.error)throw new Error(a.error.message??"Stripe could not link the account");return a.financialConnectionsSession?.accounts.length?O("/api/v1/connections/bank/complete",{sessionId:t.sessionId}):[]}function Qt(e){return e instanceof Uint8Array||ArrayBuffer.isView(e)&&e.constructor.name==="Uint8Array"&&"BYTES_PER_ELEMENT"in e&&e.BYTES_PER_ELEMENT===1}var ft=e=>e?`"${e}" `:"";function ze(e,t=""){if(typeof e!="number")throw new TypeError(ft(t)+"expected number, got "+typeof e);if(!Number.isSafeInteger(e)||e<0)throw new RangeError(ft(t)+"expected integer >= 0, got "+e);return e}function Pe(e,t,a=""){if(Qt(e)&&(t===void 0||e.length===t))return e;t!==void 0&&ze(t,"length");let n=Qt(e),r=t!==void 0?` of length ${t}`:"",o=n?`length=${e.length}`:`type=${typeof e}`,i=ft(a)+"expected Uint8Array"+r+", got "+o;throw n?new RangeError(i):new TypeError(i)}var un=(e,t)=>{if(e===null||typeof e!="object"||Array.isArray(e))throw new TypeError((t==="object"?"":`"${t}" `)+"expected object, got type="+typeof e)},ea=(e,t)=>{un(e,t);let a=Object.getPrototypeOf(e);if(a!==Object.prototype&&a!==null)throw new TypeError(`"${t}" expected plain object`);if(Object.hasOwn(e,"__proto__"))throw new TypeError(`"${t}.__proto__" is not allowed`)};function yt(e,t=!0){if(e.destroyed)throw new Error("hash was destroyed");if(t&&e.finished)throw new Error("digest() was already called")}function ta(e,t){Pe(e,void 0,"output");let a=t.outputLen;if(!(e.length>=a))throw new RangeError('"output" expected length >= '+a)}function gt(...e){for(let t=0;t<e.length;t++)e[t].fill(0)}function Ye(e){return new DataView(e.buffer,e.byteOffset,e.byteLength)}function ne(e,t){return e<<32-t|e>>>t}function pn(e,t,a="opts"){return ea(e,"defaults"),t!==void 0&&ea(t,a),Object.assign(Object.create(null),e,t)}function aa(e,t={}){if(typeof e!="function")throw new TypeError('"hashCons" expected function, got type='+typeof e);t=pn({},t,"info");let a=(r,o)=>e(o).update(r).digest(),n=e(void 0);return a.outputLen=n.outputLen,a.blockLen=n.blockLen,a.canXOF=n.canXOF,a.create=r=>e(r),Object.assign(a,t),Object.freeze(a)}function na(e=32){ze(e,"bytesLength");let t=typeof globalThis=="object"?globalThis.crypto:null;if(typeof t?.getRandomValues!="function")throw new Error("crypto.getRandomValues must be defined");if(e>65536)throw new RangeError(`"bytesLength" expected <= 65536, got ${e}`);return t.getRandomValues(new Uint8Array(e))}var sa=e=>({oid:Uint8Array.from([6,9,96,134,72,1,101,3,4,2,e])});var mn=e=>e/2**32|0,hn=e=>e>>>0;function oa(e,t,a,n){let r=mn(a),o=hn(a);e.setUint32(t,n?o:r,n),e.setUint32(t+4,n?r:o,n)}function ra(e,t,a){return e&t^~e&a}function ia(e,t,a){return e&t^e&a^t&a}var Ge=class{blockLen;outputLen;canXOF=!1;padOffset;isLE;buffer;view;finished=!1;length=0;pos=0;destroyed=!1;constructor(t,a,n,r){this.blockLen=t,this.outputLen=a,this.padOffset=n,this.isLE=r,this.buffer=new Uint8Array(t),this.view=Ye(this.buffer)}update(t){yt(this),Pe(t);let{view:a,buffer:n,blockLen:r}=this,o=t.length,i=!1;for(let l=0;l<o;){let c=Math.min(r-this.pos,o-l);if(c===r){let d=Ye(t);for(;r<=o-l;l+=r)this.process(d,l);i=!0;continue}n.set(l===0&&c===o?t:t.subarray(l,l+c),this.pos),this.pos+=c,l+=c,this.pos===r&&(this.process(a,0),this.pos=0,i=!0)}return this.length+=t.length,i&&this.roundClean(),this}digestInto(t){yt(this),ta(t,this),this.finished=!0;let{buffer:a,view:n,blockLen:r,isLE:o}=this,{pos:i}=this;a[i++]=128,a.fill(0,i),this.padOffset>r-i&&(this.process(n,0),a.fill(0)),oa(n,r-8,this.length*8,o),this.process(n,0),this.roundClean();let l=t===a?n:Ye(t),c=this.outputLen,d=c/4,p=this.get();if(c%4||d>p.length)throw new Error("invalid outputLen");for(let h=0;h<d;h++)l.setUint32(4*h,p[h],o)}digest(){let{buffer:t,outputLen:a}=this;this.digestInto(t);let n=t.slice(0,a);return this.destroy(),n}_cloneIntoMeta(t){let{buffer:a,length:n,finished:r,destroyed:o,pos:i}=this;return t.destroyed=o,t.finished=r,t.length=n,t.pos=i,i&&t.buffer.set(a),t}clone(){return this._cloneInto()}},ca=Uint32Array.from([1779033703,3144134277,1013904242,2773480762,1359893119,2600822924,528734635,1541459225]);var fn=Uint32Array.from([1116352408,1899447441,3049323471,3921009573,961987163,1508970993,2453635748,2870763221,3624381080,310598401,607225278,1426881987,1925078388,2162078206,2614888103,3248222580,3835390401,4022224774,264347078,604807628,770255983,1249150122,1555081692,1996064986,2554220882,2821834349,2952996808,3210313671,3336571891,3584528711,113926993,338241895,666307205,773529912,1294757372,1396182291,1695183700,1986661051,2177026350,2456956037,2730485921,2820302411,3259730800,3345764771,3516065817,3600352804,4094571909,275423344,430227734,506948616,659060556,883997877,958139571,1322822218,1537002063,1747873779,1955562222,2024104815,2227730452,2361852424,2428436474,2756734187,3204031479,3329325298]),de=new Uint32Array(64),bt=class extends Ge{A=0;B=0;C=0;D=0;E=0;F=0;G=0;H=0;constructor(t,a){super(64,t,8,!1),this.A=a[0]|0,this.B=a[1]|0,this.C=a[2]|0,this.D=a[3]|0,this.E=a[4]|0,this.F=a[5]|0,this.G=a[6]|0,this.H=a[7]|0}get(){let{A:t,B:a,C:n,D:r,E:o,F:i,G:l,H:c}=this;return[t,a,n,r,o,i,l,c]}set(t,a,n,r,o,i,l,c){this.A=t|0,this.B=a|0,this.C=n|0,this.D=r|0,this.E=o|0,this.F=i|0,this.G=l|0,this.H=c|0}_cloneInto(t){return(t||=new this.constructor).set(...this.get()),this._cloneIntoMeta(t)}process(t,a){for(let h=0;h<16;h++,a+=4)de[h]=t.getUint32(a,!1);for(let h=16;h<64;h++){let f=de[h-15],m=de[h-2],b=ne(f,7)^ne(f,18)^f>>>3,v=ne(m,17)^ne(m,19)^m>>>10;de[h]=v+de[h-7]+b+de[h-16]|0}let{A:n,B:r,C:o,D:i,E:l,F:c,G:d,H:p}=this;for(let h=0;h<64;h++){let f=ne(l,6)^ne(l,11)^ne(l,25),m=p+f+ra(l,c,d)+fn[h]+de[h]|0,v=(ne(n,2)^ne(n,13)^ne(n,22))+ia(n,r,o)|0;p=d,d=c,c=l,l=i+m|0,i=o,o=r,r=n,n=m+v|0}n=n+this.A|0,r=r+this.B|0,o=o+this.C|0,i=i+this.D|0,l=l+this.E|0,c=c+this.F|0,d=d+this.G|0,p=p+this.H|0,this.set(n,r,o,i,l,c,d,p)}roundClean(){gt(de)}destroy(){this.destroyed=!0,this.set(0,0,0,0,0,0,0,0),gt(this.buffer)}},vt=class extends bt{constructor(){super(32,ca)}};var la=aa(()=>new vt,sa(1));var yn=e=>e[0]==="\u3042\u3044\u3053\u304F\u3057\u3093";function da(e){for(let t=0;t<e.length;t++){let a=e.charCodeAt(t);if(a>=55296&&a<=56319){if(t+1>=e.length)return!1;let n=e.charCodeAt(++t);if(n<56320||n>57343)return!1}else if(a>=56320&&a<=57343)return!1}return!0}function gn(e){if(typeof e!="string")throw new TypeError("invalid mnemonic type: "+typeof e);if(!da(e))throw new TypeError("expected well-formed Unicode string");return e.normalize("NFKD")}function bn(e){let t=gn(e),a=t.split(" ");if(![12,15,18,21,24].includes(a.length))throw new Error("Invalid mnemonic");return{nfkd:t,words:a}}function ua(e){if(Pe(e),![16,20,24,28,32].includes(e.length))throw new RangeError("invalid entropy length")}function pa(e,t=128){if(ze(t),t%32!==0||t>256)throw new RangeError("Invalid entropy");return xn(na(t/8),e)}var ma=e=>{let t=8-e.length/4;return la(e)[0]>>t<<t};function ha(e){if(!Array.isArray(e)||e.length!==2048||typeof e[0]!="string")throw new TypeError("Wordlist: expected array of 2048 strings");e.forEach(t=>{if(typeof t!="string")throw new TypeError("wordlist: non-string element: "+t);if(!da(t))throw new TypeError("wordlist: expected well-formed Unicode string")})}function vn(e,t){ha(t);let a=new Uint8Array(e.length+1);a.set(e),a[e.length]=ma(e);let n=[],r=0,o=0;for(let i of a)r=r<<8|i,o+=8,o>=11&&(o-=11,n.push(t[r>>>o&2047]),r&=(1<<o)-1);return n}function wn(e,t){ha(t);let a=e.length/3*4,n=new Uint8Array(a+1),r=0,o=0,i=0;for(let c of e){let d=t.indexOf(c);if(d===-1)throw new Error("Unknown word: "+c);for(r=r<<11|d,o+=11;o>=8;)o-=8,n[i++]=r>>>o&255;r&=(1<<o)-1}o>0&&(n[i]=r<<8-o);let l=n.subarray(0,a);if(n[a]!==ma(l))throw new Error("Invalid checksum");return Uint8Array.from(l)}function $n(e,t){let{words:a}=bn(e),n=wn(a,t);return ua(n),n}function xn(e,t){return ua(e),vn(e,t).join(yn(t)?"\u3000":" ")}function fa(e,t){try{$n(e,t)}catch{return!1}return!0}var wt=Object.freeze(`abandon
+ability
+able
+about
+above
+absent
+absorb
+abstract
+absurd
+abuse
+access
+accident
+account
+accuse
+achieve
+acid
+acoustic
+acquire
+across
+act
+action
+actor
+actress
+actual
+adapt
+add
+addict
+address
+adjust
+admit
+adult
+advance
+advice
+aerobic
+affair
+afford
+afraid
+again
+age
+agent
+agree
+ahead
+aim
+air
+airport
+aisle
+alarm
+album
+alcohol
+alert
+alien
+all
+alley
+allow
+almost
+alone
+alpha
+already
+also
+alter
+always
+amateur
+amazing
+among
+amount
+amused
+analyst
+anchor
+ancient
+anger
+angle
+angry
+animal
+ankle
+announce
+annual
+another
+answer
+antenna
+antique
+anxiety
+any
+apart
+apology
+appear
+apple
+approve
+april
+arch
+arctic
+area
+arena
+argue
+arm
+armed
+armor
+army
+around
+arrange
+arrest
+arrive
+arrow
+art
+artefact
+artist
+artwork
+ask
+aspect
+assault
+asset
+assist
+assume
+asthma
+athlete
+atom
+attack
+attend
+attitude
+attract
+auction
+audit
+august
+aunt
+author
+auto
+autumn
+average
+avocado
+avoid
+awake
+aware
+away
+awesome
+awful
+awkward
+axis
+baby
+bachelor
+bacon
+badge
+bag
+balance
+balcony
+ball
+bamboo
+banana
+banner
+bar
+barely
+bargain
+barrel
+base
+basic
+basket
+battle
+beach
+bean
+beauty
+because
+become
+beef
+before
+begin
+behave
+behind
+believe
+below
+belt
+bench
+benefit
+best
+betray
+better
+between
+beyond
+bicycle
+bid
+bike
+bind
+biology
+bird
+birth
+bitter
+black
+blade
+blame
+blanket
+blast
+bleak
+bless
+blind
+blood
+blossom
+blouse
+blue
+blur
+blush
+board
+boat
+body
+boil
+bomb
+bone
+bonus
+book
+boost
+border
+boring
+borrow
+boss
+bottom
+bounce
+box
+boy
+bracket
+brain
+brand
+brass
+brave
+bread
+breeze
+brick
+bridge
+brief
+bright
+bring
+brisk
+broccoli
+broken
+bronze
+broom
+brother
+brown
+brush
+bubble
+buddy
+budget
+buffalo
+build
+bulb
+bulk
+bullet
+bundle
+bunker
+burden
+burger
+burst
+bus
+business
+busy
+butter
+buyer
+buzz
+cabbage
+cabin
+cable
+cactus
+cage
+cake
+call
+calm
+camera
+camp
+can
+canal
+cancel
+candy
+cannon
+canoe
+canvas
+canyon
+capable
+capital
+captain
+car
+carbon
+card
+cargo
+carpet
+carry
+cart
+case
+cash
+casino
+castle
+casual
+cat
+catalog
+catch
+category
+cattle
+caught
+cause
+caution
+cave
+ceiling
+celery
+cement
+census
+century
+cereal
+certain
+chair
+chalk
+champion
+change
+chaos
+chapter
+charge
+chase
+chat
+cheap
+check
+cheese
+chef
+cherry
+chest
+chicken
+chief
+child
+chimney
+choice
+choose
+chronic
+chuckle
+chunk
+churn
+cigar
+cinnamon
+circle
+citizen
+city
+civil
+claim
+clap
+clarify
+claw
+clay
+clean
+clerk
+clever
+click
+client
+cliff
+climb
+clinic
+clip
+clock
+clog
+close
+cloth
+cloud
+clown
+club
+clump
+cluster
+clutch
+coach
+coast
+coconut
+code
+coffee
+coil
+coin
+collect
+color
+column
+combine
+come
+comfort
+comic
+common
+company
+concert
+conduct
+confirm
+congress
+connect
+consider
+control
+convince
+cook
+cool
+copper
+copy
+coral
+core
+corn
+correct
+cost
+cotton
+couch
+country
+couple
+course
+cousin
+cover
+coyote
+crack
+cradle
+craft
+cram
+crane
+crash
+crater
+crawl
+crazy
+cream
+credit
+creek
+crew
+cricket
+crime
+crisp
+critic
+crop
+cross
+crouch
+crowd
+crucial
+cruel
+cruise
+crumble
+crunch
+crush
+cry
+crystal
+cube
+culture
+cup
+cupboard
+curious
+current
+curtain
+curve
+cushion
+custom
+cute
+cycle
+dad
+damage
+damp
+dance
+danger
+daring
+dash
+daughter
+dawn
+day
+deal
+debate
+debris
+decade
+december
+decide
+decline
+decorate
+decrease
+deer
+defense
+define
+defy
+degree
+delay
+deliver
+demand
+demise
+denial
+dentist
+deny
+depart
+depend
+deposit
+depth
+deputy
+derive
+describe
+desert
+design
+desk
+despair
+destroy
+detail
+detect
+develop
+device
+devote
+diagram
+dial
+diamond
+diary
+dice
+diesel
+diet
+differ
+digital
+dignity
+dilemma
+dinner
+dinosaur
+direct
+dirt
+disagree
+discover
+disease
+dish
+dismiss
+disorder
+display
+distance
+divert
+divide
+divorce
+dizzy
+doctor
+document
+dog
+doll
+dolphin
+domain
+donate
+donkey
+donor
+door
+dose
+double
+dove
+draft
+dragon
+drama
+drastic
+draw
+dream
+dress
+drift
+drill
+drink
+drip
+drive
+drop
+drum
+dry
+duck
+dumb
+dune
+during
+dust
+dutch
+duty
+dwarf
+dynamic
+eager
+eagle
+early
+earn
+earth
+easily
+east
+easy
+echo
+ecology
+economy
+edge
+edit
+educate
+effort
+egg
+eight
+either
+elbow
+elder
+electric
+elegant
+element
+elephant
+elevator
+elite
+else
+embark
+embody
+embrace
+emerge
+emotion
+employ
+empower
+empty
+enable
+enact
+end
+endless
+endorse
+enemy
+energy
+enforce
+engage
+engine
+enhance
+enjoy
+enlist
+enough
+enrich
+enroll
+ensure
+enter
+entire
+entry
+envelope
+episode
+equal
+equip
+era
+erase
+erode
+erosion
+error
+erupt
+escape
+essay
+essence
+estate
+eternal
+ethics
+evidence
+evil
+evoke
+evolve
+exact
+example
+excess
+exchange
+excite
+exclude
+excuse
+execute
+exercise
+exhaust
+exhibit
+exile
+exist
+exit
+exotic
+expand
+expect
+expire
+explain
+expose
+express
+extend
+extra
+eye
+eyebrow
+fabric
+face
+faculty
+fade
+faint
+faith
+fall
+false
+fame
+family
+famous
+fan
+fancy
+fantasy
+farm
+fashion
+fat
+fatal
+father
+fatigue
+fault
+favorite
+feature
+february
+federal
+fee
+feed
+feel
+female
+fence
+festival
+fetch
+fever
+few
+fiber
+fiction
+field
+figure
+file
+film
+filter
+final
+find
+fine
+finger
+finish
+fire
+firm
+first
+fiscal
+fish
+fit
+fitness
+fix
+flag
+flame
+flash
+flat
+flavor
+flee
+flight
+flip
+float
+flock
+floor
+flower
+fluid
+flush
+fly
+foam
+focus
+fog
+foil
+fold
+follow
+food
+foot
+force
+forest
+forget
+fork
+fortune
+forum
+forward
+fossil
+foster
+found
+fox
+fragile
+frame
+frequent
+fresh
+friend
+fringe
+frog
+front
+frost
+frown
+frozen
+fruit
+fuel
+fun
+funny
+furnace
+fury
+future
+gadget
+gain
+galaxy
+gallery
+game
+gap
+garage
+garbage
+garden
+garlic
+garment
+gas
+gasp
+gate
+gather
+gauge
+gaze
+general
+genius
+genre
+gentle
+genuine
+gesture
+ghost
+giant
+gift
+giggle
+ginger
+giraffe
+girl
+give
+glad
+glance
+glare
+glass
+glide
+glimpse
+globe
+gloom
+glory
+glove
+glow
+glue
+goat
+goddess
+gold
+good
+goose
+gorilla
+gospel
+gossip
+govern
+gown
+grab
+grace
+grain
+grant
+grape
+grass
+gravity
+great
+green
+grid
+grief
+grit
+grocery
+group
+grow
+grunt
+guard
+guess
+guide
+guilt
+guitar
+gun
+gym
+habit
+hair
+half
+hammer
+hamster
+hand
+happy
+harbor
+hard
+harsh
+harvest
+hat
+have
+hawk
+hazard
+head
+health
+heart
+heavy
+hedgehog
+height
+hello
+helmet
+help
+hen
+hero
+hidden
+high
+hill
+hint
+hip
+hire
+history
+hobby
+hockey
+hold
+hole
+holiday
+hollow
+home
+honey
+hood
+hope
+horn
+horror
+horse
+hospital
+host
+hotel
+hour
+hover
+hub
+huge
+human
+humble
+humor
+hundred
+hungry
+hunt
+hurdle
+hurry
+hurt
+husband
+hybrid
+ice
+icon
+idea
+identify
+idle
+ignore
+ill
+illegal
+illness
+image
+imitate
+immense
+immune
+impact
+impose
+improve
+impulse
+inch
+include
+income
+increase
+index
+indicate
+indoor
+industry
+infant
+inflict
+inform
+inhale
+inherit
+initial
+inject
+injury
+inmate
+inner
+innocent
+input
+inquiry
+insane
+insect
+inside
+inspire
+install
+intact
+interest
+into
+invest
+invite
+involve
+iron
+island
+isolate
+issue
+item
+ivory
+jacket
+jaguar
+jar
+jazz
+jealous
+jeans
+jelly
+jewel
+job
+join
+joke
+journey
+joy
+judge
+juice
+jump
+jungle
+junior
+junk
+just
+kangaroo
+keen
+keep
+ketchup
+key
+kick
+kid
+kidney
+kind
+kingdom
+kiss
+kit
+kitchen
+kite
+kitten
+kiwi
+knee
+knife
+knock
+know
+lab
+label
+labor
+ladder
+lady
+lake
+lamp
+language
+laptop
+large
+later
+latin
+laugh
+laundry
+lava
+law
+lawn
+lawsuit
+layer
+lazy
+leader
+leaf
+learn
+leave
+lecture
+left
+leg
+legal
+legend
+leisure
+lemon
+lend
+length
+lens
+leopard
+lesson
+letter
+level
+liar
+liberty
+library
+license
+life
+lift
+light
+like
+limb
+limit
+link
+lion
+liquid
+list
+little
+live
+lizard
+load
+loan
+lobster
+local
+lock
+logic
+lonely
+long
+loop
+lottery
+loud
+lounge
+love
+loyal
+lucky
+luggage
+lumber
+lunar
+lunch
+luxury
+lyrics
+machine
+mad
+magic
+magnet
+maid
+mail
+main
+major
+make
+mammal
+man
+manage
+mandate
+mango
+mansion
+manual
+maple
+marble
+march
+margin
+marine
+market
+marriage
+mask
+mass
+master
+match
+material
+math
+matrix
+matter
+maximum
+maze
+meadow
+mean
+measure
+meat
+mechanic
+medal
+media
+melody
+melt
+member
+memory
+mention
+menu
+mercy
+merge
+merit
+merry
+mesh
+message
+metal
+method
+middle
+midnight
+milk
+million
+mimic
+mind
+minimum
+minor
+minute
+miracle
+mirror
+misery
+miss
+mistake
+mix
+mixed
+mixture
+mobile
+model
+modify
+mom
+moment
+monitor
+monkey
+monster
+month
+moon
+moral
+more
+morning
+mosquito
+mother
+motion
+motor
+mountain
+mouse
+move
+movie
+much
+muffin
+mule
+multiply
+muscle
+museum
+mushroom
+music
+must
+mutual
+myself
+mystery
+myth
+naive
+name
+napkin
+narrow
+nasty
+nation
+nature
+near
+neck
+need
+negative
+neglect
+neither
+nephew
+nerve
+nest
+net
+network
+neutral
+never
+news
+next
+nice
+night
+noble
+noise
+nominee
+noodle
+normal
+north
+nose
+notable
+note
+nothing
+notice
+novel
+now
+nuclear
+number
+nurse
+nut
+oak
+obey
+object
+oblige
+obscure
+observe
+obtain
+obvious
+occur
+ocean
+october
+odor
+off
+offer
+office
+often
+oil
+okay
+old
+olive
+olympic
+omit
+once
+one
+onion
+online
+only
+open
+opera
+opinion
+oppose
+option
+orange
+orbit
+orchard
+order
+ordinary
+organ
+orient
+original
+orphan
+ostrich
+other
+outdoor
+outer
+output
+outside
+oval
+oven
+over
+own
+owner
+oxygen
+oyster
+ozone
+pact
+paddle
+page
+pair
+palace
+palm
+panda
+panel
+panic
+panther
+paper
+parade
+parent
+park
+parrot
+party
+pass
+patch
+path
+patient
+patrol
+pattern
+pause
+pave
+payment
+peace
+peanut
+pear
+peasant
+pelican
+pen
+penalty
+pencil
+people
+pepper
+perfect
+permit
+person
+pet
+phone
+photo
+phrase
+physical
+piano
+picnic
+picture
+piece
+pig
+pigeon
+pill
+pilot
+pink
+pioneer
+pipe
+pistol
+pitch
+pizza
+place
+planet
+plastic
+plate
+play
+please
+pledge
+pluck
+plug
+plunge
+poem
+poet
+point
+polar
+pole
+police
+pond
+pony
+pool
+popular
+portion
+position
+possible
+post
+potato
+pottery
+poverty
+powder
+power
+practice
+praise
+predict
+prefer
+prepare
+present
+pretty
+prevent
+price
+pride
+primary
+print
+priority
+prison
+private
+prize
+problem
+process
+produce
+profit
+program
+project
+promote
+proof
+property
+prosper
+protect
+proud
+provide
+public
+pudding
+pull
+pulp
+pulse
+pumpkin
+punch
+pupil
+puppy
+purchase
+purity
+purpose
+purse
+push
+put
+puzzle
+pyramid
+quality
+quantum
+quarter
+question
+quick
+quit
+quiz
+quote
+rabbit
+raccoon
+race
+rack
+radar
+radio
+rail
+rain
+raise
+rally
+ramp
+ranch
+random
+range
+rapid
+rare
+rate
+rather
+raven
+raw
+razor
+ready
+real
+reason
+rebel
+rebuild
+recall
+receive
+recipe
+record
+recycle
+reduce
+reflect
+reform
+refuse
+region
+regret
+regular
+reject
+relax
+release
+relief
+rely
+remain
+remember
+remind
+remove
+render
+renew
+rent
+reopen
+repair
+repeat
+replace
+report
+require
+rescue
+resemble
+resist
+resource
+response
+result
+retire
+retreat
+return
+reunion
+reveal
+review
+reward
+rhythm
+rib
+ribbon
+rice
+rich
+ride
+ridge
+rifle
+right
+rigid
+ring
+riot
+ripple
+risk
+ritual
+rival
+river
+road
+roast
+robot
+robust
+rocket
+romance
+roof
+rookie
+room
+rose
+rotate
+rough
+round
+route
+royal
+rubber
+rude
+rug
+rule
+run
+runway
+rural
+sad
+saddle
+sadness
+safe
+sail
+salad
+salmon
+salon
+salt
+salute
+same
+sample
+sand
+satisfy
+satoshi
+sauce
+sausage
+save
+say
+scale
+scan
+scare
+scatter
+scene
+scheme
+school
+science
+scissors
+scorpion
+scout
+scrap
+screen
+script
+scrub
+sea
+search
+season
+seat
+second
+secret
+section
+security
+seed
+seek
+segment
+select
+sell
+seminar
+senior
+sense
+sentence
+series
+service
+session
+settle
+setup
+seven
+shadow
+shaft
+shallow
+share
+shed
+shell
+sheriff
+shield
+shift
+shine
+ship
+shiver
+shock
+shoe
+shoot
+shop
+short
+shoulder
+shove
+shrimp
+shrug
+shuffle
+shy
+sibling
+sick
+side
+siege
+sight
+sign
+silent
+silk
+silly
+silver
+similar
+simple
+since
+sing
+siren
+sister
+situate
+six
+size
+skate
+sketch
+ski
+skill
+skin
+skirt
+skull
+slab
+slam
+sleep
+slender
+slice
+slide
+slight
+slim
+slogan
+slot
+slow
+slush
+small
+smart
+smile
+smoke
+smooth
+snack
+snake
+snap
+sniff
+snow
+soap
+soccer
+social
+sock
+soda
+soft
+solar
+soldier
+solid
+solution
+solve
+someone
+song
+soon
+sorry
+sort
+soul
+sound
+soup
+source
+south
+space
+spare
+spatial
+spawn
+speak
+special
+speed
+spell
+spend
+sphere
+spice
+spider
+spike
+spin
+spirit
+split
+spoil
+sponsor
+spoon
+sport
+spot
+spray
+spread
+spring
+spy
+square
+squeeze
+squirrel
+stable
+stadium
+staff
+stage
+stairs
+stamp
+stand
+start
+state
+stay
+steak
+steel
+stem
+step
+stereo
+stick
+still
+sting
+stock
+stomach
+stone
+stool
+story
+stove
+strategy
+street
+strike
+strong
+struggle
+student
+stuff
+stumble
+style
+subject
+submit
+subway
+success
+such
+sudden
+suffer
+sugar
+suggest
+suit
+summer
+sun
+sunny
+sunset
+super
+supply
+supreme
+sure
+surface
+surge
+surprise
+surround
+survey
+suspect
+sustain
+swallow
+swamp
+swap
+swarm
+swear
+sweet
+swift
+swim
+swing
+switch
+sword
+symbol
+symptom
+syrup
+system
+table
+tackle
+tag
+tail
+talent
+talk
+tank
+tape
+target
+task
+taste
+tattoo
+taxi
+teach
+team
+tell
+ten
+tenant
+tennis
+tent
+term
+test
+text
+thank
+that
+theme
+then
+theory
+there
+they
+thing
+this
+thought
+three
+thrive
+throw
+thumb
+thunder
+ticket
+tide
+tiger
+tilt
+timber
+time
+tiny
+tip
+tired
+tissue
+title
+toast
+tobacco
+today
+toddler
+toe
+together
+toilet
+token
+tomato
+tomorrow
+tone
+tongue
+tonight
+tool
+tooth
+top
+topic
+topple
+torch
+tornado
+tortoise
+toss
+total
+tourist
+toward
+tower
+town
+toy
+track
+trade
+traffic
+tragic
+train
+transfer
+trap
+trash
+travel
+tray
+treat
+tree
+trend
+trial
+tribe
+trick
+trigger
+trim
+trip
+trophy
+trouble
+truck
+true
+truly
+trumpet
+trust
+truth
+try
+tube
+tuition
+tumble
+tuna
+tunnel
+turkey
+turn
+turtle
+twelve
+twenty
+twice
+twin
+twist
+two
+type
+typical
+ugly
+umbrella
+unable
+unaware
+uncle
+uncover
+under
+undo
+unfair
+unfold
+unhappy
+uniform
+unique
+unit
+universe
+unknown
+unlock
+until
+unusual
+unveil
+update
+upgrade
+uphold
+upon
+upper
+upset
+urban
+urge
+usage
+use
+used
+useful
+useless
+usual
+utility
+vacant
+vacuum
+vague
+valid
+valley
+valve
+van
+vanish
+vapor
+various
+vast
+vault
+vehicle
+velvet
+vendor
+venture
+venue
+verb
+verify
+version
+very
+vessel
+veteran
+viable
+vibrant
+vicious
+victory
+video
+view
+village
+vintage
+violin
+virtual
+virus
+visa
+visit
+visual
+vital
+vivid
+vocal
+voice
+void
+volcano
+volume
+vote
+voyage
+wage
+wagon
+wait
+walk
+wall
+walnut
+want
+warfare
+warm
+warrior
+wash
+wasp
+waste
+water
+wave
+way
+wealth
+weapon
+wear
+weasel
+weather
+web
+wedding
+weekend
+weird
+welcome
+west
+wet
+whale
+what
+wheat
+wheel
+when
+where
+whip
+whisper
+wide
+width
+wife
+wild
+will
+win
+window
+wine
+wing
+wink
+winner
+winter
+wire
+wisdom
+wise
+wish
+witness
+wolf
+woman
+wonder
+wood
+wool
+word
+work
+world
+worry
+worth
+wrap
+wreck
+wrestle
+wrist
+write
+wrong
+yard
+year
+yellow
+you
+young
+youth
+zebra
+zero
+zone
+zoo`.split(`
+`));var Cn="qpzry9x8gf2tvdw0s3jn54khce6mua7l",kn=[996825010,642813549,513874426,1027748829,705979059];function Mn(e){let t=1;for(let a of e){let n=t>>>25;t=(t&33554431)<<5^a;for(let r=0;r<5;r++)n>>>r&1&&(t^=kn[r])}return t}function Ln(e){let t=[...e].map(a=>a.charCodeAt(0));return[...t.map(a=>a>>5),0,...t.map(a=>a&31)]}function En(e){let t=[],a=0,n=0;for(let r of e)for(a=(a<<8|r)&4095,n+=8;n>=5;)n-=5,t.push(a>>>n&31);return n>0&&t.push(a<<5-n&31),t}function ya(e,t){let a=En(t),n=Mn([...Ln(e),...a,0,0,0,0,0,0])^1,r=Array.from({length:6},(o,i)=>n>>>5*(5-i)&31);return`${e}1${[...a,...r].map(o=>Cn[o]).join("")}`}function Tn(e){if(!/^(?:[0-9a-fA-F]{2})+$/.test(e))throw new Error("not hex");return Uint8Array.from(e.match(/../g),t=>parseInt(t,16))}function $t(e){let t=Tn(e);t[0]===88&&t[1]===t.length-2&&(t=t.subarray(2));let a=t[0];if(a===void 0)throw new Error("empty address");let n=a>>4,r=(a&15)===0;if(n<=7)return ya(r?"addr_test":"addr",t);if(n===14||n===15)return ya(r?"stake_test":"stake",t);throw new Error("unsupported Cardano address type")}var Xe=()=>window;function Ke(){let e=Xe().cardano;if(!e||typeof e!="object")return[];let t=new Set,a=[];for(let[n,r]of Object.entries(e)){if(!r||typeof r.enable!="function"||typeof r.name!="string"||t.has(r.name))continue;t.add(r.name);let o=typeof r.icon=="string"&&/^(data:image\/|https:)/.test(r.icon)?r.icon:void 0;a.push({id:n,name:r.name,...o?{icon:o}:{}})}return a}var ga=()=>typeof Xe().ethereum?.request=="function";async function ba(e){let t=Xe().cardano?.[e];if(!t?.enable)throw new Error("That wallet is no longer available in this browser.");let a;try{a=await t.enable()}catch{throw new Error("The wallet did not allow the connection.")}if(await a.getNetworkId()!==0)throw new Error("The wallet is on mainnet. Switch it to Preprod (testnet) and try again.");return a}async function va(e){let t=await ba(e),a=await t.getUsedAddresses().catch(()=>[]),n=$t(a[0]??await t.getChangeAddress());if(!n.startsWith("addr_test1"))throw new Error("The wallet returned no payment address.");return n}async function wa(e,t){let a=await ba(e),n=await a.getUsedAddresses().catch(()=>[]),r=await a.getChangeAddress();if(![...n,r].map(l=>{try{return $t(l)}catch{return""}}).includes(t))throw new Error(`This wallet does not hold ${t.slice(0,20)}\u2026, the wallet connected for payments. Open that wallet.`);let i=await a.getUtxos().catch(()=>null)??[];if(!i.length)throw new Error("This wallet has no funds on Cardano Preprod. Top it up from the Preprod faucet.");return{funds:{utxos:i,changeAddress:r,addresses:n},async sign(l){try{return await a.signTx(l,!0)}catch{throw new Error("Not signed in the wallet: nothing was sent. Sign again, or cancel the payment.")}}}}async function $a(){let e=Xe().ethereum;if(!e)throw new Error("No browser wallet found.");let t;try{t=await e.request({method:"eth_requestAccounts"})}catch{throw new Error("The wallet did not allow the connection.")}let a=Array.isArray(t)?t[0]:void 0;if(typeof a!="string"||!/^0x[0-9a-fA-F]{40}$/.test(a))throw new Error("The wallet returned no account.");return a}var ka={cardano_agent_wallet:"bot",cardano_wallet:"wallet",evm_wallet:"globe",cashxchain:"zap",bank:"bank"},An={"cardano:preprod":["Cardano Preprod","testnet"],"cardano:mainnet":["Cardano",""],ethereum:["Ethereum",""],"cashxchain:sandbox":["CashXChain","sandbox"],bank:["Bank",""]},Sn={cardano_wallet:"addr_test1\u2026",evm_wallet:"0x\u2026"},Hn=/^cxc_(sk|rk)_sandbox_[A-Za-z0-9]+$/,xt=!1;function Pn(e){return e.kind==="cardano_agent_wallet"?e.keyHint?`<div class="addr-row owner"><span class="muted small">Your agent wallet \xB7 ${s(e.keyHint)}, stored encrypted</span></div>`:`<div class="addr-row owner"><span class="muted small">PayLorya AI's shared wallet: remove it and connect your own</span></div>`:e.kind!=="cashxchain"?"":e.keyHint?`<div class="addr-row owner"><span class="muted small">Your account \xB7 key</span><span class="mono" title="Stored encrypted">${s(e.keyHint)}</span></div>`:`<div class="addr-row owner"><span class="muted small">${xt?"Your linked CashXChain sub-account \xB7 payouts need your API key":"No API key: remove and connect again with your key"}</span></div>`}function Dn(e){if(e!=="cardano_wallet"&&e!=="evm_wallet")return"";let t=e==="cardano_wallet"?Ke():ga()?[{id:"ethereum",name:"browser wallet"}]:[];if(!t.length){let a=e==="cardano_wallet"?"a Cardano wallet such as Lace or Eternl":"an EVM wallet such as MetaMask";return`<p class="fine">${u("info",13)} No browser wallet found. Install ${a} to connect with one click, or paste the address.</p>`}return`<div class="field"><span class="lbl">Connect a wallet</span><div class="wallet-pick">${t.map(a=>`<button type="button" class="btn ghost sm" data-wallet="${s(a.id)}">${a.icon?`<img src="${s(a.icon)}" alt="" width="18" height="18">`:u("wallet",16)}Connect ${s(a.name)}</button>`).join("")}</div><span class="fine">Your wallet asks for permission and shares this address only. The AI CFO never holds your keys: with read &amp; write, you sign each payment in your wallet.</span></div>`}function Un(e){let[t,a]=An[e]??[e,""];return`<span class="net">${s(t)}${a?`<em>${s(a)}</em>`:""}</span>`}function xa(e,t){let a=e.balances.reduce((r,o)=>r+(o.usdMinor??0),0),n=e.balances.some(r=>r.usdMinor!=null);return`<article class="card conn reveal ${e.status}" data-id="${s(e.id)}" style="--d:${t*40}ms">
     <div class="conn-head">
-      <span class="conn-ic k-${e.kind}">${p(Vt[e.kind]??"link",20)}</span>
-      <div class="conn-t"><h3>${s(e.label)}</h3>${Xa(e.network)}</div>
+      <span class="conn-ic k-${e.kind}">${u(ka[e.kind]??"link",20)}</span>
+      <div class="conn-t"><h3>${s(e.label)}</h3>${Un(e.network)}</div>
       <span class="pill ${e.status==="active"?"t-ok":e.status==="error"?"t-bad":"t-neutral"}">${e.status==="active"?'<i class="live"></i>Active':e.status==="error"?"Error":"Coming soon"}</span>
     </div>
-    ${Wa(e)}
-    ${e.address?`<div class="addr-row"><span class="mono" title="${s(e.address)}">${s(de(e.address))}</span><button type="button" class="icon-btn xs" data-copy="${s(e.address)}" aria-label="Copy address">${p("copy",13)}</button></div>`:""}
-    ${e.error?`<div class="callout bad sm">${p("alert",14)}<span>${s(e.error)}</span></div>`:""}
+    ${Pn(e)}
+    ${e.address?`<div class="addr-row"><span class="mono" title="${s(e.address)}">${s(pe(e.address))}</span><button type="button" class="icon-btn xs" data-copy="${s(e.address)}" aria-label="Copy address">${u("copy",13)}</button></div>`:""}
+    ${e.error?`<div class="callout bad sm">${u("alert",14)}<span>${s(e.error)}</span></div>`:""}
     <div class="conn-bal">
       ${n?`<b class="conn-total">${s(T(a))}</b><span class="muted small">indicative USD</span>`:""}
-      <ul>${e.balances.length?e.balances.map(i=>`<li><span>${s(i.asset)}</span><b>${s(xe(i))}</b></li>`).join(""):'<li class="muted small">No balances reported</li>'}</ul>
+      <ul>${e.balances.length?e.balances.map(r=>`<li><span>${s(r.asset)}</span><b>${s(Le(r))}</b></li>`).join(""):'<li class="muted small">No balances reported</li>'}</ul>
     </div>
     <div class="conn-access">
       <span class="label-sm">Agent access</span>
       <div class="seg${e.supports.write?"":" disabled"}" role="radiogroup" aria-label="Access for ${s(e.label)}">
-        <button type="button" role="radio" aria-checked="${e.access==="read"}" data-access="read" ${e.supports.write?"":"disabled"}>${p("eye",14)}Read-only</button>
-        <button type="button" role="radio" aria-checked="${e.access==="read_write"}" data-access="read_write" ${e.supports.write?"":"disabled"}>${p("pay",14)}Read &amp; write</button>
+        <button type="button" role="radio" aria-checked="${e.access==="read"}" data-access="read" ${e.supports.write?"":"disabled"}>${u("eye",14)}Read-only</button>
+        <button type="button" role="radio" aria-checked="${e.access==="read_write"}" data-access="read_write" ${e.supports.write?"":"disabled"}>${u("pay",14)}Read &amp; write</button>
       </div>
       ${e.supports.write?e.kind==="cardano_wallet"?'<span class="fine">Read &amp; write: you sign each tADA payout in your wallet. No keys are stored.</span>':"":`<span class="fine">${e.kind==="cardano_agent_wallet"?"Pays the x402 verification fees only; payouts leave from your own wallet.":e.kind==="bank"?"Read-only through Stripe: balances only, no money moves.":"Watch-only: this connection cannot send payments."}</span>`}
     </div>
-    <div class="conn-foot"><span class="muted small">Added ${s(Pe(e.createdAt))}</span>
-      <span><button type="button" class="icon-btn" data-rename aria-label="Rename">${p("edit",16)}</button><button type="button" class="icon-btn" data-refresh aria-label="Refresh balances" title="Refresh balances">${p("refresh",16)}</button><button type="button" class="icon-btn danger-h" data-remove aria-label="Remove connection" title="Remove">${p("trash",16)}</button></span></div>
-  </article>`}var Kt={needs_signup:e=>`Sign up at the CashXChain sandbox with <b>${s(e)}</b>, sign in once, then link.`,needs_signin:e=>`<b>${s(e)}</b> has a CashXChain account that was never signed in to. Sign in once, then link.`,other_platform:e=>`<b>${s(e)}</b> already belongs to another CashXChain platform. Use another email, or end that grant in CashXChain first.`,error:()=>"CashXChain could not be reached or refused the link. Try again."};function za(e){if(!e.platform)return"";let t=e.link;if(t?.status==="linked"){let n=e.accounts?.length?`<ul class="cxc-acc">${e.accounts.map(i=>`<li><span>${s(i.currency)}</span><b>${s(i.available??"\u2013")}</b></li>`).join("")}</ul>`:e.accountsError?`<span class="muted small">${s(e.accountsError)}</span>`:'<span class="muted small">No currency accounts yet.</span>';return`<div class="callout info">${p("zap",18)}<div><b>CashXChain sub-account linked</b> <span class="pill t-neutral">sandbox</span><br>
+    <div class="conn-foot"><span class="muted small">Added ${s(Ie(e.createdAt))}</span>
+      <span><button type="button" class="icon-btn" data-rename aria-label="Rename">${u("edit",16)}</button><button type="button" class="icon-btn" data-refresh aria-label="Refresh balances" title="Refresh balances">${u("refresh",16)}</button><button type="button" class="icon-btn danger-h" data-remove aria-label="Remove connection" title="Remove">${u("trash",16)}</button></span></div>
+  </article>`}var Ca={needs_signup:e=>`Sign up at the CashXChain sandbox with <b>${s(e)}</b>, sign in once, then link.`,needs_signin:e=>`<b>${s(e)}</b> has a CashXChain account that was never signed in to. Sign in once, then link.`,other_platform:e=>`<b>${s(e)}</b> already belongs to another CashXChain platform. Use another email, or end that grant in CashXChain first.`,error:()=>"CashXChain could not be reached or refused the link. Try again."};function In(e){if(!e.platform)return"";let t=e.link;if(t?.status==="linked"){let n=e.accounts?.length?`<ul class="cxc-acc">${e.accounts.map(r=>`<li><span>${s(r.currency)}</span><b>${s(r.available??"\u2013")}</b></li>`).join("")}</ul>`:e.accountsError?`<span class="muted small">${s(e.accountsError)}</span>`:'<span class="muted small">No currency accounts yet.</span>';return`<div class="callout info">${u("zap",18)}<div><b>CashXChain sub-account linked</b> <span class="pill t-neutral">sandbox</span><br>
       <span class="mono small">${s(t.accountId??"")}</span> \xB7 KYB ${s(t.kybStatus??"unknown")} \xB7 ${s(t.email)}<br>
       ${n}
-      <span class="fine">Your CashXChain connection reads this account. Payouts from it need CashXChain's money permission for this platform${t.canMoveMoney?" (granted)":" (not granted yet)"}.</span></div></div>`}let a=t?(Kt[t.status]??Kt.error)(t.email):"Linking your CashXChain sandbox sub-account\u2026";return`<div class="callout${t?.status==="error"?" bad":""}">${p("link",18)}<div><b>CashXChain sub-account not linked yet</b><br>${a}
+      <span class="fine">Your CashXChain connection reads this account. Payouts from it need CashXChain's money permission for this platform${t.canMoveMoney?" (granted)":" (not granted yet)"}.</span></div></div>`}let a=t?(Ca[t.status]??Ca.error)(t.email):"Linking your CashXChain sandbox sub-account\u2026";return`<div class="callout${t?.status==="error"?" bad":""}">${u("link",18)}<div><b>CashXChain sub-account not linked yet</b><br>${a}
     ${t?.detail?`<br><span class="fine">${s(t.detail)}</span>`:""}
-    <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><a class="btn ghost xs" href="${s(e.signupUrl)}" target="_blank" rel="noopener">${p("external",14)}CashXChain sign-up</a><button type="button" class="btn primary xs" data-cxc-link>${p("link",14)}Link now</button></div></div></div>`}async function Ka(e){let t=null;return await Z({title:`Connect ${e.name}`,submit:"Connect",body:`<p class="dlg-text">${s(e.description)}</p>
+    <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><a class="btn ghost xs" href="${s(e.signupUrl)}" target="_blank" rel="noopener">${u("external",14)}CashXChain sign-up</a><button type="button" class="btn primary xs" data-cxc-link>${u("link",14)}Link now</button></div></div></div>`}async function Bn(e){let t=null;return await Z({title:`Connect ${e.name}`,submit:"Connect",body:`<p class="dlg-text">${s(e.description)}</p>
       <div class="field"><label for="c-label">Name <span class="opt-l">optional</span></label><input id="c-label" name="label" placeholder="${s(e.name)}" autocomplete="off"></div>
-      ${e.needsAddress?Ya(e.kind):""}
-      ${e.needsAddress?`<div class="field"><label for="c-addr">Address</label><input id="c-addr" name="address" class="mono" placeholder="${s(Oa[e.kind]??"Address")}" autocomplete="off" spellcheck="false"></div>`:""}
+      ${e.needsAddress?Dn(e.kind):""}
+      ${e.needsAddress?`<div class="field"><label for="c-addr">Address</label><input id="c-addr" name="address" class="mono" placeholder="${s(Sn[e.kind]??"Address")}" autocomplete="off" spellcheck="false"></div>`:""}
       ${e.acceptsApiKey?`<div class="field"><label for="c-key">API key${e.linkedFallback?' <span class="opt-l">optional</span>':""}</label><input id="c-key" name="apiKey" type="password" class="mono" placeholder="cxc_sk_sandbox_\u2026" autocomplete="off" spellcheck="false">
         <span class="fine">From your CashXChain sandbox dashboard: a secret key, or a restricted key with accounts:read (to pay, also payments:read, payments:write and beneficiaries:write). Stored encrypted; shown again only by its last four characters.${e.linkedFallback?" Leave empty to read your linked CashXChain sub-account; payouts need the key.":""}</span></div>`:""}
+      ${e.acceptsRecoveryPhrase?`<div class="field"><label for="c-phrase">Recovery phrase</label><textarea id="c-phrase" name="recoveryPhrase" class="mono" rows="3" placeholder="12, 15 or 24 words" autocomplete="off" autocapitalize="off" spellcheck="false"></textarea>
+        <span class="fine">Use a wallet made for PayLorya AI that holds test tADA only, never the phrase of a wallet with real funds. Stored encrypted; the AI CFO signs with it on Cardano Preprod only, within your policy.</span>
+        <div style="margin-top:8px"><button type="button" class="btn ghost xs" data-new-wallet>${u("plus",14,2.4)}Create a new wallet</button></div>
+        <div class="callout info sm" id="c-phrase-new" hidden>${u("info",14)}<span>New wallet created in your browser. Write the phrase down now: it is the only way to recover this wallet. After connecting, fund its address from the Cardano Preprod faucet.</span></div></div>`:""}
       <div class="field"><span class="lbl">Agent access</span>
         <div class="radio-cards">
-          <label><input type="radio" name="access" value="read" checked><span>${p("eye",16)}<b>Read-only</b><em>See balances and history</em></span></label>
-          <label class="${e.supports.write?"":"off"}"><input type="radio" name="access" value="read_write" ${e.supports.write?"":"disabled"}><span>${p("pay",16)}<b>Read &amp; write</b><em>${e.supports.write?e.kind==="cardano_wallet"?"Pays tADA: you sign each payment in your wallet":"May also send payments, within your policy":"Not supported by this connection"}</em></span></label>
+          <label><input type="radio" name="access" value="read" checked><span>${u("eye",16)}<b>Read-only</b><em>See balances and history</em></span></label>
+          <label class="${e.supports.write?"":"off"}"><input type="radio" name="access" value="read_write" ${e.supports.write?"":"disabled"}><span>${u("pay",16)}<b>Read &amp; write</b><em>${e.supports.write?e.kind==="cardano_wallet"?"Pays tADA: you sign each payment in your wallet":e.kind==="cardano_agent_wallet"?"Pays verifications and tADA on its own, within your policy":"May also send payments, within your policy":"Not supported by this connection"}</em></span></label>
         </div>
       </div>
-      ${e.kind==="cardano_agent_wallet"||e.kind==="cardano_wallet"?`<p class="fine">${p("info",13)} Cardano Preprod is a test network. Balances are tADA with no real value.</p>`:""}
-      ${e.kind==="cashxchain"?`<p class="fine">${p("info",13)} CashXChain sandbox: a test ledger, no real money moves.</p>`:""}`,onOpen:a=>{a.addEventListener("click",async n=>{let i=n.target.closest("[data-wallet]");if(!(!i||i.disabled)){i.disabled=!0,i.classList.add("loading");try{let o=e.kind==="cardano_wallet"?await Wt(i.dataset.wallet):await Xt(),l=a.elements.namedItem("address");l&&(l.value=o,l.closest(".field")?.classList.remove("invalid")),S("Address taken from your wallet","ok")}catch(o){B(a,"address",o instanceof Error?o.message:"The wallet could not be connected.")}finally{i.disabled=!1,i.classList.remove("loading")}}})},onSubmit:async a=>{let n={kind:e.kind,access:N(a,"access")||"read"},i=N(a,"label");if(i&&(n.label=i),e.acceptsApiKey){let o=N(a,"apiKey");if(o&&!_a.test(o))return B(a,"apiKey","Use a CashXChain sandbox key: cxc_sk_sandbox_\u2026 or cxc_rk_sandbox_\u2026");if(!o&&!e.linkedFallback)return B(a,"apiKey","Paste your CashXChain sandbox API key.");o&&(n.apiKey=o)}if(e.needsAddress){let o=N(a,"address");if(!o)return B(a,"address","Paste the wallet address.");if(e.kind==="cardano_wallet"&&!/^addr_test1[0-9a-z]{20,}$/.test(o))return B(a,"address","Use a Cardano Preprod address (addr_test1\u2026).");if(e.kind==="evm_wallet"&&!/^0x[0-9a-fA-F]{40}$/.test(o))return B(a,"address","Use an EVM address (0x followed by 40 hex characters).");n.address=o}return t=await O("/api/v1/connections",n),S(`${t.label} connected`,"ok"),!0}}),t}async function Gt(e,t){let a=[],n=[];e.innerHTML=`${_("Connections","Wallets and accounts your AI CFO can see, and the ones it may pay from.",`<a class="btn primary sm" href="#add" id="c-add-top">${p("plus",16,2.4)}Add connection</a>`)}
+      ${e.kind==="cardano_agent_wallet"||e.kind==="cardano_wallet"?`<p class="fine">${u("info",13)} Cardano Preprod is a test network. Balances are tADA with no real value.</p>`:""}
+      ${e.kind==="cashxchain"?`<p class="fine">${u("info",13)} CashXChain sandbox: a test ledger, no real money moves.</p>`:""}`,onOpen:a=>{a.addEventListener("click",n=>{if(!n.target.closest("[data-new-wallet]"))return;let r=a.elements.namedItem("recoveryPhrase");if(!r)return;r.value=pa(wt,256),a.querySelector("#c-phrase-new").hidden=!1;let o=a.querySelector('input[name="access"][value="read_write"]');o&&(o.checked=!0)}),a.addEventListener("click",async n=>{let r=n.target.closest("[data-wallet]");if(!(!r||r.disabled)){r.disabled=!0,r.classList.add("loading");try{let o=e.kind==="cardano_wallet"?await va(r.dataset.wallet):await $a(),i=a.elements.namedItem("address");i&&(i.value=o,i.closest(".field")?.classList.remove("invalid")),S("Address taken from your wallet","ok")}catch(o){I(a,"address",o instanceof Error?o.message:"The wallet could not be connected.")}finally{r.disabled=!1,r.classList.remove("loading")}}})},onSubmit:async a=>{let n={kind:e.kind,access:B(a,"access")||"read"},r=B(a,"label");if(r&&(n.label=r),e.acceptsRecoveryPhrase){let o=B(a,"recoveryPhrase").toLowerCase().replace(/\s+/g," ");if(!o)return I(a,"recoveryPhrase","Paste the wallet's recovery phrase, or create a new wallet.");if(!fa(o,wt))return I(a,"recoveryPhrase","That is not a valid recovery phrase: 12, 15 or 24 English words.");n.recoveryPhrase=o}if(e.acceptsApiKey){let o=B(a,"apiKey");if(o&&!Hn.test(o))return I(a,"apiKey","Use a CashXChain sandbox key: cxc_sk_sandbox_\u2026 or cxc_rk_sandbox_\u2026");if(!o&&!e.linkedFallback)return I(a,"apiKey","Paste your CashXChain sandbox API key.");o&&(n.apiKey=o)}if(e.needsAddress){let o=B(a,"address");if(!o)return I(a,"address","Paste the wallet address.");if(e.kind==="cardano_wallet"&&!/^addr_test1[0-9a-z]{20,}$/.test(o))return I(a,"address","Use a Cardano Preprod address (addr_test1\u2026).");if(e.kind==="evm_wallet"&&!/^0x[0-9a-fA-F]{40}$/.test(o))return I(a,"address","Use an EVM address (0x followed by 40 hex characters).");n.address=o}return t=await O("/api/v1/connections",n),S(`${t.label} connected`,"ok"),!0}}),t}async function Ma(e,t){let a=[],n=[];e.innerHTML=`${_("Connections","Wallets and accounts your AI CFO can see, and the ones it may pay from.",`<a class="btn primary sm" href="#add" id="c-add-top">${u("plus",16,2.4)}Add connection</a>`)}
     <div id="c-cxc"></div>
-    <section class="conn-grid" id="c-grid">${Array.from({length:3},()=>`<div class="card">${I("50%",18)}<div style="height:14px"></div>${I("30%",12)}<div style="height:28px"></div>${I("60%",26)}<div style="height:22px"></div>${I("100%",38,12)}</div>`).join("")}</section>
-    <section class="catalog" id="add"><div class="section-h"><h2>Add a connection</h2><p class="muted">Read-only by default. Grant write access only where you want the agent to be able to pay from.</p></div><div class="cat-grid" id="c-cat"></div></section>`;let i=e.querySelector("#c-grid"),o=e.querySelector("#c-cat"),l=e.querySelector("#c-cxc"),d=m=>{l.innerHTML=za(m);let v=m.link?.status==="linked";v!==dt&&(dt=v,a.some(b=>b.kind==="cashxchain"&&!b.keyHint)&&r())};U("/api/v1/cashxchain",!0).then(m=>t.alive()&&d(m),()=>{}),l.addEventListener("click",async m=>{let v=m.target.closest("[data-cxc-link]");if(v){v.disabled=!0,v.classList.add("loading");try{let b=await O("/api/v1/cashxchain/link");if(!t.alive())return;d(b),S(b.link?.status==="linked"?"CashXChain sub-account linked":"Not linked yet: see the note",b.link?.status==="linked"?"ok":void 0)}catch{v.disabled=!1,v.classList.remove("loading")}}});let r=()=>{i.innerHTML=a.length?a.map(zt).join(""):`<div class="card wide-empty">${j({icon:"link",title:"No connections yet",text:"Connect your own Cardano wallet, an EVM wallet or your CashXChain sandbox account below. Your AI CFO starts reading balances right away."})}</div>`},c=()=>{o.innerHTML=n.map(m=>`<button type="button" class="cat-item${m.available?"":" soon"}" data-kind="${s(m.kind)}" ${m.available?"":"disabled"}>
-        <span class="conn-ic k-${m.kind}">${p(Vt[m.kind]??"link",20)}</span>
+    <section class="conn-grid" id="c-grid">${Array.from({length:3},()=>`<div class="card">${U("50%",18)}<div style="height:14px"></div>${U("30%",12)}<div style="height:28px"></div>${U("60%",26)}<div style="height:22px"></div>${U("100%",38,12)}</div>`).join("")}</section>
+    <section class="catalog" id="add"><div class="section-h"><h2>Add a connection</h2><p class="muted">Read-only by default. Grant write access only where you want the agent to be able to pay from.</p></div><div class="cat-grid" id="c-cat"></div></section>`;let r=e.querySelector("#c-grid"),o=e.querySelector("#c-cat"),i=e.querySelector("#c-cxc"),l=m=>{i.innerHTML=In(m);let b=m.link?.status==="linked";b!==xt&&(xt=b,a.some(v=>v.kind==="cashxchain"&&!v.keyHint)&&c())};N("/api/v1/cashxchain",!0).then(m=>t.alive()&&l(m),()=>{}),i.addEventListener("click",async m=>{let b=m.target.closest("[data-cxc-link]");if(b){b.disabled=!0,b.classList.add("loading");try{let v=await O("/api/v1/cashxchain/link");if(!t.alive())return;l(v),S(v.link?.status==="linked"?"CashXChain sub-account linked":"Not linked yet: see the note",v.link?.status==="linked"?"ok":void 0)}catch{b.disabled=!1,b.classList.remove("loading")}}});let c=()=>{r.innerHTML=a.length?a.map(xa).join(""):`<div class="card wide-empty">${R({icon:"link",title:"No connections yet",text:"Start with your agent wallet: it pays the verification on Cardano before every payout. Then add your CashXChain sandbox account, or wallets to watch."})}</div>`},d=()=>{o.innerHTML=n.map(m=>`<button type="button" class="cat-item${m.available?"":" soon"}" data-kind="${s(m.kind)}" ${m.available?"":"disabled"}>
+        <span class="conn-ic k-${m.kind}">${u(ka[m.kind]??"link",20)}</span>
         <span class="cat-t"><b>${s(m.name)}</b><span>${s(m.description)}</span></span>
-        <span class="cat-f">${m.available?`<span class="caps">${m.supports.write?"Read &amp; write":"Read-only"}</span><span class="cat-go">${p("plus",16,2.4)}</span>`:'<span class="pill t-neutral">Coming soon</span>'}</span>
-      </button>`).join("")},u=m=>{a=a.map(b=>b.id===m.id?m:b);let v=i.querySelector(`[data-id="${CSS.escape(m.id)}"]`);if(v){let b=document.createElement("div");b.innerHTML=zt(m,0);let C=b.firstElementChild;C.classList.remove("reveal"),v.replaceWith(C)}};e.querySelector("#c-add-top").addEventListener("click",m=>{m.preventDefault(),e.querySelector("#add").scrollIntoView({behavior:"smooth",block:"start"})}),o.addEventListener("click",async m=>{let v=m.target.closest("[data-kind]"),b=v&&n.find(x=>x.kind===v.dataset.kind);if(!b||!b.available)return;if(b.viaStripe){v.disabled=!0;try{let x=await Ft();if(!t.alive())return;let L=x[0];L&&(a.push(...x),r(),S(x.length===1?`${L.label} connected`:`${x.length} bank accounts connected`,"ok"),i.querySelector(`[data-id="${CSS.escape(L.id)}"]`)?.scrollIntoView({behavior:"smooth",block:"center"}))}catch(x){!(x instanceof Q)&&x instanceof Error&&S(x.message,"error")}finally{v.disabled=!1}return}let C=await Ka(b);C&&t.alive()&&(a.push(C),r(),i.querySelector(`[data-id="${CSS.escape(C.id)}"]`)?.scrollIntoView({behavior:"smooth",block:"center"}))}),i.addEventListener("click",async m=>{let v=m.target,b=v.closest("[data-copy]");if(b)return void Ie(b.dataset.copy);let C=v.closest(".conn"),x=C&&a.find(f=>f.id===C.dataset.id);if(!x||!C)return;let L=`/api/v1/connections/${encodeURIComponent(x.id)}`,A=v.closest("[data-access]");if(A&&!A.disabled){let f=A.dataset.access;if(f===x.access||f==="read_write"&&!await ae("Allow payments from this connection?",`With read & write access the agent can send payments from \u201C${x.label}\u201D, always within your agent access policy and limits.`,"Allow read & write"))return;try{u(await J(L,{access:f})),S(f==="read"?`${x.label} is now read-only`:`${x.label} can now be used for payments`,"ok")}catch{}return}if(v.closest("[data-refresh]")){let f=v.closest("[data-refresh]");f.classList.add("spinning"),f.disabled=!0;try{u(await O(`${L}/refresh`)),S("Balances refreshed","ok")}catch{f.classList.remove("spinning"),f.disabled=!1}return}if(v.closest("[data-rename]")){await Z({title:"Rename connection",submit:"Save",body:`<div class="field"><label for="r-label">Name</label><input id="r-label" name="label" value="${s(x.label)}" autocomplete="off"></div>`,onSubmit:async f=>{let g=N(f,"label");return g?(u(await J(L,{label:g})),!0):B(f,"label","Enter a name.")}});return}if(v.closest("[data-remove]")){if(!await ae(`Remove ${x.label}?`,"Your AI CFO will stop reading this connection and can no longer pay from it. Nothing on-chain or in your account changes.","Remove",!0))return;try{await se(L),a=a.filter(f=>f.id!==x.id),r(),S("Connection removed","ok")}catch{}}});let[y,h]=await Promise.all([U("/api/v1/connections"),U("/api/v1/connections/catalog",!0).catch(()=>[])]);t.alive()&&(a=y,n=h.sort((m,v)=>Number(v.available)-Number(m.available)),r(),c())}async function ut(e,t){let a=await O(`/api/v1/payments/${encodeURIComponent(e)}/${t}`);return S(t==="approve"?a.status==="executed"?`Approved and paid ${a.payeeName}`:a.status==="failed"||a.status==="blocked"?`Approved, but the payment ${a.status==="failed"?"failed":"was blocked"}`:a.currency==="ADA"?`Approved. Sign the payment to ${a.payeeName} in your wallet in a moment.`:`Approved. Paying ${a.payeeName}\u2026`:`Rejected payment to ${a.payeeName}`,t==="approve"&&(a.status==="failed"||a.status==="blocked")?"error":"ok"),Te(),a}var Va={pass:"check",warn:"alert",fail:"x"};function Ga(e){return e.policy.checks.length?`<ul class="checks">${e.policy.checks.map(t=>`<li class="ck-${t.status}"><span class="ck-ic">${p(Va[t.status],12,2.8)}</span><span>${s(t.message)}</span></li>`).join("")}</ul>`:'<p class="muted small">No policy checks recorded.</p>'}var Jt={auto:["Within agent limits","t-ok"],approval:["Needs your approval","t-warn"],blocked:["Blocked by policy","t-bad"]};function Ja(e){let t=e.destination,a=[t?.iban?`IBAN ${t.iban}`:"",t?.bic?`BIC ${t.bic}`:"",t?.routingNumber?`ABA ${t.routingNumber} / ${t.accountNumber??"?"}`:"",t?.cardanoAddress?de(t.cardanoAddress):""].filter(Boolean);return a.length?`<span class="mono">${s(a.join(" \xB7 "))}</span> <span class="pill t-warn">not saved</span>`:'<span class="muted">No account details</span>'}function Za(e){let t=e.policy.checks,a=t.filter(o=>o.status==="fail").length,n=t.filter(o=>o.status==="warn").length,i=t.filter(o=>o.status==="pass").length;return`<span class="ck-sum">${i?`<span class="ck-pass">${p("check",11,3)}${i}</span>`:""}${n?`<span class="ck-warn">${p("alert",11,2.6)}${n}</span>`:""}${a?`<span class="ck-fail">${p("x",11,3)}${a}</span>`:""}</span>`}var pt=new Set;function Qa(e){let t=pt.has(e.id),a=_e(),n=`data-pid="${s(e.id)}" data-from="${s(e.cardano?.from??"")}"`,i=a.length?a.map(o=>`<button type="button" class="btn primary xs${t?" loading":""}" data-act="sign" data-wallet="${s(o.id)}" ${n} ${t?"disabled":""}>${p("wallet",14)}Sign with ${s(o.name)}</button>`).join(""):'<span class="muted small">Install Lace or Eternl to sign</span>';return`<span class="decide"><button type="button" class="btn ghost xs" data-act="decline" ${n} ${t?"disabled":""}>Cancel</button>${i}</span>`}var Zt=e=>e.status==="pending_approval"||e.status==="awaiting_signature",en=e=>e.status==="pending_approval"?`<span class="decide"><button type="button" class="btn ghost xs" data-act="reject" data-pid="${s(e.id)}">Reject</button><button type="button" class="btn primary xs" data-act="approve" data-pid="${s(e.id)}">${p("check",14,2.6)}Approve</button></span>`:e.status==="awaiting_signature"?Qa(e):"",Qt=(e,t)=>t?`<a class="mono" href="${s(t)}" target="_blank" rel="noopener noreferrer">${s(Ke(e))} ${p("external",12)}</a>`:`<span class="mono">${s(Ke(e))}</span>`;function tn(e){let t=e.cardano;return t?e.status==="awaiting_signature"?`<div class="callout info">${p("wallet",15)}<span>Checked and ready. Sign it in your wallet: the transaction is built from your wallet's funds when you click, and your wallet shows payee, amount and fee before you confirm. Nothing is sent without your signature.</span></div>`:e.status==="executing"&&t.submitted?`<div class="callout info">${p("clock",15)}<span>Sent to Cardano Preprod; waiting for it to reach a block.</span></div>`:"":""}function an(e,t=!1){let a=e.currency==="ADA";return`<li class="pay-row${t?" open":""}" data-row="${s(e.id)}" id="pay-${s(e.id)}">
+        <span class="cat-f">${m.available?`<span class="caps">${m.supports.write?"Read &amp; write":"Read-only"}</span><span class="cat-go">${u("plus",16,2.4)}</span>`:'<span class="pill t-neutral">Coming soon</span>'}</span>
+      </button>`).join("")},p=m=>{a=a.map(v=>v.id===m.id?m:v);let b=r.querySelector(`[data-id="${CSS.escape(m.id)}"]`);if(b){let v=document.createElement("div");v.innerHTML=xa(m,0);let x=v.firstElementChild;x.classList.remove("reveal"),b.replaceWith(x)}};e.querySelector("#c-add-top").addEventListener("click",m=>{m.preventDefault(),e.querySelector("#add").scrollIntoView({behavior:"smooth",block:"start"})}),o.addEventListener("click",async m=>{let b=m.target.closest("[data-kind]"),v=b&&n.find(k=>k.kind===b.dataset.kind);if(!v||!v.available)return;if(v.viaStripe){b.disabled=!0;try{let k=await Zt();if(!t.alive())return;let L=k[0];L&&(a.push(...k),c(),S(k.length===1?`${L.label} connected`:`${k.length} bank accounts connected`,"ok"),r.querySelector(`[data-id="${CSS.escape(L.id)}"]`)?.scrollIntoView({behavior:"smooth",block:"center"}))}catch(k){!(k instanceof Q)&&k instanceof Error&&S(k.message,"error")}finally{b.disabled=!1}return}let x=await Bn(v);x&&t.alive()&&(a.push(x),c(),r.querySelector(`[data-id="${CSS.escape(x.id)}"]`)?.scrollIntoView({behavior:"smooth",block:"center"}))}),r.addEventListener("click",async m=>{let b=m.target,v=b.closest("[data-copy]");if(v)return void Ne(v.dataset.copy);let x=b.closest(".conn"),k=x&&a.find(g=>g.id===x.dataset.id);if(!k||!x)return;let L=`/api/v1/connections/${encodeURIComponent(k.id)}`,A=b.closest("[data-access]");if(A&&!A.disabled){let g=A.dataset.access;if(g===k.access||g==="read_write"&&!await ae("Allow payments from this connection?",`With read & write access the agent can send payments from \u201C${k.label}\u201D, always within your agent access policy and limits.`,"Allow read & write"))return;try{p(await J(L,{access:g})),S(g==="read"?`${k.label} is now read-only`:`${k.label} can now be used for payments`,"ok")}catch{}return}if(b.closest("[data-refresh]")){let g=b.closest("[data-refresh]");g.classList.add("spinning"),g.disabled=!0;try{p(await O(`${L}/refresh`)),S("Balances refreshed","ok")}catch{g.classList.remove("spinning"),g.disabled=!1}return}if(b.closest("[data-rename]")){await Z({title:"Rename connection",submit:"Save",body:`<div class="field"><label for="r-label">Name</label><input id="r-label" name="label" value="${s(k.label)}" autocomplete="off"></div>`,onSubmit:async g=>{let y=B(g,"label");return y?(p(await J(L,{label:y})),!0):I(g,"label","Enter a name.")}});return}if(b.closest("[data-remove]")){if(!await ae(`Remove ${k.label}?`,"Your AI CFO will stop reading this connection and can no longer pay from it. Nothing on-chain or in your account changes.","Remove",!0))return;try{await oe(L),a=a.filter(g=>g.id!==k.id),c(),S("Connection removed","ok")}catch{}}});let[h,f]=await Promise.all([N("/api/v1/connections"),N("/api/v1/connections/catalog",!0).catch(()=>[])]);t.alive()&&(a=h,n=f.sort((m,b)=>Number(b.available)-Number(m.available)),c(),d())}async function kt(e,t){let a=await O(`/api/v1/payments/${encodeURIComponent(e)}/${t}`);return S(t==="approve"?a.status==="executed"?`Approved and paid ${a.payeeName}`:a.status==="failed"||a.status==="blocked"?`Approved, but the payment ${a.status==="failed"?"failed":"was blocked"}`:a.currency==="ADA"?`Approved. Sign the payment to ${a.payeeName} in your wallet in a moment.`:`Approved. Paying ${a.payeeName}\u2026`:`Rejected payment to ${a.payeeName}`,t==="approve"&&(a.status==="failed"||a.status==="blocked")?"error":"ok"),Se(),a}var Nn={pass:"check",warn:"alert",fail:"x"};function qn(e){return e.policy.checks.length?`<ul class="checks">${e.policy.checks.map(t=>`<li class="ck-${t.status}"><span class="ck-ic">${u(Nn[t.status],12,2.8)}</span><span>${s(t.message)}</span></li>`).join("")}</ul>`:'<p class="muted small">No policy checks recorded.</p>'}var La={auto:["Within agent limits","t-ok"],approval:["Needs your approval","t-warn"],blocked:["Blocked by policy","t-bad"]};function jn(e){let t=e.destination,a=[t?.iban?`IBAN ${t.iban}`:"",t?.bic?`BIC ${t.bic}`:"",t?.routingNumber?`ABA ${t.routingNumber} / ${t.accountNumber??"?"}`:"",t?.cardanoAddress?pe(t.cardanoAddress):""].filter(Boolean);return a.length?`<span class="mono">${s(a.join(" \xB7 "))}</span> <span class="pill t-warn">not saved</span>`:'<span class="muted">No account details</span>'}function Fn(e){let t=e.policy.checks,a=t.filter(o=>o.status==="fail").length,n=t.filter(o=>o.status==="warn").length,r=t.filter(o=>o.status==="pass").length;return`<span class="ck-sum">${r?`<span class="ck-pass">${u("check",11,3)}${r}</span>`:""}${n?`<span class="ck-warn">${u("alert",11,2.6)}${n}</span>`:""}${a?`<span class="ck-fail">${u("x",11,3)}${a}</span>`:""}</span>`}var Ct=new Set;function Rn(e){let t=Ct.has(e.id),a=Ke(),n=`data-pid="${s(e.id)}" data-from="${s(e.cardano?.from??"")}"`,r=a.length?a.map(o=>`<button type="button" class="btn primary xs${t?" loading":""}" data-act="sign" data-wallet="${s(o.id)}" ${n} ${t?"disabled":""}>${u("wallet",14)}Sign with ${s(o.name)}</button>`).join(""):'<span class="muted small">Install Lace or Eternl to sign</span>';return`<span class="decide"><button type="button" class="btn ghost xs" data-act="decline" ${n} ${t?"disabled":""}>Cancel</button>${r}</span>`}var Ea=e=>e.status==="pending_approval"||e.status==="awaiting_signature",On=e=>e.status==="pending_approval"?`<span class="decide"><button type="button" class="btn ghost xs" data-act="reject" data-pid="${s(e.id)}">Reject</button><button type="button" class="btn primary xs" data-act="approve" data-pid="${s(e.id)}">${u("check",14,2.6)}Approve</button></span>`:e.status==="awaiting_signature"?Rn(e):"";function _n(e){let t=e.verification??e.cardano?.verification;return t?`<dt>Verified</dt><dd>x402 report paid on Cardano from your agent wallet ${Ta(t.txHash,t.explorerUrl)}</dd>`:""}var Ta=(e,t)=>t?`<a class="mono" href="${s(t)}" target="_blank" rel="noopener noreferrer">${s(et(e))} ${u("external",12)}</a>`:`<span class="mono">${s(et(e))}</span>`;function Wn(e){let t=e.cardano;return t?e.status==="awaiting_signature"?`<div class="callout info">${u("wallet",15)}<span>Checked and ready. Sign it in your wallet: the transaction is built from your wallet's funds when you click, and your wallet shows payee, amount and fee before you confirm. Nothing is sent without your signature.</span></div>`:e.status==="executing"&&t.submitted?`<div class="callout info">${u("clock",15)}<span>Sent to Cardano Preprod; waiting for it to reach a block.</span></div>`:"":""}function zn(e,t=!1){let a=e.currency==="ADA";return`<li class="pay-row${t?" open":""}" data-row="${s(e.id)}" id="pay-${s(e.id)}">
     <div class="pay-main" role="button" tabindex="0" aria-expanded="${t}" data-toggle>
       ${te(e.payeeName)}
       <div class="pay-who"><b>${s(e.payeeName)}</b><span>${s(e.reason||"No reason given")}</span></div>
-      <div class="pay-rail">${et(e.rail)}</div>
-      <div class="pay-by"><span class="by by-${e.requestedBy}">${p(e.requestedBy==="agent"?"bot":"user",13,2)}${e.requestedBy==="agent"?"Agent":"You"}</span><em>${s(F(e.createdAt))}</em></div>
-      <div class="pay-amt"><b>${s(z(e.amountMinor,e.currency))}</b>${a||e.currency!=="USD"?`<span>\u2248 ${s(T(e.usdMinor))}</span>`:""}</div>
-      <div class="pay-status">${De(e.status)}${Za(e)}</div>
-      <div class="pay-act">${en(e)}<span class="chev">${p("chevronDown",16)}</span></div>
+      <div class="pay-rail">${rt(e.rail)}</div>
+      <div class="pay-by"><span class="by by-${e.requestedBy}">${u(e.requestedBy==="agent"?"bot":"user",13,2)}${e.requestedBy==="agent"?"Agent":"You"}</span><em>${s(F(e.createdAt))}</em></div>
+      <div class="pay-amt"><b>${s(G(e.amountMinor,e.currency))}</b>${a||e.currency!=="USD"?`<span>\u2248 ${s(T(e.usdMinor))}</span>`:""}</div>
+      <div class="pay-status">${Be(e.status)}${Fn(e)}</div>
+      <div class="pay-act">${On(e)}<span class="chev">${u("chevronDown",16)}</span></div>
     </div>
     <div class="pay-detail"><div class="pay-detail-in">
       <div class="pd-col">
-        <div class="pd-h">Policy checks <span class="pill ${Jt[e.policy.decision][1]}">${Jt[e.policy.decision][0]}</span></div>
-        ${Ga(e)}
-        ${tn(e)}
-        ${e.error?`<div class="callout bad">${p("alert",15)}<span>${s(e.error)}</span></div>`:""}
+        <div class="pd-h">Policy checks <span class="pill ${La[e.policy.decision][1]}">${La[e.policy.decision][0]}</span></div>
+        ${qn(e)}
+        ${Wn(e)}
+        ${e.error?`<div class="callout bad">${u("alert",15)}<span>${s(e.error)}</span></div>`:""}
       </div>
       <dl class="pd-col kv">
-        <dt>Amount</dt><dd>${s(z(e.amountMinor,e.currency))}${a?' <span class="pill t-neutral">testnet</span>':""}</dd>
-        <dt>Rail</dt><dd>${et(e.rail)}</dd>
-        <dt>Pays to</dt><dd>${e.payeeId?"Saved payee account":Ja(e)}</dd>
+        <dt>Amount</dt><dd>${s(G(e.amountMinor,e.currency))}${a?' <span class="pill t-neutral">testnet</span>':""}</dd>
+        <dt>Rail</dt><dd>${rt(e.rail)}</dd>
+        <dt>Pays to</dt><dd>${e.payeeId?"Saved payee account":jn(e)}</dd>
         <dt>Requested by</dt><dd>${e.requestedBy==="agent"?"AI CFO agent":"You"}${e.runId?` <span class="mono muted">${s(e.runId)}</span>`:""}</dd>
-        ${e.cardano?`<dt>From</dt><dd><span class="mono" title="${s(e.cardano.from)}">${s(de(e.cardano.from))}</span> <span class="muted small">your wallet</span></dd>`:""}
-        ${e.cardano?.verification?`<dt>Verified</dt><dd>x402 report paid on Cardano ${Qt(e.cardano.verification.txHash,e.cardano.verification.explorerUrl)}</dd>`:""}
+        ${e.cardano?`<dt>From</dt><dd><span class="mono" title="${s(e.cardano.from)}">${s(pe(e.cardano.from))}</span> <span class="muted small">your wallet</span></dd>`:""}
+        ${_n(e)}
         ${e.reference&&!e.txHash?`<dt>Reference</dt><dd class="mono">${s(e.reference)}</dd>`:""}
-        ${e.txHash?`<dt>Transaction</dt><dd>${Qt(e.txHash,e.explorerUrl)}${e.cardano?e.cardano.confirmedAt?' <span class="pill t-ok">in a block</span>':' <span class="pill t-neutral">waiting for a block</span>':""}</dd>`:""}
+        ${e.txHash?`<dt>Transaction</dt><dd>${Ta(e.txHash,e.explorerUrl)}${e.cardano?e.cardano.confirmedAt?' <span class="pill t-ok">in a block</span>':' <span class="pill t-neutral">waiting for a block</span>':""}</dd>`:""}
         ${e.documentId?`<dt>Document</dt><dd><a href="/app/documents/${s(e.documentId)}">Open source document</a></dd>`:""}
-        <dt>Created</dt><dd>${s(fe(e.createdAt))}</dd>
-        ${e.decidedAt?`<dt>Decided</dt><dd>${s(fe(e.decidedAt))}</dd>`:""}
-        ${e.executedAt?`<dt>Executed</dt><dd>${s(fe(e.executedAt))}</dd>`:""}
+        <dt>Created</dt><dd>${s(ve(e.createdAt))}</dd>
+        ${e.decidedAt?`<dt>Decided</dt><dd>${s(ve(e.decidedAt))}</dd>`:""}
+        ${e.executedAt?`<dt>Executed</dt><dd>${s(ve(e.executedAt))}</dd>`:""}
       </dl>
     </div></div>
-  </li>`}function nn(e,t){e.addEventListener("click",async a=>{let n=a.target,i=n.closest("[data-act]");if(i&&(i.dataset.act==="sign"||i.dataset.act==="decline")){a.stopPropagation();let l=i.dataset.pid,d=i.closest(".decide");for(let r of d?.querySelectorAll("button")??[])r.disabled=!0;i.classList.add("loading"),pt.add(l);try{let r=`/api/v1/payments/${encodeURIComponent(l)}`;if(i.dataset.act==="sign"){let c=await Yt(i.dataset.wallet,i.dataset.from),u=await O(`${r}/transaction`,c.funds),y=await c.sign(u.txCbor),h=await O(`${r}/signature`,{txHash:u.txHash,witnessSet:y});S(h.status==="executed"?`Sent to ${h.payeeName} on Cardano Preprod`:"Signed. Waiting for the network to confirm\u2026","ok")}else await O(`${r}/signature`,{declined:!0}),S("Payment cancelled: nothing was sent","ok")}catch(r){r instanceof Error&&!(r instanceof Q)&&S(r.message,"error")}finally{pt.delete(l);let r=(await U("/api/v1/payments").catch(()=>[])).find(c=>c.id===l);r&&t(r)}return}if(i){a.stopPropagation();let l=i.dataset.pid,d=i.dataset.act,r=i.closest(".decide");for(let c of r?.querySelectorAll("button")??[])c.disabled=!0;i.classList.add("loading");try{t(await ut(l,d))}catch{for(let c of r?.querySelectorAll("button")??[])c.disabled=!1;i.classList.remove("loading")}return}let o=n.closest("[data-toggle]");if(o&&!n.closest("a")){let l=o.closest(".pay-row");l.classList.toggle("open"),o.setAttribute("aria-expanded",String(l.classList.contains("open")))}}),e.addEventListener("keydown",a=>{let n=a.target;(a.key==="Enter"||a.key===" ")&&n.matches("[data-toggle]")&&(a.preventDefault(),n.click())})}var sn=[["USD","USD"],["EUR","EUR"],["GBP","GBP"],["CHF","CHF"],["ADA","tADA (Cardano Preprod)"]],on=(e="USD")=>sn.map(([t,a])=>`<option value="${t}"${t===e?" selected":""}>${a}</option>`).join("");function rn(e,t){return e==null?"":String(e/10**(t==="ADA"?6:t==="JPY"?0:2))}async function mt(e={}){let t=await U("/api/v1/payees"),a=e.counterparty?t.find(l=>l.name.toLowerCase()===e.counterparty.toLowerCase()):void 0,n=e.payeeId??a?.id??"",i=e.currency??"USD",o=null;return await Z({title:"New payment",submit:"Create payment",body:`
+  </li>`}function Yn(e,t){e.addEventListener("click",async a=>{let n=a.target,r=n.closest("[data-act]");if(r&&(r.dataset.act==="sign"||r.dataset.act==="decline")){a.stopPropagation();let i=r.dataset.pid,l=r.closest(".decide");for(let c of l?.querySelectorAll("button")??[])c.disabled=!0;r.classList.add("loading"),Ct.add(i);try{let c=`/api/v1/payments/${encodeURIComponent(i)}`;if(r.dataset.act==="sign"){let d=await wa(r.dataset.wallet,r.dataset.from),p=await O(`${c}/transaction`,d.funds),h=await d.sign(p.txCbor),f=await O(`${c}/signature`,{txHash:p.txHash,witnessSet:h});S(f.status==="executed"?`Sent to ${f.payeeName} on Cardano Preprod`:"Signed. Waiting for the network to confirm\u2026","ok")}else await O(`${c}/signature`,{declined:!0}),S("Payment cancelled: nothing was sent","ok")}catch(c){c instanceof Error&&!(c instanceof Q)&&S(c.message,"error")}finally{Ct.delete(i);let c=(await N("/api/v1/payments").catch(()=>[])).find(d=>d.id===i);c&&t(c)}return}if(r){a.stopPropagation();let i=r.dataset.pid,l=r.dataset.act,c=r.closest(".decide");for(let d of c?.querySelectorAll("button")??[])d.disabled=!0;r.classList.add("loading");try{t(await kt(i,l))}catch{for(let d of c?.querySelectorAll("button")??[])d.disabled=!1;r.classList.remove("loading")}return}let o=n.closest("[data-toggle]");if(o&&!n.closest("a")){let i=o.closest(".pay-row");i.classList.toggle("open"),o.setAttribute("aria-expanded",String(i.classList.contains("open")))}}),e.addEventListener("keydown",a=>{let n=a.target;(a.key==="Enter"||a.key===" ")&&n.matches("[data-toggle]")&&(a.preventDefault(),n.click())})}var Gn=[["USD","USD"],["EUR","EUR"],["GBP","GBP"],["CHF","CHF"],["ADA","tADA (Cardano Preprod)"]],Xn=(e="USD")=>Gn.map(([t,a])=>`<option value="${t}"${t===e?" selected":""}>${a}</option>`).join("");function Kn(e,t){return e==null?"":String(e/10**(t==="ADA"?6:t==="JPY"?0:2))}async function Mt(e={}){let t=await N("/api/v1/payees"),a=e.counterparty?t.find(i=>i.name.toLowerCase()===e.counterparty.toLowerCase()):void 0,n=e.payeeId??a?.id??"",r=e.currency??"USD",o=null;return await Z({title:"New payment",submit:"Create payment",body:`
       <div class="field"><label for="np-payee">Payee</label>
         <select id="np-payee" name="payeeId">
           <option value="" disabled${n?"":" selected"}>Choose a payee\u2026</option>
-          ${t.map(l=>`<option value="${s(l.id)}"${l.id===n?" selected":""}>${s(l.name)}${l.cardanoAddress?" \xB7 Cardano":l.iban?" \xB7 IBAN":l.accountNumber?" \xB7 ACH":""}</option>`).join("")}
+          ${t.map(i=>`<option value="${s(i.id)}"${i.id===n?" selected":""}>${s(i.name)}${i.cardanoAddress?" \xB7 Cardano":i.iban?" \xB7 IBAN":i.accountNumber?" \xB7 ACH":""}</option>`).join("")}
           <option value="__new">+ Add a new payee\u2026</option>
         </select>
       </div>
@@ -209,12 +2261,12 @@ var fa={"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"},s=e=>String(
         </div>
       </div>
       <div class="grid2 amt-grid">
-        <div class="field"><label for="np-amount">Amount</label><input id="np-amount" name="amount" inputmode="decimal" placeholder="0.00" value="${s(rn(e.amountMinor,i))}"></div>
-        <div class="field"><label for="np-cur">Currency</label><select id="np-cur" name="currency">${on(i)}</select></div>
+        <div class="field"><label for="np-amount">Amount</label><input id="np-amount" name="amount" inputmode="decimal" placeholder="0.00" value="${s(Kn(e.amountMinor,r))}"></div>
+        <div class="field"><label for="np-cur">Currency</label><select id="np-cur" name="currency">${Xn(r)}</select></div>
       </div>
       <div class="field"><label for="np-reason">Reason</label><textarea id="np-reason" name="reason" rows="2" placeholder="Invoice INV-1042, October hosting">${s(e.reason??"")}</textarea></div>
-      <div class="callout">${p("shield",15)}<span>Code checks every payment against your policy before anything moves. tADA runs on Cardano Preprod (testnet); fiat runs on the CashXChain sandbox rail.</span></div>`,onOpen:l=>{let d=l.elements.namedItem("payeeId"),r=l.querySelector(".np-new"),c=()=>{r.hidden=d.value!=="__new",r.hidden||l.elements.namedItem("newName").focus()};d.addEventListener("change",c),t.length||(d.value="__new",c())},onSubmit:async l=>{let d=N(l,"payeeId"),r=N(l,"currency"),c=pe(N(l,"amount"),r),u=N(l,"reason");if(!d)return B(l,"payeeId","Choose who to pay.");if(d==="__new"&&!N(l,"newName"))return B(l,"newName","Enter the payee's name.");let y=N(l,"newAda");if(d==="__new"&&y&&!/^addr_test1[0-9a-z]+$/.test(y))return B(l,"newAda","Use a Cardano Preprod address (addr_test1\u2026).");if(!Number.isFinite(c)||c<=0)return B(l,"amount","Enter an amount above zero.");if(!u)return B(l,"reason","Add a short reason. It appears in the audit log.");if(d==="__new"){let m={name:N(l,"newName")},v=N(l,"newIban").replace(/\s+/g,"").toUpperCase();v&&(m.iban=v);let b=N(l,"newCountry").toUpperCase();b&&(m.country=b),y&&(m.cardanoAddress=y),d=(await O("/api/v1/payees",m)).id}let h={payeeId:d,amountMinor:c,currency:r,reason:u};return e.documentId&&(h.documentId=e.documentId),o=await O("/api/v1/payments",h),S(o.status==="pending_approval"?"Payment created. It is waiting for your approval.":o.status==="blocked"?"Payment blocked by policy. See the checks for why.":"Payment created.",o.status==="blocked"?"error":"ok"),Te(),!0}}),o}async function ea(e,t){let a=t.query.get("tab")==="all"||t.query.get("id")?"all":"approvals",n="any",i=t.query.get("id");e.innerHTML=`${_("Payments","Every payment is checked by code against your policy. Payouts run on Cardano Preprod (testnet tADA) and the CashXChain sandbox rail.",`<button class="btn primary sm" type="button" id="pay-new">${p("plus",16,2.4)}New payment</button>`)}
-  <section class="stat-row" id="pay-stats">${Array.from({length:3},()=>`<div class="stat-card">${G(1)}</div>`).join("")}</section>
+      <div class="callout">${u("shield",15)}<span>Code checks every payment against your policy before anything moves. tADA runs on Cardano Preprod (testnet); fiat runs on the CashXChain sandbox rail.</span></div>`,onOpen:i=>{let l=i.elements.namedItem("payeeId"),c=i.querySelector(".np-new"),d=()=>{c.hidden=l.value!=="__new",c.hidden||i.elements.namedItem("newName").focus()};l.addEventListener("change",d),t.length||(l.value="__new",d())},onSubmit:async i=>{let l=B(i,"payeeId"),c=B(i,"currency"),d=me(B(i,"amount"),c),p=B(i,"reason");if(!l)return I(i,"payeeId","Choose who to pay.");if(l==="__new"&&!B(i,"newName"))return I(i,"newName","Enter the payee's name.");let h=B(i,"newAda");if(l==="__new"&&h&&!/^addr_test1[0-9a-z]+$/.test(h))return I(i,"newAda","Use a Cardano Preprod address (addr_test1\u2026).");if(!Number.isFinite(d)||d<=0)return I(i,"amount","Enter an amount above zero.");if(!p)return I(i,"reason","Add a short reason. It appears in the audit log.");if(l==="__new"){let m={name:B(i,"newName")},b=B(i,"newIban").replace(/\s+/g,"").toUpperCase();b&&(m.iban=b);let v=B(i,"newCountry").toUpperCase();v&&(m.country=v),h&&(m.cardanoAddress=h),l=(await O("/api/v1/payees",m)).id}let f={payeeId:l,amountMinor:d,currency:c,reason:p};return e.documentId&&(f.documentId=e.documentId),o=await O("/api/v1/payments",f),S(o.status==="pending_approval"?"Payment created. It is waiting for your approval.":o.status==="blocked"?"Payment blocked by policy. See the checks for why.":"Payment created.",o.status==="blocked"?"error":"ok"),Se(),!0}}),o}async function Aa(e,t){let a=t.query.get("tab")==="all"||t.query.get("id")?"all":"approvals",n="any",r=t.query.get("id");e.innerHTML=`${_("Payments","Every payment is checked by code against your policy. Payouts run on Cardano Preprod (testnet tADA) and the CashXChain sandbox rail.",`<button class="btn primary sm" type="button" id="pay-new">${u("plus",16,2.4)}New payment</button>`)}
+  <section class="stat-row" id="pay-stats">${Array.from({length:3},()=>`<div class="stat-card">${V(1)}</div>`).join("")}</section>
   <section class="card list-card">
     <div class="list-head">
       <div class="tabs" role="tablist"><button role="tab" data-tab="approvals">Approvals <em id="n-appr"></em></button><button role="tab" data-tab="all">All payments <em id="n-all"></em></button></div>
@@ -222,103 +2274,103 @@ var fa={"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"},s=e=>String(
         <button data-f="any" class="on">All</button><button data-f="done">Paid</button><button data-f="live">In progress</button><button data-f="stopped">Rejected &amp; failed</button>
       </div>
     </div>
-    <ul class="pay-list" id="pay-list">${G(5)}</ul>
-  </section>`;let o=[],l=e.querySelector("#pay-list"),d=()=>{for(let C of e.querySelectorAll("[data-tab]"))C.setAttribute("aria-selected",String(C.dataset.tab===a));e.querySelector("#pay-filter").hidden=a!=="all";let c=o.filter(Zt);e.querySelector("#n-appr").textContent=String(c.length),e.querySelector("#n-all").textContent=String(o.length);let u={done:["executed"],live:["pending_approval","approved","executing","awaiting_signature"],stopped:["rejected","failed","blocked"]},y=a==="approvals"?c:n==="any"?o:o.filter(C=>u[n].includes(C.status));l.innerHTML=y.length?y.map(C=>an(C,C.id===i)).join(""):`<li class="list-empty">${a==="approvals"?j({icon:"shieldCheck",title:"Nothing waiting for you",text:"When the agent or a teammate drafts a payment that needs a human, it shows up here with its policy checks."}):j({icon:"pay",title:"No payments yet",text:"Draft one yourself, or ask the AI CFO to prepare payments from your invoices.",action:`<button class="btn primary sm" type="button" data-new>${p("plus",15,2.4)}New payment</button>`})}</li>`;let h=C=>C.reduce((x,L)=>x+L.usdMinor,0),m=new Date().toISOString().slice(0,7),v=o.filter(C=>C.status==="executed"&&(C.executedAt??C.createdAt).startsWith(m)),b=o.filter(C=>C.status==="blocked"||C.status==="failed");e.querySelector("#pay-stats").innerHTML=`
-      <div class="stat-card"><span class="label">Waiting for you</span><b>${s(T(h(c)))}</b><span class="sub">${c.length} payment${c.length===1?"":"s"}</span></div>
-      <div class="stat-card"><span class="label">Paid this month</span><b>${s(T(h(v)))}</b><span class="sub">${v.length} payment${v.length===1?"":"s"} \xB7 testnet &amp; sandbox</span></div>
-      <div class="stat-card"><span class="label">Stopped by policy or errors</span><b>${b.length}</b><span class="sub">blocked or failed</span></div>`,i&&document.getElementById(`pay-${i}`)?.scrollIntoView({block:"center"})},r=async()=>{if(o=await U("/api/v1/payments"),!t.alive())return;o.sort((u,y)=>y.createdAt.localeCompare(u.createdAt)),d();let c=u=>u.status==="executed"&&u.cardano?.submitted&&!u.cardano.confirmedAt&&Date.now()-Date.parse(u.cardano.submitted.at)<15*6e4;if(o.some(u=>u.status==="executing"||u.status==="approved"||c(u))){let u=window.setTimeout(()=>{r().catch(()=>{})},2500);t.onCleanup(()=>window.clearTimeout(u))}};e.addEventListener("click",async c=>{let u=c.target,y=u.closest("[data-tab]");y&&(a=y.dataset.tab,d());let h=u.closest("[data-f]");if(h){n=h.dataset.f;for(let m of e.querySelectorAll("[data-f]"))m.classList.toggle("on",m===h);d()}if(u.closest("#pay-new, [data-new]")){let m=await mt().catch(()=>null);m&&t.alive()&&(o.unshift(m),a=m.status==="pending_approval"?"approvals":"all",d())}}),nn(l,c=>{let u=o.findIndex(h=>h.id===c.id);u>=0&&(o[u]=c);let y=l.querySelector(`[data-row="${CSS.escape(c.id)}"]`);a==="approvals"&&!Zt(c)&&y?(y.classList.add("leaving"),window.setTimeout(d,280)):d(),(c.status==="executing"||c.status==="approved")&&window.setTimeout(()=>t.alive()&&void r().catch(()=>{}),2e3)}),await r()}var ln={invoice:"Invoices",receipt:"Receipts",bank_statement:"Bank statements",contract:"Contracts",payroll:"Payroll",tax:"Tax",other:"Other"},Se=e=>`/api/v1/documents/${encodeURIComponent(e)}`;function cn(e){return e.status==="processing"?'<span class="pill t-run"><i class="live"></i>Reading</span>':e.status==="failed"?`<span class="pill t-bad" title="${s(e.error??"")}">Failed</span>`:`<span class="pill t-ok">${p("check",11,3)}Ready</span>`}function dn(e){let t=e.dueDate&&e.kind==="invoice"?ke(e.dueDate):null;return`<tr data-id="${s(e.id)}" tabindex="0">
-    <td class="c-doc"><div class="c-doc-in"><span class="doc-ic ${e.status}">${p(be(e.mimeType),17)}</span><div><b>${s(e.title||e.filename)}</b><span>${s(e.title?e.filename:ve(e.size))}${e.source==="chat"?" \xB7 from chat":""}</span></div></div></td>
-    <td class="c-kind">${e.kind?`<span class="kind k-${e.kind}">${s(ue[e.kind]??e.kind)}</span>`:e.status==="processing"?I("60px",12):'<span class="muted">\u2014</span>'}</td>
+    <ul class="pay-list" id="pay-list">${V(5)}</ul>
+  </section>`;let o=[],i=e.querySelector("#pay-list"),l=()=>{for(let x of e.querySelectorAll("[data-tab]"))x.setAttribute("aria-selected",String(x.dataset.tab===a));e.querySelector("#pay-filter").hidden=a!=="all";let d=o.filter(Ea);e.querySelector("#n-appr").textContent=String(d.length),e.querySelector("#n-all").textContent=String(o.length);let p={done:["executed"],live:["pending_approval","approved","executing","awaiting_signature"],stopped:["rejected","failed","blocked"]},h=a==="approvals"?d:n==="any"?o:o.filter(x=>p[n].includes(x.status));i.innerHTML=h.length?h.map(x=>zn(x,x.id===r)).join(""):`<li class="list-empty">${a==="approvals"?R({icon:"shieldCheck",title:"Nothing waiting for you",text:"When the agent or a teammate drafts a payment that needs a human, it shows up here with its policy checks."}):R({icon:"pay",title:"No payments yet",text:"Draft one yourself, or ask the AI CFO to prepare payments from your invoices.",action:`<button class="btn primary sm" type="button" data-new>${u("plus",15,2.4)}New payment</button>`})}</li>`;let f=x=>x.reduce((k,L)=>k+L.usdMinor,0),m=new Date().toISOString().slice(0,7),b=o.filter(x=>x.status==="executed"&&(x.executedAt??x.createdAt).startsWith(m)),v=o.filter(x=>x.status==="blocked"||x.status==="failed");e.querySelector("#pay-stats").innerHTML=`
+      <div class="stat-card"><span class="label">Waiting for you</span><b>${s(T(f(d)))}</b><span class="sub">${d.length} payment${d.length===1?"":"s"}</span></div>
+      <div class="stat-card"><span class="label">Paid this month</span><b>${s(T(f(b)))}</b><span class="sub">${b.length} payment${b.length===1?"":"s"} \xB7 testnet &amp; sandbox</span></div>
+      <div class="stat-card"><span class="label">Stopped by policy or errors</span><b>${v.length}</b><span class="sub">blocked or failed</span></div>`,r&&document.getElementById(`pay-${r}`)?.scrollIntoView({block:"center"})},c=async()=>{if(o=await N("/api/v1/payments"),!t.alive())return;o.sort((p,h)=>h.createdAt.localeCompare(p.createdAt)),l();let d=p=>p.status==="executed"&&p.cardano?.submitted&&!p.cardano.confirmedAt&&Date.now()-Date.parse(p.cardano.submitted.at)<15*6e4;if(o.some(p=>p.status==="executing"||p.status==="approved"||d(p))){let p=window.setTimeout(()=>{c().catch(()=>{})},2500);t.onCleanup(()=>window.clearTimeout(p))}};e.addEventListener("click",async d=>{let p=d.target,h=p.closest("[data-tab]");h&&(a=h.dataset.tab,l());let f=p.closest("[data-f]");if(f){n=f.dataset.f;for(let m of e.querySelectorAll("[data-f]"))m.classList.toggle("on",m===f);l()}if(p.closest("#pay-new, [data-new]")){let m=await Mt().catch(()=>null);m&&t.alive()&&(o.unshift(m),a=m.status==="pending_approval"?"approvals":"all",l())}}),Yn(i,d=>{let p=o.findIndex(f=>f.id===d.id);p>=0&&(o[p]=d);let h=i.querySelector(`[data-row="${CSS.escape(d.id)}"]`);a==="approvals"&&!Ea(d)&&h?(h.classList.add("leaving"),window.setTimeout(l,280)):l(),(d.status==="executing"||d.status==="approved")&&window.setTimeout(()=>t.alive()&&void c().catch(()=>{}),2e3)}),await c()}var Vn={invoice:"Invoices",receipt:"Receipts",bank_statement:"Bank statements",contract:"Contracts",payroll:"Payroll",tax:"Tax",other:"Other"},De=e=>`/api/v1/documents/${encodeURIComponent(e)}`;function Jn(e){return e.status==="processing"?'<span class="pill t-run"><i class="live"></i>Reading</span>':e.status==="failed"?`<span class="pill t-bad" title="${s(e.error??"")}">Failed</span>`:`<span class="pill t-ok">${u("check",11,3)}Ready</span>`}function Zn(e){let t=e.dueDate&&e.kind==="invoice"?Ee(e.dueDate):null;return`<tr data-id="${s(e.id)}" tabindex="0">
+    <td class="c-doc"><div class="c-doc-in"><span class="doc-ic ${e.status}">${u($e(e.mimeType),17)}</span><div><b>${s(e.title||e.filename)}</b><span>${s(e.title?e.filename:we(e.size))}${e.source==="chat"?" \xB7 from chat":""}</span></div></div></td>
+    <td class="c-kind">${e.kind?`<span class="kind k-${e.kind}">${s(he[e.kind]??e.kind)}</span>`:e.status==="processing"?U("60px",12):'<span class="muted">\u2014</span>'}</td>
     <td class="c-cp">${s(e.counterparty||"\u2014")}</td>
-    <td class="c-amt num">${e.amountMinor!=null?s(z(e.amountMinor,e.currency)):'<span class="muted">\u2014</span>'}</td>
+    <td class="c-amt num">${e.amountMinor!=null?s(G(e.amountMinor,e.currency)):'<span class="muted">\u2014</span>'}</td>
     <td class="c-due">${e.dueDate?`<span>${s(F(e.dueDate))}</span>${t&&t.tone&&t.tone!=="t-neutral"?`<em class="${t.tone}">${s(t.text)}</em>`:""}`:'<span class="muted">\u2014</span>'}</td>
     <td class="c-cat">${e.category?`<span class="cat">${s(e.category)}</span>`:'<span class="muted">\u2014</span>'}</td>
-    <td class="c-st">${cn(e)}</td>
-  </tr>`}async function aa(e,t){let a=[],n="all",i="",o=[],l=0,d=!1,r=new Set;e.innerHTML=`${_("Documents","Upload invoices, receipts, statements, contracts and payroll. Claude reads them and extracts amounts, dates and counterparties.")}
+    <td class="c-st">${Jn(e)}</td>
+  </tr>`}async function Ha(e,t){let a=[],n="all",r="",o=[],i=0,l=!1,c=new Set;e.innerHTML=`${_("Documents","Upload invoices, receipts, statements, contracts and payroll. Claude reads them and extracts amounts, dates and counterparties.")}
   <label class="drop" id="drop" tabindex="0">
-    <input type="file" id="doc-file" multiple accept="${Be}" hidden>
-    <span class="drop-ic">${p("upload",22)}</span>
+    <input type="file" id="doc-file" multiple accept="${Fe}" hidden>
+    <span class="drop-ic">${u("upload",22)}</span>
     <span class="drop-t"><b>Drop files here or <u>browse</u></b><span>PDF, photos, CSV or text \xB7 up to 15 MB each \xB7 multiple files at once</span></span>
   </label>
   <ul class="queue" id="queue" hidden></ul>
   <section class="card list-card">
     <div class="list-head">
       <div class="chips" id="kinds"></div>
-      <label class="search">${p("search",16)}<input id="doc-q" placeholder="Search documents" aria-label="Search documents"></label>
+      <label class="search">${u("search",16)}<input id="doc-q" placeholder="Search documents" aria-label="Search documents"></label>
     </div>
-    <div class="tbl-wrap" id="doc-table"><div class="pad">${G(6)}</div></div>
-  </section>`;let c=e.querySelector("#doc-table"),u=e.querySelector("#kinds"),y=e.querySelector("#queue"),h=()=>{let f=new Map;for(let k of a)k.kind&&f.set(k.kind,(f.get(k.kind)??0)+1);let g=a.filter(k=>k.status!=="processed").length;u.innerHTML=`<button data-k="all" class="${n==="all"?"on":""}">All <em>${a.length}</em></button>`+Object.keys(ue).filter(k=>f.get(k)).map(k=>`<button data-k="${k}" class="${n===k?"on":""}">${ln[k]??ue[k]} <em>${f.get(k)}</em></button>`).join("")+(g?`<button data-k="pending" class="${n==="pending"?"on":""}">Processing &amp; failed <em>${g}</em></button>`:"");let M=i.toLowerCase(),H=a.filter(k=>(n==="all"||(n==="pending"?k.status!=="processed":k.kind===n))&&(!M||[k.title,k.filename,k.counterparty,k.category].some(P=>P?.toLowerCase().includes(M))));if(!a.length){c.innerHTML=j({icon:"doc",title:"No documents yet",text:"Upload your first invoices, receipts or bank statements above. Your AI CFO reads them and keeps your books, budgets and forecast current."});return}if(!H.length){c.innerHTML=j({icon:"search",title:"No matches",text:"Try another filter or search term."});return}c.innerHTML=`<table class="tbl docs"><thead><tr><th>Document</th><th class="c-kind">Kind</th><th class="c-cp">Counterparty</th><th class="c-amt num">Amount</th><th class="c-due">Due</th><th class="c-cat">Category</th><th class="c-st">Status</th></tr></thead><tbody>${H.map(dn).join("")}</tbody></table>`},m=f=>{if(r.has(f))return;r.add(f);let g=Date.now(),M=async()=>{if(!t.alive())return;try{let P=await U(Se(f),!0);if(!t.alive())return;if(P.status!=="processing"||Date.now()-g>18e4){r.delete(f);let Y=a.findIndex(E=>E.id===f);Y>=0?a[Y]=P:a.unshift(P);let V=o.find(E=>E.doc?.id===f);V&&(V.doc=P,V.state=P.status==="processed"?"done":P.status==="failed"?"failed":"processing",V.error=P.error,b()),h();return}}catch{}let k=window.setTimeout(M,1500);t.onCleanup(()=>window.clearTimeout(k))},H=window.setTimeout(M,1200);t.onCleanup(()=>window.clearTimeout(H))},v={waiting:"Waiting",reading:"Preparing",uploading:"Uploading",processing:"Claude is reading it\u2026",done:"Done",failed:"Failed"},b=()=>{y.hidden=!o.length;let f=o.some(g=>g.state!=="done"&&g.state!=="failed");y.innerHTML=o.map(g=>{let M=g.state==="uploading"?Math.round(g.progress*100):g.state==="waiting"||g.state==="reading"?0:100,H=g.state==="done"&&g.doc?`${ue[g.doc.kind??"other"]??"Document"}${g.doc.counterparty?` from ${g.doc.counterparty}`:""}${g.doc.amountMinor!=null?` \xB7 ${z(g.doc.amountMinor,g.doc.currency)}`:""}`:g.state==="failed"?g.error||"Could not process this file":`${v[g.state]}${g.state==="uploading"?` ${M}%`:""}`;return`<li class="q-item q-${g.state}">
-          <span class="q-ic">${g.state==="done"?p("check",16,2.6):g.state==="failed"?p("alert",16):g.state==="processing"?'<i class="spin"></i>':p(be(Le(g.file)),16)}</span>
-          <div class="q-body"><div class="q-top"><b>${s(g.file.name)}</b><span>${s(ve(g.file.size))}</span></div>
-          <div class="q-bar"><i style="width:${M}%"></i></div><span class="q-state">${s(H)}</span></div>
-          ${g.doc&&g.state==="done"?`<a class="btn ghost xs" href="/app/documents/${s(g.doc.id)}">Open</a>`:""}
-        </li>`}).join("")+(f?"":'<li class="q-foot"><button type="button" class="link-sm" id="q-clear">Clear finished</button></li>')},C=async()=>{if(!d){d=!0;try{for(;;){let f=o.find(g=>g.state==="waiting");if(!f||!t.alive())break;f.state="reading",b();try{let g={filename:f.file.name,mimeType:Le(f.file),dataBase64:await Ue(f.file)};f.state="uploading",b();let M=0,H=await xt("/api/v1/documents",g,k=>{f.progress=k,Date.now()-M>80&&(M=Date.now(),b())});f.doc=H,f.state=H.status==="processing"?"processing":H.status==="failed"?"failed":"done",f.error=H.error,a.unshift(H),h(),H.status==="processing"&&m(H.id)}catch(g){f.state="failed",f.error=g.message,S(`${f.file.name}: ${f.error}`,"error")}b()}}finally{d=!1}}},x=f=>{for(let g of Array.from(f)){if(g.size>Ne){S(`${g.name} is larger than 15 MB.`,"error");continue}o.push({key:++l,file:g,state:"waiting",progress:0})}b(),C()},L=e.querySelector("#drop"),A=e.querySelector("#doc-file");if(A.addEventListener("change",()=>{A.files&&x(A.files),A.value=""}),L.addEventListener("keydown",f=>{(f.key==="Enter"||f.key===" ")&&(f.preventDefault(),A.click())}),L.addEventListener("dragover",f=>{f.preventDefault(),L.classList.add("over")}),L.addEventListener("dragleave",()=>L.classList.remove("over")),L.addEventListener("drop",f=>{f.preventDefault(),L.classList.remove("over"),f.dataTransfer?.files.length&&x(f.dataTransfer.files)}),y.addEventListener("click",f=>{if(f.target.closest("#q-clear")){for(let g=o.length-1;g>=0;g--)(o[g].state==="done"||o[g].state==="failed")&&o.splice(g,1);b()}}),u.addEventListener("click",f=>{let g=f.target.closest("[data-k]");g&&(n=g.dataset.k,h())}),e.querySelector("#doc-q").addEventListener("input",f=>{i=f.target.value.trim(),h()}),c.addEventListener("click",f=>{let g=f.target.closest("tr[data-id]");g&&oe(`/app/documents/${encodeURIComponent(g.dataset.id)}`)}),c.addEventListener("keydown",f=>{let g=f.target.closest("tr[data-id]");g&&f.key==="Enter"&&oe(`/app/documents/${encodeURIComponent(g.dataset.id)}`)}),a=await U("/api/v1/documents"),!!t.alive()){a.sort((f,g)=>g.createdAt.localeCompare(f.createdAt)),h();for(let f of a)f.status==="processing"&&m(f.id)}}var We=e=>!!e&&typeof e=="object"&&!Array.isArray(e);function Ye(e){return e==null||e===""?'<span class="muted">\u2014</span>':typeof e=="boolean"?e?"Yes":"No":typeof e=="number"?s(e.toLocaleString("en-US")):s(String(e))}function na(e,t=0){if(Array.isArray(e)){if(!e.length)return'<span class="muted">None</span>';if(e.every(We)){let a=[...new Set(e.flatMap(n=>Object.keys(n)))].slice(0,6);return`<div class="md-table"><table><thead><tr>${a.map(n=>`<th>${s(Qe(n))}</th>`).join("")}</tr></thead><tbody>${e.map(n=>`<tr>${a.map(i=>`<td>${We(n[i])?s(JSON.stringify(n[i])):Ye(n[i])}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`}return e.map(Ye).join(", ")}if(We(e)){let a=Object.entries(e);return a.length?`<dl class="kv ${t?"nested":""}">${a.map(([n,i])=>`<dt>${s(Qe(n))}</dt><dd>${We(i)||Array.isArray(i)?na(i,t+1):Ye(i)}</dd>`).join("")}</dl>`:'<span class="muted">\u2014</span>'}return Ye(e)}async function pn(e,t){let a=`${Se(t.id)}/file`;if(t.mimeType.startsWith("image/"))e.innerHTML=`<img src="${s(a)}" alt="${s(t.filename)}" loading="lazy">`;else if(t.mimeType==="application/pdf")e.innerHTML=`<iframe src="${s(a)}#view=FitH&toolbar=0" title="${s(t.filename)}"></iframe><a class="preview-open" href="${s(a)}" target="_blank" rel="noopener">${p("external",13)}Open PDF in a new tab</a>`;else if(t.mimeType.startsWith("text/")||/csv/.test(t.mimeType)){e.innerHTML=`<div class="pad">${I("90%")}<div style="height:8px"></div>${I("70%")}</div>`;try{let o=(await(await fetch(a,{credentials:"same-origin"})).text()).split(`
-`);if(/csv/.test(t.mimeType)||t.filename.endsWith(".csv")){let l=o.filter(d=>d.trim()).slice(0,60).map(d=>d.split(",").map(r=>r.replace(/^"|"$/g,"")));e.innerHTML=`<div class="csv"><table>${l.map((d,r)=>`<tr>${d.map(c=>r?`<td>${s(c)}</td>`:`<th>${s(c)}</th>`).join("")}</tr>`).join("")}</table></div>`}else e.innerHTML=`<pre class="txt">${s(o.slice(0,300).join(`
-`))}</pre>`}catch{e.innerHTML='<div class="chart-empty">Preview unavailable.</div>'}}else e.innerHTML=`<div class="chart-empty">No preview for this file type. <a href="${s(a)}" download="${s(t.filename)}">Download it</a>.</div>`}async function sa(e,t){let a=t.params[0];e.innerHTML=`<a class="back" href="/app/documents">${p("chevronLeft",16)}Documents</a>
-    <header class="page-head"><div class="page-title">${I("320px",30)}<div style="height:10px"></div>${I("200px",13)}</div></header>
-    <div class="doc-grid"><div class="card preview-card">${I("100%",480,14)}</div><div class="col">${ta()}${ta()}</div></div>`;let n;try{n=await U(Se(a),!0)}catch{if(!t.alive())return;e.innerHTML=`<a class="back" href="/app/documents">${p("chevronLeft",16)}Documents</a>${j({icon:"doc",title:"Document not found",text:"It may have been deleted.",action:'<a class="btn primary sm" href="/app/documents">Back to documents</a>'})}`;return}if(!t.alive())return;let i=n.dueDate?ke(n.dueDate):null,o=n.status==="processed"&&(n.kind==="invoice"||n.kind==="payroll"||n.kind==="tax"),l=n.payments.some(r=>r.status==="executed"),d=[n.kind?ue[n.kind]:null,n.filename,`${ve(n.size)}`,`uploaded ${F(n.createdAt)}${n.source==="chat"?" in chat":""}`].filter(Boolean).map(r=>s(r)).join(" \xB7 ");if(e.innerHTML=`<a class="back" href="/app/documents">${p("chevronLeft",16)}Documents</a>
-  ${_(n.title||n.filename,d,`<button class="btn ghost sm" type="button" id="d-ask">${p("sparkle",16)}Ask CFO about this</button>
-     ${n.status==="processed"?`<button class="btn ${o&&!l?"primary":"ghost"} sm" type="button" id="d-pay">${p("pay",16)}Draft payment</button>`:""}
-     <a class="icon-btn boxed" href="${s(Se(n.id))}/file" download="${s(n.filename)}" aria-label="Download original" title="Download original">${p("download",17)}</a>
-     <button class="icon-btn boxed danger-h" type="button" id="d-del" aria-label="Delete document" title="Delete document">${p("trash",17)}</button>`)}
+    <div class="tbl-wrap" id="doc-table"><div class="pad">${V(6)}</div></div>
+  </section>`;let d=e.querySelector("#doc-table"),p=e.querySelector("#kinds"),h=e.querySelector("#queue"),f=()=>{let g=new Map;for(let M of a)M.kind&&g.set(M.kind,(g.get(M.kind)??0)+1);let y=a.filter(M=>M.status!=="processed").length;p.innerHTML=`<button data-k="all" class="${n==="all"?"on":""}">All <em>${a.length}</em></button>`+Object.keys(he).filter(M=>g.get(M)).map(M=>`<button data-k="${M}" class="${n===M?"on":""}">${Vn[M]??he[M]} <em>${g.get(M)}</em></button>`).join("")+(y?`<button data-k="pending" class="${n==="pending"?"on":""}">Processing &amp; failed <em>${y}</em></button>`:"");let C=r.toLowerCase(),H=a.filter(M=>(n==="all"||(n==="pending"?M.status!=="processed":M.kind===n))&&(!C||[M.title,M.filename,M.counterparty,M.category].some(P=>P?.toLowerCase().includes(C))));if(!a.length){d.innerHTML=R({icon:"doc",title:"No documents yet",text:"Upload your first invoices, receipts or bank statements above. Your AI CFO reads them and keeps your books, budgets and forecast current."});return}if(!H.length){d.innerHTML=R({icon:"search",title:"No matches",text:"Try another filter or search term."});return}d.innerHTML=`<table class="tbl docs"><thead><tr><th>Document</th><th class="c-kind">Kind</th><th class="c-cp">Counterparty</th><th class="c-amt num">Amount</th><th class="c-due">Due</th><th class="c-cat">Category</th><th class="c-st">Status</th></tr></thead><tbody>${H.map(Zn).join("")}</tbody></table>`},m=g=>{if(c.has(g))return;c.add(g);let y=Date.now(),C=async()=>{if(!t.alive())return;try{let P=await N(De(g),!0);if(!t.alive())return;if(P.status!=="processing"||Date.now()-y>18e4){c.delete(g);let z=a.findIndex(E=>E.id===g);z>=0?a[z]=P:a.unshift(P);let K=o.find(E=>E.doc?.id===g);K&&(K.doc=P,K.state=P.status==="processed"?"done":P.status==="failed"?"failed":"processing",K.error=P.error,v()),f();return}}catch{}let M=window.setTimeout(C,1500);t.onCleanup(()=>window.clearTimeout(M))},H=window.setTimeout(C,1200);t.onCleanup(()=>window.clearTimeout(H))},b={waiting:"Waiting",reading:"Preparing",uploading:"Uploading",processing:"Claude is reading it\u2026",done:"Done",failed:"Failed"},v=()=>{h.hidden=!o.length;let g=o.some(y=>y.state!=="done"&&y.state!=="failed");h.innerHTML=o.map(y=>{let C=y.state==="uploading"?Math.round(y.progress*100):y.state==="waiting"||y.state==="reading"?0:100,H=y.state==="done"&&y.doc?`${he[y.doc.kind??"other"]??"Document"}${y.doc.counterparty?` from ${y.doc.counterparty}`:""}${y.doc.amountMinor!=null?` \xB7 ${G(y.doc.amountMinor,y.doc.currency)}`:""}`:y.state==="failed"?y.error||"Could not process this file":`${b[y.state]}${y.state==="uploading"?` ${C}%`:""}`;return`<li class="q-item q-${y.state}">
+          <span class="q-ic">${y.state==="done"?u("check",16,2.6):y.state==="failed"?u("alert",16):y.state==="processing"?'<i class="spin"></i>':u($e(Te(y.file)),16)}</span>
+          <div class="q-body"><div class="q-top"><b>${s(y.file.name)}</b><span>${s(we(y.file.size))}</span></div>
+          <div class="q-bar"><i style="width:${C}%"></i></div><span class="q-state">${s(H)}</span></div>
+          ${y.doc&&y.state==="done"?`<a class="btn ghost xs" href="/app/documents/${s(y.doc.id)}">Open</a>`:""}
+        </li>`}).join("")+(g?"":'<li class="q-foot"><button type="button" class="link-sm" id="q-clear">Clear finished</button></li>')},x=async()=>{if(!l){l=!0;try{for(;;){let g=o.find(y=>y.state==="waiting");if(!g||!t.alive())break;g.state="reading",v();try{let y={filename:g.file.name,mimeType:Te(g.file),dataBase64:await qe(g.file)};g.state="uploading",v();let C=0,H=await Bt("/api/v1/documents",y,M=>{g.progress=M,Date.now()-C>80&&(C=Date.now(),v())});g.doc=H,g.state=H.status==="processing"?"processing":H.status==="failed"?"failed":"done",g.error=H.error,a.unshift(H),f(),H.status==="processing"&&m(H.id)}catch(y){g.state="failed",g.error=y.message,S(`${g.file.name}: ${g.error}`,"error")}v()}}finally{l=!1}}},k=g=>{for(let y of Array.from(g)){if(y.size>je){S(`${y.name} is larger than 15 MB.`,"error");continue}o.push({key:++i,file:y,state:"waiting",progress:0})}v(),x()},L=e.querySelector("#drop"),A=e.querySelector("#doc-file");if(A.addEventListener("change",()=>{A.files&&k(A.files),A.value=""}),L.addEventListener("keydown",g=>{(g.key==="Enter"||g.key===" ")&&(g.preventDefault(),A.click())}),L.addEventListener("dragover",g=>{g.preventDefault(),L.classList.add("over")}),L.addEventListener("dragleave",()=>L.classList.remove("over")),L.addEventListener("drop",g=>{g.preventDefault(),L.classList.remove("over"),g.dataTransfer?.files.length&&k(g.dataTransfer.files)}),h.addEventListener("click",g=>{if(g.target.closest("#q-clear")){for(let y=o.length-1;y>=0;y--)(o[y].state==="done"||o[y].state==="failed")&&o.splice(y,1);v()}}),p.addEventListener("click",g=>{let y=g.target.closest("[data-k]");y&&(n=y.dataset.k,f())}),e.querySelector("#doc-q").addEventListener("input",g=>{r=g.target.value.trim(),f()}),d.addEventListener("click",g=>{let y=g.target.closest("tr[data-id]");y&&re(`/app/documents/${encodeURIComponent(y.dataset.id)}`)}),d.addEventListener("keydown",g=>{let y=g.target.closest("tr[data-id]");y&&g.key==="Enter"&&re(`/app/documents/${encodeURIComponent(y.dataset.id)}`)}),a=await N("/api/v1/documents"),!!t.alive()){a.sort((g,y)=>y.createdAt.localeCompare(g.createdAt)),f();for(let g of a)g.status==="processing"&&m(g.id)}}var Ve=e=>!!e&&typeof e=="object"&&!Array.isArray(e);function Je(e){return e==null||e===""?'<span class="muted">\u2014</span>':typeof e=="boolean"?e?"Yes":"No":typeof e=="number"?s(e.toLocaleString("en-US")):s(String(e))}function Pa(e,t=0){if(Array.isArray(e)){if(!e.length)return'<span class="muted">None</span>';if(e.every(Ve)){let a=[...new Set(e.flatMap(n=>Object.keys(n)))].slice(0,6);return`<div class="md-table"><table><thead><tr>${a.map(n=>`<th>${s(ot(n))}</th>`).join("")}</tr></thead><tbody>${e.map(n=>`<tr>${a.map(r=>`<td>${Ve(n[r])?s(JSON.stringify(n[r])):Je(n[r])}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`}return e.map(Je).join(", ")}if(Ve(e)){let a=Object.entries(e);return a.length?`<dl class="kv ${t?"nested":""}">${a.map(([n,r])=>`<dt>${s(ot(n))}</dt><dd>${Ve(r)||Array.isArray(r)?Pa(r,t+1):Je(r)}</dd>`).join("")}</dl>`:'<span class="muted">\u2014</span>'}return Je(e)}async function Qn(e,t){let a=`${De(t.id)}/file`;if(t.mimeType.startsWith("image/"))e.innerHTML=`<img src="${s(a)}" alt="${s(t.filename)}" loading="lazy">`;else if(t.mimeType==="application/pdf")e.innerHTML=`<iframe src="${s(a)}#view=FitH&toolbar=0" title="${s(t.filename)}"></iframe><a class="preview-open" href="${s(a)}" target="_blank" rel="noopener">${u("external",13)}Open PDF in a new tab</a>`;else if(t.mimeType.startsWith("text/")||/csv/.test(t.mimeType)){e.innerHTML=`<div class="pad">${U("90%")}<div style="height:8px"></div>${U("70%")}</div>`;try{let o=(await(await fetch(a,{credentials:"same-origin"})).text()).split(`
+`);if(/csv/.test(t.mimeType)||t.filename.endsWith(".csv")){let i=o.filter(l=>l.trim()).slice(0,60).map(l=>l.split(",").map(c=>c.replace(/^"|"$/g,"")));e.innerHTML=`<div class="csv"><table>${i.map((l,c)=>`<tr>${l.map(d=>c?`<td>${s(d)}</td>`:`<th>${s(d)}</th>`).join("")}</tr>`).join("")}</table></div>`}else e.innerHTML=`<pre class="txt">${s(o.slice(0,300).join(`
+`))}</pre>`}catch{e.innerHTML='<div class="chart-empty">Preview unavailable.</div>'}}else e.innerHTML=`<div class="chart-empty">No preview for this file type. <a href="${s(a)}" download="${s(t.filename)}">Download it</a>.</div>`}async function Da(e,t){let a=t.params[0];e.innerHTML=`<a class="back" href="/app/documents">${u("chevronLeft",16)}Documents</a>
+    <header class="page-head"><div class="page-title">${U("320px",30)}<div style="height:10px"></div>${U("200px",13)}</div></header>
+    <div class="doc-grid"><div class="card preview-card">${U("100%",480,14)}</div><div class="col">${Sa()}${Sa()}</div></div>`;let n;try{n=await N(De(a),!0)}catch{if(!t.alive())return;e.innerHTML=`<a class="back" href="/app/documents">${u("chevronLeft",16)}Documents</a>${R({icon:"doc",title:"Document not found",text:"It may have been deleted.",action:'<a class="btn primary sm" href="/app/documents">Back to documents</a>'})}`;return}if(!t.alive())return;let r=n.dueDate?Ee(n.dueDate):null,o=n.status==="processed"&&(n.kind==="invoice"||n.kind==="payroll"||n.kind==="tax"),i=n.payments.some(c=>c.status==="executed"),l=[n.kind?he[n.kind]:null,n.filename,`${we(n.size)}`,`uploaded ${F(n.createdAt)}${n.source==="chat"?" in chat":""}`].filter(Boolean).map(c=>s(c)).join(" \xB7 ");if(e.innerHTML=`<a class="back" href="/app/documents">${u("chevronLeft",16)}Documents</a>
+  ${_(n.title||n.filename,l,`<button class="btn ghost sm" type="button" id="d-ask">${u("sparkle",16)}Ask CFO about this</button>
+     ${n.status==="processed"?`<button class="btn ${o&&!i?"primary":"ghost"} sm" type="button" id="d-pay">${u("pay",16)}Draft payment</button>`:""}
+     <a class="icon-btn boxed" href="${s(De(n.id))}/file" download="${s(n.filename)}" aria-label="Download original" title="Download original">${u("download",17)}</a>
+     <button class="icon-btn boxed danger-h" type="button" id="d-del" aria-label="Delete document" title="Delete document">${u("trash",17)}</button>`)}
   ${n.status==="processing"?'<div class="callout run"><i class="spin"></i><span>Claude is reading this document. Fields appear here when it is done.</span></div>':""}
-  ${n.status==="failed"?`<div class="callout bad">${p("alert",15)}<span>${s(n.error||"This document could not be processed.")} Try uploading a clearer copy.</span></div>`:""}
+  ${n.status==="failed"?`<div class="callout bad">${u("alert",15)}<span>${s(n.error||"This document could not be processed.")} Try uploading a clearer copy.</span></div>`:""}
   <div class="doc-grid">
     <div class="card preview-card"><div class="preview" id="preview"></div></div>
     <div class="col">
       <section class="card">
-        <div class="card-head"><h2>Summary</h2>${n.status==="processed"?'<span class="pill t-ok">'+p("check",11,3)+"Read by Claude</span>":""}</div>
+        <div class="card-head"><h2>Summary</h2>${n.status==="processed"?'<span class="pill t-ok">'+u("check",11,3)+"Read by Claude</span>":""}</div>
         ${n.summary?`<p class="doc-sum">${s(n.summary)}</p>`:""}
         <dl class="kv">
-          <dt>Kind</dt><dd>${n.kind?s(ue[n.kind]??n.kind):"\u2014"}</dd>
+          <dt>Kind</dt><dd>${n.kind?s(he[n.kind]??n.kind):"\u2014"}</dd>
           <dt>Counterparty</dt><dd>${s(n.counterparty||"\u2014")}</dd>
-          <dt>Amount</dt><dd class="strong">${n.amountMinor!=null?s(z(n.amountMinor,n.currency)):"\u2014"}</dd>
+          <dt>Amount</dt><dd class="strong">${n.amountMinor!=null?s(G(n.amountMinor,n.currency)):"\u2014"}</dd>
           <dt>Issued</dt><dd>${s(F(n.issueDate,!0))}</dd>
-          <dt>Due</dt><dd>${n.dueDate?`${s(F(n.dueDate,!0))} ${i&&!l?`<span class="pill ${i.tone}">${s(i.text)}</span>`:""}`:"\u2014"}</dd>
+          <dt>Due</dt><dd>${n.dueDate?`${s(F(n.dueDate,!0))} ${r&&!i?`<span class="pill ${r.tone}">${s(r.text)}</span>`:""}`:"\u2014"}</dd>
           <dt>Category</dt><dd>${n.category?`<span class="cat">${s(n.category)}</span>`:"\u2014"}</dd>
         </dl>
       </section>
-      ${n.extracted&&Object.keys(n.extracted).length?`<section class="card"><div class="card-head"><h2>Extracted details</h2><span class="count">for reference</span></div><div class="extracted">${na(n.extracted)}</div></section>`:""}
+      ${n.extracted&&Object.keys(n.extracted).length?`<section class="card"><div class="card-head"><h2>Extracted details</h2><span class="count">for reference</span></div><div class="extracted">${Pa(n.extracted)}</div></section>`:""}
       <section class="card">
         <div class="card-head"><h2>Payments</h2></div>
-        ${n.payments.length?`<ul class="link-list">${n.payments.map(r=>`<li><a href="/app/payments?id=${s(r.id)}"><div><b>${s(r.payeeName)}</b><span>${s(fe(r.createdAt))}</span></div><div class="ll-r"><b>${s(z(r.amountMinor,r.currency))}</b>${De(r.status)}</div></a></li>`).join("")}</ul>`:`<p class="muted small">No payments linked to this document${o?". Draft one and it goes through your policy checks.":"."}</p>`}
+        ${n.payments.length?`<ul class="link-list">${n.payments.map(c=>`<li><a href="/app/payments?id=${s(c.id)}"><div><b>${s(c.payeeName)}</b><span>${s(ve(c.createdAt))}</span></div><div class="ll-r"><b>${s(G(c.amountMinor,c.currency))}</b>${Be(c.status)}</div></a></li>`).join("")}</ul>`:`<p class="muted small">No payments linked to this document${o?". Draft one and it goes through your policy checks.":"."}</p>`}
       </section>
       <section class="card">
         <div class="card-head"><h2>Transactions</h2></div>
-        ${n.transactions.length?`<ul class="link-list">${n.transactions.map(r=>`<li><div class="ll"><div><b>${s(r.description)}</b><span>${s(F(r.date))} \xB7 ${s(r.category)}</span></div><div class="ll-r"><b class="${r.amountMinor<0?"":"pos"}">${s(z(r.amountMinor,r.currency))}</b>${r.currency!=="USD"?`<span class="muted small">\u2248 ${s(T(r.usdMinor))}</span>`:""}</div></div></li>`).join("")}</ul>`:'<p class="muted small">No transactions recorded from this document.</p>'}
+        ${n.transactions.length?`<ul class="link-list">${n.transactions.map(c=>`<li><div class="ll"><div><b>${s(c.description)}</b><span>${s(F(c.date))} \xB7 ${s(c.category)}</span></div><div class="ll-r"><b class="${c.amountMinor<0?"":"pos"}">${s(G(c.amountMinor,c.currency))}</b>${c.currency!=="USD"?`<span class="muted small">\u2248 ${s(T(c.usdMinor))}</span>`:""}</div></div></li>`).join("")}</ul>`:'<p class="muted small">No transactions recorded from this document.</p>'}
       </section>
     </div>
-  </div>`,pn(e.querySelector("#preview"),n),e.querySelector("#d-ask").addEventListener("click",()=>Ee(`About the document \u201C${n.title||n.filename}\u201D${n.counterparty?` from ${n.counterparty}`:""}: summarise what it says and tell me what I should do about it.`)),e.querySelector("#d-pay")?.addEventListener("click",async()=>{await mt({amountMinor:n.amountMinor,currency:n.currency,documentId:n.id,counterparty:n.counterparty,reason:[n.title||n.filename,n.counterparty].filter(Boolean).join(" \xB7 ")}).catch(()=>null)&&t.alive()&&t.reload()}),e.querySelector("#d-del").addEventListener("click",async()=>{if(await ae("Delete document?",`\u201C${n.title||n.filename}\u201D and its extracted data will be removed. Payments already made are kept in the audit log.`,"Delete",!0))try{await se(Se(n.id)),S("Document deleted","ok"),oe("/app/documents",{replace:!0})}catch{}}),n.status==="processing"){let r=window.setTimeout(()=>t.reload(),2500);t.onCleanup(()=>window.clearTimeout(r))}}function ta(){return`<div class="card">${I("30%",18)}<div style="height:16px"></div>${G(3)}</div>`}var un=["Summarise my spending this month","Which invoices are due in the next 14 days?","Forecast my cash for the next 90 days"];function oa(){let e=new Date().getHours();return e<5?"Good evening":e<12?"Good morning":e<18?"Good afternoon":"Good evening"}function mn(e){let t=e.limitUsdMinor?e.spentUsdMinor/e.limitUsdMinor*100:0,a=t>100,n=!a&&t>=85;return`<li class="bud ${a?"over":n?"warn":""}">
+  </div>`,Qn(e.querySelector("#preview"),n),e.querySelector("#d-ask").addEventListener("click",()=>Ae(`About the document \u201C${n.title||n.filename}\u201D${n.counterparty?` from ${n.counterparty}`:""}: summarise what it says and tell me what I should do about it.`)),e.querySelector("#d-pay")?.addEventListener("click",async()=>{await Mt({amountMinor:n.amountMinor,currency:n.currency,documentId:n.id,counterparty:n.counterparty,reason:[n.title||n.filename,n.counterparty].filter(Boolean).join(" \xB7 ")}).catch(()=>null)&&t.alive()&&t.reload()}),e.querySelector("#d-del").addEventListener("click",async()=>{if(await ae("Delete document?",`\u201C${n.title||n.filename}\u201D and its extracted data will be removed. Payments already made are kept in the audit log.`,"Delete",!0))try{await oe(De(n.id)),S("Document deleted","ok"),re("/app/documents",{replace:!0})}catch{}}),n.status==="processing"){let c=window.setTimeout(()=>t.reload(),2500);t.onCleanup(()=>window.clearTimeout(c))}}function Sa(){return`<div class="card">${U("30%",18)}<div style="height:16px"></div>${V(3)}</div>`}var es=["Summarise my spending this month","Which invoices are due in the next 14 days?","Forecast my cash for the next 90 days"];function Ua(){let e=new Date().getHours();return e<5?"Good evening":e<12?"Good morning":e<18?"Good afternoon":"Good evening"}function ts(e){let t=e.limitUsdMinor?e.spentUsdMinor/e.limitUsdMinor*100:0,a=t>100,n=!a&&t>=85;return`<li class="bud ${a?"over":n?"warn":""}">
     <div class="bud-top"><b>${s(e.name)}</b><span>${s(T(e.spentUsdMinor,{cents:!1}))} <em>of ${s(T(e.limitUsdMinor,{cents:!1}))}</em></span></div>
     <div class="meter"><i style="width:${Math.min(100,t).toFixed(1)}%"></i></div>
-    <div class="bud-sub"><span>${e.category.toLowerCase()===e.name.toLowerCase()?"":s(e.category)}</span>${a?`<span class="over-l">${p("alert",12,2.4)}${s(T(e.spentUsdMinor-e.limitUsdMinor,{cents:!1}))} over</span>`:`<span>${Math.round(t)}% used</span>`}</div>
-  </li>`}var ht=14;function hn(e){let t=ke(e.dueDate);return`<li><a href="/app/documents/${s(e.id)}"><div><b>${s(e.counterparty||e.title||e.filename)}</b><span>${s(e.title||e.filename)}</span></div><div class="due-r"><b>${s(z(e.amountMinor,e.currency))}</b><span class="pill ${t.tone}">${s(t.text)}</span></div></a></li>`}var ia=e=>e?`${e} thing${e===1?" needs":"s need"} you.`:"Nothing needs you right now.",ra=`<div class="attn-empty">${j({icon:"shieldCheck",title:"All caught up",text:`Nothing to approve and no invoices due in the next ${ht} days.`})}</div>`;function yn(e){return`<li class="ap" data-row="${s(e.id)}">
+    <div class="bud-sub"><span>${e.category.toLowerCase()===e.name.toLowerCase()?"":s(e.category)}</span>${a?`<span class="over-l">${u("alert",12,2.4)}${s(T(e.spentUsdMinor-e.limitUsdMinor,{cents:!1}))} over</span>`:`<span>${Math.round(t)}% used</span>`}</div>
+  </li>`}var Lt=14;function as(e){let t=Ee(e.dueDate);return`<li><a href="/app/documents/${s(e.id)}"><div><b>${s(e.counterparty||e.title||e.filename)}</b><span>${s(e.title||e.filename)}</span></div><div class="due-r"><b>${s(G(e.amountMinor,e.currency))}</b><span class="pill ${t.tone}">${s(t.text)}</span></div></a></li>`}var Ia=e=>e?`${e} thing${e===1?" needs":"s need"} you.`:"Nothing needs you right now.",Ba=`<div class="attn-empty">${R({icon:"shieldCheck",title:"All caught up",text:`Nothing to approve and no invoices due in the next ${Lt} days.`})}</div>`;function ns(e){return`<li class="ap" data-row="${s(e.id)}">
     ${te(e.payeeName)}
     <a class="ap-who" href="/app/payments?id=${s(e.id)}"><b>${s(e.payeeName)}</b><span>${s(e.reason)}</span></a>
-    <div class="ap-amt"><b>${s(z(e.amountMinor,e.currency))}</b><span>${e.requestedBy==="agent"?"Agent":"You"} \xB7 ${s(e.rail==="cardano_preprod"?"Preprod testnet":e.rail==="cashxchain"?"Sandbox":"Manual")}</span></div>
-    <span class="decide"><button type="button" class="btn ghost xs" data-act="reject" data-pid="${s(e.id)}" aria-label="Reject payment to ${s(e.payeeName)}">${p("x",14,2.4)}</button><button type="button" class="btn primary xs" data-act="approve" data-pid="${s(e.id)}">${p("check",14,2.6)}Approve</button></span>
-  </li>`}async function la(e,t){let a=q.me?.user.name?.split(" ")[0],n=new Date().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"});e.innerHTML=`
-  <header class="page-head"><div class="page-title"><h1>${s(oa())}${a?`, ${s(a)}`:""}</h1><p>${s(n)} \xB7 <span id="ov-needs">Here is where your business stands.</span></p></div>
-    <div class="page-actions"><a class="btn ghost sm" href="/app/documents">${p("upload",16)}Upload</a><span id="ov-agent"></span></div></header>
+    <div class="ap-amt"><b>${s(G(e.amountMinor,e.currency))}</b><span>${e.requestedBy==="agent"?"Agent":"You"} \xB7 ${s(e.rail==="cardano_preprod"?"Preprod testnet":e.rail==="cashxchain"?"Sandbox":"Manual")}</span></div>
+    <span class="decide"><button type="button" class="btn ghost xs" data-act="reject" data-pid="${s(e.id)}" aria-label="Reject payment to ${s(e.payeeName)}">${u("x",14,2.4)}</button><button type="button" class="btn primary xs" data-act="approve" data-pid="${s(e.id)}">${u("check",14,2.6)}Approve</button></span>
+  </li>`}async function Na(e,t){let a=q.me?.user.name?.split(" ")[0],n=new Date().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"});e.innerHTML=`
+  <header class="page-head"><div class="page-title"><h1>${s(Ua())}${a?`, ${s(a)}`:""}</h1><p>${s(n)} \xB7 <span id="ov-needs">Here is where your business stands.</span></p></div>
+    <div class="page-actions"><a class="btn ghost sm" href="/app/documents">${u("upload",16)}Upload</a><span id="ov-agent"></span></div></header>
   <form class="ask reveal" id="ask">
-    <span class="ask-ic">${p("sparkle",20)}</span>
+    <span class="ask-ic">${u("sparkle",20)}</span>
     <input id="ask-in" name="q" autocomplete="off" placeholder="Ask your AI CFO anything about your money\u2026" aria-label="Ask your AI CFO">
-    <button class="btn primary sm" type="submit">Ask${p("arrowRight",15,2.2)}</button>
-    <div class="ask-chips">${un.map(E=>`<button type="button" class="opt" data-q="${s(E)}">${s(E)}</button>`).join("")}</div>
+    <button class="btn primary sm" type="submit">Ask${u("arrowRight",15,2.2)}</button>
+    <div class="ask-chips">${es.map(E=>`<button type="button" class="opt" data-q="${s(E)}">${s(E)}</button>`).join("")}</div>
   </form>
   <div id="ov-body">
-    <section class="today">${Array.from({length:3},()=>`<div class="today-item">${I("50%",12)}<div style="height:10px"></div>${I("70%",24)}</div>`).join("")}</section>
-    <section class="ov-grid">${me(340)}${me(340)}</section>
-  </div>`,e.querySelector("#ask").addEventListener("submit",E=>{E.preventDefault();let $=(e.querySelector("#ask-in").value||"").trim();$?Ee($):e.querySelector("#ask-in").focus()});for(let E of e.querySelectorAll("[data-q]"))E.addEventListener("click",()=>Ee(E.dataset.q));a||U("/api/v1/me",!0).then(E=>{let $=E.user.name?.split(" ")[0],w=e.querySelector(".page-head h1");$&&w&&t.alive()&&(w.textContent=`${oa()}, ${$}`)}).catch(()=>{});let[o,l]=await Promise.all([U("/api/v1/overview"),U("/api/v1/forecast?days=90",!0).catch(()=>null)]);if(!t.alive())return;let d=e.querySelector("#ov-body"),r=o.cash.connections.length===0&&o.documents.total===0,c=o.agent,u=o.monthly[o.monthly.length-1],y=o.spendByCategory.reduce((E,$)=>E+$.usdMinor,0),h=o.approvals.payments.reduce((E,$)=>E+$.usdMinor,0),m=o.payables.upcoming.filter(E=>{let $=Ze(E.dueDate);return $!=null&&$<=ht}),v=o.approvals.count+m.length,b=o.payables.upcoming.find(E=>E.dueDate);e.querySelector("#ov-needs").textContent=ia(v);let C=c.limits.monthlyUsdMinor?Math.min(100,c.executedThisMonthUsdMinor/c.limits.monthlyUsdMinor*100):0;e.querySelector("#ov-agent").outerHTML=`<a class="agent-chip a-${c.autonomy}" href="/app/agent" title="What your agent may do on its own"><i></i><b>${s(K[c.autonomy].name)}</b><span>${c.autonomy==="read_only"?"drafts only":`${s(T(c.executedThisMonthUsdMinor,{cents:!1}))} of ${s(T(c.limits.monthlyUsdMinor,{cents:!1}))}`}</span>${c.autonomy==="read_only"?"":`<span class="chip-meter ${C>=90?"hot":""}"><i style="width:${C.toFixed(1)}%"></i></span>`}</a>`;let x=r?`<section class="card onboard reveal"><div class="onboard-head"><h2>Set up your AI CFO</h2><p class="muted">Three steps and your AI CFO has the full picture. It reads; code enforces your rules; you approve what moves.</p></div>
+    <section class="today">${Array.from({length:3},()=>`<div class="today-item">${U("50%",12)}<div style="height:10px"></div>${U("70%",24)}</div>`).join("")}</section>
+    <section class="ov-grid">${fe(340)}${fe(340)}</section>
+  </div>`,e.querySelector("#ask").addEventListener("submit",E=>{E.preventDefault();let w=(e.querySelector("#ask-in").value||"").trim();w?Ae(w):e.querySelector("#ask-in").focus()});for(let E of e.querySelectorAll("[data-q]"))E.addEventListener("click",()=>Ae(E.dataset.q));a||N("/api/v1/me",!0).then(E=>{let w=E.user.name?.split(" ")[0],$=e.querySelector(".page-head h1");w&&$&&t.alive()&&($.textContent=`${Ua()}, ${w}`)}).catch(()=>{});let[o,i]=await Promise.all([N("/api/v1/overview"),N("/api/v1/forecast?days=90",!0).catch(()=>null)]);if(!t.alive())return;let l=e.querySelector("#ov-body"),c=o.cash.connections.length===0&&o.documents.total===0,d=o.agent,p=o.monthly[o.monthly.length-1],h=o.spendByCategory.reduce((E,w)=>E+w.usdMinor,0),f=o.approvals.payments.reduce((E,w)=>E+w.usdMinor,0),m=o.payables.upcoming.filter(E=>{let w=st(E.dueDate);return w!=null&&w<=Lt}),b=o.approvals.count+m.length,v=o.payables.upcoming.find(E=>E.dueDate);e.querySelector("#ov-needs").textContent=Ia(b);let x=d.limits.monthlyUsdMinor?Math.min(100,d.executedThisMonthUsdMinor/d.limits.monthlyUsdMinor*100):0;e.querySelector("#ov-agent").outerHTML=`<a class="agent-chip a-${d.autonomy}" href="/app/agent" title="What your agent may do on its own"><i></i><b>${s(X[d.autonomy].name)}</b><span>${d.autonomy==="read_only"?"drafts only":`${s(T(d.executedThisMonthUsdMinor,{cents:!1}))} of ${s(T(d.limits.monthlyUsdMinor,{cents:!1}))}`}</span>${d.autonomy==="read_only"?"":`<span class="chip-meter ${x>=90?"hot":""}"><i style="width:${x.toFixed(1)}%"></i></span>`}</a>`;let k=c?`<section class="card onboard reveal"><div class="onboard-head"><h2>Set up your AI CFO</h2><p class="muted">Three steps and your AI CFO has the full picture. It reads; code enforces your rules; you approve what moves.</p></div>
       <ol class="steps">
-        <li><a href="/app/connections"><span class="step-n">1</span><span class="step-ic">${p("wallet",20)}</span><b>Connect a wallet or account</b><span>Add your own Cardano wallet or your CashXChain sandbox account (API key).</span><em>Connect${p("arrowRight",14,2.2)}</em></a></li>
-        <li><a href="/app/documents"><span class="step-n">2</span><span class="step-ic">${p("upload",20)}</span><b>Upload financial documents</b><span>Invoices, receipts, bank statements, contracts. PDFs, photos, CSV.</span><em>Upload${p("arrowRight",14,2.2)}</em></a></li>
-        <li><a href="/app/agent"><span class="step-n">3</span><span class="step-ic">${p("shield",20)}</span><b>Decide what the agent may do</b><span>Start read-only. Move to guarded with limits when you are ready.</span><em>Review${p("arrowRight",14,2.2)}</em></a></li>
-      </ol></section>`:"",L=o.cash.connections.length;d.innerHTML=`${x}
+        <li><a href="/app/connections"><span class="step-n">1</span><span class="step-ic">${u("wallet",20)}</span><b>Connect your agent wallet and accounts</b><span>Your agent wallet (recovery phrase) pays on Cardano; add your CashXChain sandbox account (API key) for fiat.</span><em>Connect${u("arrowRight",14,2.2)}</em></a></li>
+        <li><a href="/app/documents"><span class="step-n">2</span><span class="step-ic">${u("upload",20)}</span><b>Upload financial documents</b><span>Invoices, receipts, bank statements, contracts. PDFs, photos, CSV.</span><em>Upload${u("arrowRight",14,2.2)}</em></a></li>
+        <li><a href="/app/agent"><span class="step-n">3</span><span class="step-ic">${u("shield",20)}</span><b>Decide what the agent may do</b><span>Start read-only. Move to guarded with limits when you are ready.</span><em>Review${u("arrowRight",14,2.2)}</em></a></li>
+      </ol></section>`:"",L=o.cash.connections.length;l.innerHTML=`${k}
   <section class="today reveal" aria-label="Today">
-    <a class="today-item" href="/app/connections"><span class="label">${p("wallet",14)}Cash position</span><b>${s(T(o.cash.totalUsdMinor,{cents:!1}))}</b><span class="sub">${L?`across ${L} connection${L===1?"":"s"} \xB7 indicative USD`:"No connections yet"}</span></a>
-    <a class="today-item ${o.approvals.count?"attn":""}" href="/app/payments" id="today-appr"><span class="label">${p("shieldCheck",14)}To approve</span><b>${o.approvals.count}</b><span class="sub">${o.approvals.count?`${s(T(h,{cents:!1}))} waiting for you`:"You're all caught up"}</span></a>
-    <a class="today-item" href="/app/documents"><span class="label">${p("calendar",14)}Payables open</span><b>${s(T(o.payables.totalUsdMinor,{cents:!1}))}</b><span class="sub">${o.payables.count?`${o.payables.count} unpaid${b?` \xB7 next ${s(F(b.dueDate))}`:""}`:"No open invoices"}</span></a>
+    <a class="today-item" href="/app/connections"><span class="label">${u("wallet",14)}Cash position</span><b>${s(T(o.cash.totalUsdMinor,{cents:!1}))}</b><span class="sub">${L?`across ${L} connection${L===1?"":"s"} \xB7 indicative USD`:"No connections yet"}</span></a>
+    <a class="today-item ${o.approvals.count?"attn":""}" href="/app/payments" id="today-appr"><span class="label">${u("shieldCheck",14)}To approve</span><b>${o.approvals.count}</b><span class="sub">${o.approvals.count?`${s(T(f,{cents:!1}))} waiting for you`:"You're all caught up"}</span></a>
+    <a class="today-item" href="/app/documents"><span class="label">${u("calendar",14)}Payables open</span><b>${s(T(o.payables.totalUsdMinor,{cents:!1}))}</b><span class="sub">${o.payables.count?`${o.payables.count} unpaid${v?` \xB7 next ${s(F(v.dueDate))}`:""}`:"No open invoices"}</span></a>
   </section>
 
   <section class="ov-grid">
@@ -330,39 +2382,39 @@ var fa={"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"},s=e=>String(
           <button type="button" role="tab" data-tab="cat" aria-selected="false" aria-controls="tab-cat" tabindex="-1">By category</button>
         </div></div>
       <div class="tab-panel" id="tab-fc" role="tabpanel">
-        ${l?'<div class="fc-legend"><span class="lg-in">Inflow</span><span class="lg-out">Outflow</span></div>':""}
+        ${i?'<div class="fc-legend"><span class="lg-in">Inflow</span><span class="lg-out">Outflow</span></div>':""}
         <div class="chart-wrap"><div class="chart" id="fc-chart"></div></div>
-        ${l&&l.events.length?`<ul class="events">${l.events.slice(0,4).map(E=>`<li>${E.documentId?`<a href="/app/documents/${s(E.documentId)}">`:"<span>"}<em class="${E.usdMinor<0?"out":"in"}"></em><span class="ev-d">${s(F(E.date))}</span><span class="ev-l">${s(E.label)}</span><b>${s(T(E.usdMinor,{sign:!0,cents:!1}))}</b>${E.documentId?"</a>":"</span>"}</li>`).join("")}</ul>`:""}
+        ${i&&i.events.length?`<ul class="events">${i.events.slice(0,4).map(E=>`<li>${E.documentId?`<a href="/app/documents/${s(E.documentId)}">`:"<span>"}<em class="${E.usdMinor<0?"out":"in"}"></em><span class="ev-d">${s(F(E.date))}</span><span class="ev-l">${s(E.label)}</span><b>${s(T(E.usdMinor,{sign:!0,cents:!1}))}</b>${E.documentId?"</a>":"</span>"}</li>`).join("")}</ul>`:""}
       </div>
       <div class="tab-panel" id="tab-io" role="tabpanel" hidden>
         <div class="fc-legend"><span class="lg-bin">In</span><span class="lg-bout">Out</span></div>
         <div class="chart" id="io-chart"></div>
       </div>
       <div class="tab-panel" id="tab-cat" role="tabpanel" hidden>
-        ${o.spendByCategory.length?Ut(o.spendByCategory):j({icon:"budget",title:"No spending this month",text:"Upload receipts and statements and the agent categorises them for you."})}
-        <a class="link-sm cat-more" href="/app/budgets">Budgets &amp; categories${p("chevron",14)}</a>
+        ${o.spendByCategory.length?Gt(o.spendByCategory):R({icon:"budget",title:"No spending this month",text:"Upload receipts and statements and the agent categorises them for you."})}
+        <a class="link-sm cat-more" href="/app/budgets">Budgets &amp; categories${u("chevron",14)}</a>
       </div>
     </div>
     <div class="card attn-card reveal" style="--d:120ms">
-      <div class="card-head"><h2>Needs your attention</h2><a class="link-sm" href="/app/payments">All payments${p("chevron",14)}</a></div>
-      <div id="ov-attn">${v?"":ra}
-        ${o.approvals.payments.length?`<div class="attn-group" id="attn-appr"><div class="attn-label">To approve</div><ul class="ap-list" id="ov-appr">${o.approvals.payments.slice(0,4).map(yn).join("")}</ul></div>`:""}
-        ${m.length?`<div class="attn-group"><div class="attn-label">Due in the next ${ht} days</div><ul class="due-list">${m.slice(0,4).map(hn).join("")}</ul></div>`:""}
+      <div class="card-head"><h2>Needs your attention</h2><a class="link-sm" href="/app/payments">All payments${u("chevron",14)}</a></div>
+      <div id="ov-attn">${b?"":Ba}
+        ${o.approvals.payments.length?`<div class="attn-group" id="attn-appr"><div class="attn-label">To approve</div><ul class="ap-list" id="ov-appr">${o.approvals.payments.slice(0,4).map(ns).join("")}</ul></div>`:""}
+        ${m.length?`<div class="attn-group"><div class="attn-label">Due in the next ${Lt} days</div><ul class="due-list">${m.slice(0,4).map(as).join("")}</ul></div>`:""}
       </div>
     </div>
   </section>
 
   <section class="ov-grid even">
     <div class="card reveal">
-      <div class="card-head"><h2>Budgets</h2><a class="link-sm" href="/app/budgets">Plan${p("chevron",14)}</a></div>
-      ${o.budgets.length?`<ul class="bud-list">${o.budgets.slice(0,4).map(mn).join("")}</ul>`:j({icon:"budget",title:"No budgets yet",text:"Set monthly limits per category. The agent warns you before you go over.",action:`<a class="btn ghost sm" href="/app/budgets">${p("plus",15,2.4)}Create a budget</a>`})}
+      <div class="card-head"><h2>Budgets</h2><a class="link-sm" href="/app/budgets">Plan${u("chevron",14)}</a></div>
+      ${o.budgets.length?`<ul class="bud-list">${o.budgets.slice(0,4).map(ts).join("")}</ul>`:R({icon:"budget",title:"No budgets yet",text:"Set monthly limits per category. The agent warns you before you go over.",action:`<a class="btn ghost sm" href="/app/budgets">${u("plus",15,2.4)}Create a budget</a>`})}
     </div>
     <div class="card reveal">
-      <div class="card-head"><h2>Cash by connection</h2><a class="link-sm" href="/app/connections">Manage${p("chevron",14)}</a></div>
-      ${L?`<ul class="conn-mini">${o.cash.connections.map(E=>`<li><span class="cm-ic">${p("wallet",16)}</span><div><b>${s(E.label)}</b><span title="${s(E.balances.map(xe).join(" \xB7 "))}">${E.balances.map($=>s(xe($))).join(" \xB7 ")||"No balance"}</span></div><b class="num">${s(T(E.usdMinor,{cents:!1}))}</b></li>`).join("")}</ul>`:j({icon:"link",title:"Connect your first wallet",text:"Your AI CFO needs at least one connection to see your cash.",action:`<a class="btn primary sm" href="/app/connections">${p("plus",15,2.4)}Add connection</a>`})}
+      <div class="card-head"><h2>Cash by connection</h2><a class="link-sm" href="/app/connections">Manage${u("chevron",14)}</a></div>
+      ${L?`<ul class="conn-mini">${o.cash.connections.map(E=>`<li><span class="cm-ic">${u("wallet",16)}</span><div><b>${s(E.label)}</b><span title="${s(E.balances.map(Le).join(" \xB7 "))}">${E.balances.map(w=>s(Le(w))).join(" \xB7 ")||"No balance"}</span></div><b class="num">${s(T(E.usdMinor,{cents:!1}))}</b></li>`).join("")}</ul>`:R({icon:"link",title:"Connect your first wallet",text:"Your AI CFO needs at least one connection to see your cash.",action:`<a class="btn primary sm" href="/app/connections">${u("plus",15,2.4)}Add connection</a>`})}
     </div>
   </section>
-  ${o.documents.processing?`<p class="fine center">${p("clock",13)} ${o.documents.processing} document${o.documents.processing===1?" is":"s are"} still being read. Figures update when ${o.documents.processing===1?"it is":"they are"} done.</p>`:""}`;let A=u?u.inUsdMinor-u.outUsdMinor:0,f={fc:`Next ${l?.days??90} days from balances and open invoices`,io:`Last 6 months, indicative USD${u?` \xB7 ${s(le(u.month,!0))} net <b class="${A<0?"neg":"pos"}">${s(T(A,{sign:!0,cents:!1}))}</b>`:""}`,cat:`This month \xB7 ${s(T(y,{cents:!1}))} out`},g=e.querySelector("#cash-sub"),M=new Set,H=E=>{if(!M.has(E))if(M.add(E),E==="fc"){let $=e.querySelector("#fc-chart");if(l){let w=Fe(l);t.onCleanup(Ae($,w.draw,w.wire))}else $.innerHTML='<div class="chart-empty">Forecast unavailable right now.</div>'}else E==="io"&&t.onCleanup(Ae(e.querySelector("#io-chart"),It(o.monthly)))},k=[...e.querySelectorAll(".cash-card [role=tab]")],P=(E,$=!1)=>{for(let w of k){let D=w.dataset.tab===E;w.setAttribute("aria-selected",String(D)),w.tabIndex=D?0:-1,e.querySelector(`#tab-${w.dataset.tab}`).hidden=!D,D&&$&&w.focus()}g.innerHTML=f[E]??"",H(E)};for(let E of k)E.addEventListener("click",()=>P(E.dataset.tab)),E.addEventListener("keydown",$=>{if($.key!=="ArrowRight"&&$.key!=="ArrowLeft")return;$.preventDefault();let w=k.indexOf(E)+($.key==="ArrowRight"?1:-1);P(k[(w+k.length)%k.length].dataset.tab,!0)});P("fc");let Y=e.querySelector("#ov-appr"),V=o.approvals.count;Y?.addEventListener("click",async E=>{let $=E.target.closest("[data-act]");if(!$)return;let w=$.closest(".ap");for(let D of w.querySelectorAll("button"))D.disabled=!0;$.classList.add("loading");try{await ut($.dataset.pid,$.dataset.act),V=Math.max(0,V-1),v=Math.max(0,v-1),e.querySelector("#ov-needs").textContent=ia(v);let D=e.querySelector("#today-appr");D&&(D.querySelector("b").textContent=String(V),V||(D.classList.remove("attn"),D.querySelector(".sub").textContent="You're all caught up")),w.classList.add("leaving"),window.setTimeout(()=>{if(w.remove(),Y.querySelector(".ap"))return;if(V){Y.innerHTML=`<li class="list-empty"><a class="link-sm" href="/app/payments">${V} more waiting${p("chevron",14)}</a></li>`;return}e.querySelector("#attn-appr")?.remove();let X=e.querySelector("#ov-attn");X.querySelector(".attn-group")||(X.innerHTML=ra)},280)}catch{for(let D of w.querySelectorAll("button"))D.disabled=!1;$.classList.remove("loading")}})}function gn(e){let t=[];return e.cardanoAddress&&t.push('<span class="rail-tag ada">Cardano</span>'),e.iban&&t.push('<span class="rail-tag">IBAN</span>'),e.accountNumber&&t.push('<span class="rail-tag">US account</span>'),t.join("")||'<span class="muted small">No payout details</span>'}async function ca(e){let t=null,a=e;return await Z({title:a?`Edit ${a.name}`:"Add payee",submit:a?"Save payee":"Add payee",wide:!0,body:`<div class="grid2">
+  ${o.documents.processing?`<p class="fine center">${u("clock",13)} ${o.documents.processing} document${o.documents.processing===1?" is":"s are"} still being read. Figures update when ${o.documents.processing===1?"it is":"they are"} done.</p>`:""}`;let A=p?p.inUsdMinor-p.outUsdMinor:0,g={fc:`Next ${i?.days??90} days from balances and open invoices`,io:`Last 6 months, indicative USD${p?` \xB7 ${s(le(p.month,!0))} net <b class="${A<0?"neg":"pos"}">${s(T(A,{sign:!0,cents:!1}))}</b>`:""}`,cat:`This month \xB7 ${s(T(h,{cents:!1}))} out`},y=e.querySelector("#cash-sub"),C=new Set,H=E=>{if(!C.has(E))if(C.add(E),E==="fc"){let w=e.querySelector("#fc-chart");if(i){let $=_e(i);t.onCleanup(He(w,$.draw,$.wire))}else w.innerHTML='<div class="chart-empty">Forecast unavailable right now.</div>'}else E==="io"&&t.onCleanup(He(e.querySelector("#io-chart"),Yt(o.monthly)))},M=[...e.querySelectorAll(".cash-card [role=tab]")],P=(E,w=!1)=>{for(let $ of M){let D=$.dataset.tab===E;$.setAttribute("aria-selected",String(D)),$.tabIndex=D?0:-1,e.querySelector(`#tab-${$.dataset.tab}`).hidden=!D,D&&w&&$.focus()}y.innerHTML=g[E]??"",H(E)};for(let E of M)E.addEventListener("click",()=>P(E.dataset.tab)),E.addEventListener("keydown",w=>{if(w.key!=="ArrowRight"&&w.key!=="ArrowLeft")return;w.preventDefault();let $=M.indexOf(E)+(w.key==="ArrowRight"?1:-1);P(M[($+M.length)%M.length].dataset.tab,!0)});P("fc");let z=e.querySelector("#ov-appr"),K=o.approvals.count;z?.addEventListener("click",async E=>{let w=E.target.closest("[data-act]");if(!w)return;let $=w.closest(".ap");for(let D of $.querySelectorAll("button"))D.disabled=!0;w.classList.add("loading");try{await kt(w.dataset.pid,w.dataset.act),K=Math.max(0,K-1),b=Math.max(0,b-1),e.querySelector("#ov-needs").textContent=Ia(b);let D=e.querySelector("#today-appr");D&&(D.querySelector("b").textContent=String(K),K||(D.classList.remove("attn"),D.querySelector(".sub").textContent="You're all caught up")),$.classList.add("leaving"),window.setTimeout(()=>{if($.remove(),z.querySelector(".ap"))return;if(K){z.innerHTML=`<li class="list-empty"><a class="link-sm" href="/app/payments">${K} more waiting${u("chevron",14)}</a></li>`;return}e.querySelector("#attn-appr")?.remove();let Y=e.querySelector("#ov-attn");Y.querySelector(".attn-group")||(Y.innerHTML=Ba)},280)}catch{for(let D of $.querySelectorAll("button"))D.disabled=!1;w.classList.remove("loading")}})}function ss(e){let t=[];return e.cardanoAddress&&t.push('<span class="rail-tag ada">Cardano</span>'),e.iban&&t.push('<span class="rail-tag">IBAN</span>'),e.accountNumber&&t.push('<span class="rail-tag">US account</span>'),t.join("")||'<span class="muted small">No payout details</span>'}async function qa(e){let t=null,a=e;return await Z({title:a?`Edit ${a.name}`:"Add payee",submit:a?"Save payee":"Add payee",wide:!0,body:`<div class="grid2">
         <div class="field"><label for="p-name">Name</label><input id="p-name" name="name" value="${s(a?.name??"")}" placeholder="Acme GmbH" autocomplete="off"></div>
         <div class="field"><label for="p-country">Country <span class="opt-l">ISO code</span></label><input id="p-country" name="country" maxlength="2" value="${s(a?.country??"")}" placeholder="DE"></div>
       </div>
@@ -381,30 +2433,30 @@ var fa={"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"},s=e=>String(
       </fieldset>
       <fieldset class="fs"><legend>Cardano Preprod (testnet)</legend>
         <div class="field"><label for="p-ada">Address</label><input id="p-ada" name="cardanoAddress" class="mono" value="${s(a?.cardanoAddress??"")}" placeholder="addr_test1\u2026" autocomplete="off"></div>
-      </fieldset>`,onSubmit:async n=>{let i=N(n,"name");if(!i)return B(n,"name","Enter the payee's name.");let o=N(n,"country").toUpperCase();if(o&&!/^[A-Z]{2}$/.test(o))return B(n,"country","Use a two-letter country code, e.g. DE or US.");let l=N(n,"iban").replace(/\s+/g,"").toUpperCase();if(l&&!/^[A-Z]{2}\d{2}[A-Z0-9]{8,30}$/.test(l))return B(n,"iban","This does not look like an IBAN.");let d=N(n,"bic").toUpperCase();if(d&&!/^[A-Z0-9]{8}([A-Z0-9]{3})?$/.test(d))return B(n,"bic","BIC has 8 or 11 characters.");let r=N(n,"routingNumber");if(r&&!/^\d{9}$/.test(r))return B(n,"routingNumber","Routing numbers have 9 digits.");let c=N(n,"accountNumber");if(c&&!/^\d{4,17}$/.test(c))return B(n,"accountNumber","Use 4 to 17 digits.");let u=N(n,"cardanoAddress");if(u&&!/^addr_test1[0-9a-z]{20,}$/.test(u))return B(n,"cardanoAddress","Use a Cardano Preprod address (addr_test1\u2026).");let y=N(n,"accountType"),h={name:i},m=(v,b)=>{b?h[v]=b:a&&a[v]&&(h[v]="")};return m("country",o),m("iban",l),m("bic",d),m("routingNumber",r),m("accountNumber",c),m("accountType",y),m("cardanoAddress",u),t=a?await J(`/api/v1/payees/${encodeURIComponent(a.id)}`,h):await O("/api/v1/payees",h),S(a?"Payee saved":`${i} added to your payees`,"ok"),!0}}),t}async function da(e,t){let a=[],n="",i=q.me?.workspace.limits.knownPayeesOnly??!0;e.innerHTML=`${_("Payees","Who your business pays, and where.",`<button class="btn primary sm" type="button" id="p-new">${p("plus",16,2.4)}Add payee</button>`)}
-    <div class="callout info">${p("shieldCheck",16)}<span><b>The agent only pays payees in this directory.</b> In guarded mode${i?"":" (when \u201Cknown payees only\u201D is on)"}, any payment to someone not listed here is stopped and waits for your approval. Adding a payee is always a human decision. <a href="/app/agent">Agent access settings</a></span></div>
+      </fieldset>`,onSubmit:async n=>{let r=B(n,"name");if(!r)return I(n,"name","Enter the payee's name.");let o=B(n,"country").toUpperCase();if(o&&!/^[A-Z]{2}$/.test(o))return I(n,"country","Use a two-letter country code, e.g. DE or US.");let i=B(n,"iban").replace(/\s+/g,"").toUpperCase();if(i&&!/^[A-Z]{2}\d{2}[A-Z0-9]{8,30}$/.test(i))return I(n,"iban","This does not look like an IBAN.");let l=B(n,"bic").toUpperCase();if(l&&!/^[A-Z0-9]{8}([A-Z0-9]{3})?$/.test(l))return I(n,"bic","BIC has 8 or 11 characters.");let c=B(n,"routingNumber");if(c&&!/^\d{9}$/.test(c))return I(n,"routingNumber","Routing numbers have 9 digits.");let d=B(n,"accountNumber");if(d&&!/^\d{4,17}$/.test(d))return I(n,"accountNumber","Use 4 to 17 digits.");let p=B(n,"cardanoAddress");if(p&&!/^addr_test1[0-9a-z]{20,}$/.test(p))return I(n,"cardanoAddress","Use a Cardano Preprod address (addr_test1\u2026).");let h=B(n,"accountType"),f={name:r},m=(b,v)=>{v?f[b]=v:a&&a[b]&&(f[b]="")};return m("country",o),m("iban",i),m("bic",l),m("routingNumber",c),m("accountNumber",d),m("accountType",h),m("cardanoAddress",p),t=a?await J(`/api/v1/payees/${encodeURIComponent(a.id)}`,f):await O("/api/v1/payees",f),S(a?"Payee saved":`${r} added to your payees`,"ok"),!0}}),t}async function ja(e,t){let a=[],n="",r=q.me?.workspace.limits.knownPayeesOnly??!0;e.innerHTML=`${_("Payees","Who your business pays, and where.",`<button class="btn primary sm" type="button" id="p-new">${u("plus",16,2.4)}Add payee</button>`)}
+    <div class="callout info">${u("shieldCheck",16)}<span><b>The agent only pays payees in this directory.</b> In guarded mode${r?"":" (when \u201Cknown payees only\u201D is on)"}, any payment to someone not listed here is stopped and waits for your approval. Adding a payee is always a human decision. <a href="/app/agent">Agent access settings</a></span></div>
     <section class="card list-card">
-      <div class="list-head"><span class="count" id="p-count"></span><label class="search">${p("search",16)}<input id="p-q" placeholder="Search payees" aria-label="Search payees"></label></div>
-      <div id="p-list"><div class="pad">${G(5)}</div></div>
-    </section>`;let o=e.querySelector("#p-list"),l=()=>{e.querySelector("#p-count").textContent=`${a.length} payee${a.length===1?"":"s"}`;let d=n.toLowerCase(),r=a.filter(c=>!d||[c.name,c.iban,c.cardanoAddress,c.country].some(u=>u?.toLowerCase().includes(d)));if(!a.length){o.innerHTML=j({icon:"payees",title:"No payees yet",text:"Add the suppliers, contractors and employees you pay. In guarded mode the agent can only pay people listed here.",action:`<button class="btn primary sm" type="button" data-new>${p("plus",15,2.4)}Add your first payee</button>`});return}if(!r.length){o.innerHTML=j({icon:"search",title:"No matches",text:"Try another name, IBAN or address."});return}o.innerHTML=`<ul class="payee-list">${r.map(c=>`<li>
-        ${te(c.name)}
-        <div class="pe-who"><b>${s(c.name)}</b><span>${c.country?`${s(c.country)} \xB7 `:""}added ${s(F(c.createdAt))}</span></div>
+      <div class="list-head"><span class="count" id="p-count"></span><label class="search">${u("search",16)}<input id="p-q" placeholder="Search payees" aria-label="Search payees"></label></div>
+      <div id="p-list"><div class="pad">${V(5)}</div></div>
+    </section>`;let o=e.querySelector("#p-list"),i=()=>{e.querySelector("#p-count").textContent=`${a.length} payee${a.length===1?"":"s"}`;let l=n.toLowerCase(),c=a.filter(d=>!l||[d.name,d.iban,d.cardanoAddress,d.country].some(p=>p?.toLowerCase().includes(l)));if(!a.length){o.innerHTML=R({icon:"payees",title:"No payees yet",text:"Add the suppliers, contractors and employees you pay. In guarded mode the agent can only pay people listed here.",action:`<button class="btn primary sm" type="button" data-new>${u("plus",15,2.4)}Add your first payee</button>`});return}if(!c.length){o.innerHTML=R({icon:"search",title:"No matches",text:"Try another name, IBAN or address."});return}o.innerHTML=`<ul class="payee-list">${c.map(d=>`<li>
+        ${te(d.name)}
+        <div class="pe-who"><b>${s(d.name)}</b><span>${d.country?`${s(d.country)} \xB7 `:""}added ${s(F(d.createdAt))}</span></div>
         <div class="pe-details">
-          ${c.iban?`<span class="mono">${s(c.iban.replace(/(.{4})/g,"$1 ").trim())}${c.bic?` \xB7 ${s(c.bic)}`:""}</span>`:""}
-          ${c.accountNumber?`<span class="mono">ACH ${s(c.routingNumber??"")} \xB7 \u2022\u2022${s(c.accountNumber.slice(-4))}${c.accountType?` \xB7 ${s(c.accountType)}`:""}</span>`:""}
-          ${c.cardanoAddress?`<span class="mono addr">${s(de(c.cardanoAddress))}<button type="button" class="icon-btn xs" data-copy="${s(c.cardanoAddress)}" aria-label="Copy address">${p("copy",13)}</button></span>`:""}
-          ${!c.iban&&!c.accountNumber&&!c.cardanoAddress?'<span class="muted small">No payout details yet</span>':""}
+          ${d.iban?`<span class="mono">${s(d.iban.replace(/(.{4})/g,"$1 ").trim())}${d.bic?` \xB7 ${s(d.bic)}`:""}</span>`:""}
+          ${d.accountNumber?`<span class="mono">ACH ${s(d.routingNumber??"")} \xB7 \u2022\u2022${s(d.accountNumber.slice(-4))}${d.accountType?` \xB7 ${s(d.accountType)}`:""}</span>`:""}
+          ${d.cardanoAddress?`<span class="mono addr">${s(pe(d.cardanoAddress))}<button type="button" class="icon-btn xs" data-copy="${s(d.cardanoAddress)}" aria-label="Copy address">${u("copy",13)}</button></span>`:""}
+          ${!d.iban&&!d.accountNumber&&!d.cardanoAddress?'<span class="muted small">No payout details yet</span>':""}
         </div>
-        <div class="pe-rails">${gn(c)}</div>
-        <div class="pe-act"><button class="icon-btn" type="button" data-edit="${s(c.id)}" aria-label="Edit ${s(c.name)}">${p("edit",16)}</button><button class="icon-btn danger-h" type="button" data-del="${s(c.id)}" aria-label="Delete ${s(c.name)}">${p("trash",16)}</button></div>
-      </li>`).join("")}</ul>`};e.querySelector("#p-q").addEventListener("input",d=>{n=d.target.value.trim(),l()}),e.addEventListener("click",async d=>{let r=d.target,c=r.closest("[data-copy]");if(c)return void Ie(c.dataset.copy);if(r.closest("#p-new, [data-new]")){let h=await ca(null);h&&t.alive()&&(a.unshift(h),l());return}let u=r.closest("[data-edit]");if(u){let h=a.find(v=>v.id===u.dataset.edit),m=h&&await ca(h);m&&t.alive()&&(a=a.map(v=>v.id===m.id?m:v),l());return}let y=r.closest("[data-del]");if(y){let h=a.find(m=>m.id===y.dataset.del);if(!h||!await ae(`Remove ${h.name}?`,"The agent will no longer be able to pay this payee without your approval. Past payments stay in the audit log.","Remove payee",!0))return;try{await se(`/api/v1/payees/${encodeURIComponent(h.id)}`),a=a.filter(m=>m.id!==h.id),l(),S("Payee removed","ok")}catch{}}}),a=await U("/api/v1/payees"),t.alive()&&(a.sort((d,r)=>d.name.localeCompare(r.name)),l())}async function yt(e,t){e.innerHTML=`${_("Settings","Workspace and account.")}<div class="settings">${[1,2].map(()=>`<div class="card">${I("30%",18)}<div style="height:18px"></div>${I("100%",44,12)}</div>`).join("")}</div>`;let a=await U("/api/v1/me");if(!t.alive())return;q.me=a;let n=a.workspace;e.innerHTML=`${_("Settings","Workspace and account.")}
+        <div class="pe-rails">${ss(d)}</div>
+        <div class="pe-act"><button class="icon-btn" type="button" data-edit="${s(d.id)}" aria-label="Edit ${s(d.name)}">${u("edit",16)}</button><button class="icon-btn danger-h" type="button" data-del="${s(d.id)}" aria-label="Delete ${s(d.name)}">${u("trash",16)}</button></div>
+      </li>`).join("")}</ul>`};e.querySelector("#p-q").addEventListener("input",l=>{n=l.target.value.trim(),i()}),e.addEventListener("click",async l=>{let c=l.target,d=c.closest("[data-copy]");if(d)return void Ne(d.dataset.copy);if(c.closest("#p-new, [data-new]")){let f=await qa(null);f&&t.alive()&&(a.unshift(f),i());return}let p=c.closest("[data-edit]");if(p){let f=a.find(b=>b.id===p.dataset.edit),m=f&&await qa(f);m&&t.alive()&&(a=a.map(b=>b.id===m.id?m:b),i());return}let h=c.closest("[data-del]");if(h){let f=a.find(m=>m.id===h.dataset.del);if(!f||!await ae(`Remove ${f.name}?`,"The agent will no longer be able to pay this payee without your approval. Past payments stay in the audit log.","Remove payee",!0))return;try{await oe(`/api/v1/payees/${encodeURIComponent(f.id)}`),a=a.filter(m=>m.id!==f.id),i(),S("Payee removed","ok")}catch{}}}),a=await N("/api/v1/payees"),t.alive()&&(a.sort((l,c)=>l.name.localeCompare(c.name)),i())}async function Et(e,t){e.innerHTML=`${_("Settings","Workspace and account.")}<div class="settings">${[1,2].map(()=>`<div class="card">${U("30%",18)}<div style="height:18px"></div>${U("100%",44,12)}</div>`).join("")}</div>`;let a=await N("/api/v1/me");if(!t.alive())return;q.me=a;let n=a.workspace;e.innerHTML=`${_("Settings","Workspace and account.")}
   <div class="settings">
     <form class="card" id="ws-form" novalidate>
       <div class="card-head"><h2>Workspace</h2></div>
       <div class="field"><label for="s-name">Workspace name</label><input id="s-name" name="name" value="${s(n.name)}" autocomplete="organization"></div>
       <dl class="kv">
         <dt>Base currency</dt><dd>${s(n.baseCurrency)}</dd>
-        <dt>Agent autonomy</dt><dd><span class="pill ${K[n.autonomy].tone}">${K[n.autonomy].name}</span> <a class="link-sm" href="/app/agent">Change${p("chevron",13)}</a></dd>
+        <dt>Agent autonomy</dt><dd><span class="pill ${X[n.autonomy].tone}">${X[n.autonomy].name}</span> <a class="link-sm" href="/app/agent">Change${u("chevron",13)}</a></dd>
         <dt>Created</dt><dd>${s(F(n.createdAt,!0))}</dd>
         <dt>Workspace ID</dt><dd class="mono">${s(n.id)}</dd>
       </dl>
@@ -414,55 +2466,55 @@ var fa={"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"},s=e=>String(
       <div class="card-head"><h2>Account</h2></div>
       <div class="acct">${te(a.user.name||a.user.email,"lg")}<div class="acct-text"><b>${s(a.user.name||"\u2014")}</b><span>${s(a.user.email)}</span></div></div>
       <dl class="kv acct-kv"><dt>User ID</dt><dd class="mono">${s(a.user.id)}</dd></dl>
-      <div class="form-foot"><span></span><button class="btn ghost sm" type="button" id="s-out">${p("logout",16)}Sign out</button></div>
+      <div class="form-foot"><span></span><button class="btn ghost sm" type="button" id="s-out">${u("logout",16)}Sign out</button></div>
     </section>
-    ${fn(a)}
+    ${os(a)}
     <section class="card">
       <div class="card-head"><h2>Appearance</h2></div>
       <div class="seg wide" role="radiogroup" aria-label="Theme" id="s-theme">
-        <button type="button" role="radio" data-t="light" aria-checked="${Me()==="light"}">${p("sun",15)}Light</button>
-        <button type="button" role="radio" data-t="dark" aria-checked="${Me()==="dark"}">${p("moon",15)}Dark</button>
+        <button type="button" role="radio" data-t="light" aria-checked="${Me()==="light"}">${u("sun",15)}Light</button>
+        <button type="button" role="radio" data-t="dark" aria-checked="${Me()==="dark"}">${u("moon",15)}Dark</button>
       </div>
     </section>
     <section class="card">
       <div class="card-head"><h2>Environment</h2></div>
       <p class="muted small">Payments in this workspace run on <b>Cardano Preprod</b> (testnet, tADA with no real value) and the <b>CashXChain sandbox</b> fiat rail (a test ledger). USD totals use indicative FX rates.</p>
     </section>
-  </div>`;let i=e.querySelector("#ws-form"),o=e.querySelector("#s-save");i.addEventListener("input",()=>o.disabled=N(i,"name")===(q.me?.workspace.name??n.name)),i.addEventListener("submit",async l=>{l.preventDefault();let d=N(i,"name");if(!d)return void B(i,"name","Enter a workspace name.");o.disabled=!0,o.classList.add("loading");try{let r=await J("/api/v1/workspace",{name:d});q.me&&(q.me={...q.me,workspace:r}),ie(),S("Workspace renamed","ok")}catch{o.disabled=!1}finally{o.classList.remove("loading")}}),e.querySelector("#s-out").addEventListener("click",()=>{Re()}),vn(e,t),e.querySelector("#s-theme").addEventListener("click",l=>{let d=l.target.closest("[data-t]");if(d){Je(d.dataset.t);for(let r of e.querySelectorAll("[data-t]"))r.setAttribute("aria-checked",String(r===d))}})}function fn(e){let t=e.signIn?.password??!1,a=t?e.signIn?.codes?"You can sign in with your password or with a code sent to your email.":"You sign in with your password.":"You sign in with a code sent to your email. Add a password only if you also want to sign in with one.";return`<form class="card" id="pw-form" novalidate data-has="${t}">
+  </div>`;let r=e.querySelector("#ws-form"),o=e.querySelector("#s-save");r.addEventListener("input",()=>o.disabled=B(r,"name")===(q.me?.workspace.name??n.name)),r.addEventListener("submit",async i=>{i.preventDefault();let l=B(r,"name");if(!l)return void I(r,"name","Enter a workspace name.");o.disabled=!0,o.classList.add("loading");try{let c=await J("/api/v1/workspace",{name:l});q.me&&(q.me={...q.me,workspace:c}),ie(),S("Workspace renamed","ok")}catch{o.disabled=!1}finally{o.classList.remove("loading")}}),e.querySelector("#s-out").addEventListener("click",()=>{Oe()}),rs(e,t),e.querySelector("#s-theme").addEventListener("click",i=>{let l=i.target.closest("[data-t]");if(l){nt(l.dataset.t);for(let c of e.querySelectorAll("[data-t]"))c.setAttribute("aria-checked",String(c===l))}})}function os(e){let t=e.signIn?.password??!1,a=t?e.signIn?.codes?"You can sign in with your password or with a code sent to your email.":"You sign in with your password.":"You sign in with a code sent to your email. Add a password only if you also want to sign in with one.";return`<form class="card" id="pw-form" novalidate data-has="${t}">
       <div class="card-head"><h2>Password</h2></div>
       <p class="muted small">${s(a)}</p>
       ${t?'<div class="field"><label for="s-pw-cur">Current password</label><input id="s-pw-cur" name="currentPassword" type="password" autocomplete="current-password"></div>':""}
       <div class="field"><label for="s-pw-new">${t?"New password":"Password"}</label><input id="s-pw-new" name="password" type="password" autocomplete="new-password" minlength="8"></div>
       <div class="form-foot"><span class="muted small">At least 8 characters.</span><button class="btn primary sm" type="submit" id="s-pw-save">${t?"Change password":"Add password"}</button></div>
-    </form>`}function vn(e,t){let a=e.querySelector("#pw-form");if(!a)return;let n=a.dataset.has==="true",i=a.querySelector("#s-pw-save");a.addEventListener("submit",async o=>{o.preventDefault();let l=a.elements.namedItem("password").value,d=n?a.elements.namedItem("currentPassword").value:"";if(n&&!d)return void B(a,"currentPassword","Enter your current password.");if(l.length<8)return void B(a,"password","Use at least 8 characters.");i.disabled=!0,i.classList.add("loading");try{await O("/api/v1/me/password",n?{password:l,currentPassword:d}:{password:l}),S(n?"Password changed":"Password added. You can now also sign in with it.","ok"),t.alive()&&await yt(e,t)}catch{i.disabled=!1}finally{i.classList.remove("loading")}})}var bn=[{re:/^\/app\/?$/,title:"Overview",nav:"overview",render:la},{re:/^\/app\/chat(?:\/([^/]+))?\/?$/,title:"Chat",nav:"chat",render:Rt,full:!0},{re:/^\/app\/documents\/([^/]+)\/?$/,title:"Document",nav:"documents",render:sa},{re:/^\/app\/documents\/?$/,title:"Documents",nav:"documents",render:aa},{re:/^\/app\/payments\/?$/,title:"Payments",nav:"payments",render:ea},{re:/^\/app\/budgets\/?$/,title:"Budgets & planning",nav:"budgets",render:Bt},{re:/^\/app\/payees\/?$/,title:"Payees",nav:"payees",render:da},{re:/^\/app\/connections\/?$/,title:"Connections",nav:"connections",render:Gt},{re:/^\/app\/agent\/?$/,title:"Agent access",nav:"agent",render:Pt},{re:/^\/app\/activity\/?$/,title:"Activity",nav:"activity",render:Lt},{re:/^\/app\/settings\/?$/,title:"Settings",nav:"settings",render:yt}],$n=[["overview","/app","home","Overview"],["chat","/app/chat","sparkle","AI CFO chat"],["documents","/app/documents","doc","Documents"],["payments","/app/payments","pay","Payments"],["budgets","/app/budgets","budget","Planning"],["payees","/app/payees","payees","Payees"],["agent","/app/agent","shield","Agent & access"]],pa={agent:"agent",connections:"agent",activity:"agent"},wn=[["agent","/app/agent","Agent"],["connections","/app/connections","Connections"],["activity","/app/activity","Activity"]],ua=(e="")=>`<button class="theme-toggle ${e}" type="button" data-theme-toggle aria-label="Toggle dark mode" aria-pressed="false">
+    </form>`}function rs(e,t){let a=e.querySelector("#pw-form");if(!a)return;let n=a.dataset.has==="true",r=a.querySelector("#s-pw-save");a.addEventListener("submit",async o=>{o.preventDefault();let i=a.elements.namedItem("password").value,l=n?a.elements.namedItem("currentPassword").value:"";if(n&&!l)return void I(a,"currentPassword","Enter your current password.");if(i.length<8)return void I(a,"password","Use at least 8 characters.");r.disabled=!0,r.classList.add("loading");try{await O("/api/v1/me/password",n?{password:i,currentPassword:l}:{password:i}),S(n?"Password changed":"Password added. You can now also sign in with it.","ok"),t.alive()&&await Et(e,t)}catch{r.disabled=!1}finally{r.classList.remove("loading")}})}var is=[{re:/^\/app\/?$/,title:"Overview",nav:"overview",render:Na},{re:/^\/app\/chat(?:\/([^/]+))?\/?$/,title:"Chat",nav:"chat",render:Jt,full:!0},{re:/^\/app\/documents\/([^/]+)\/?$/,title:"Document",nav:"documents",render:Da},{re:/^\/app\/documents\/?$/,title:"Documents",nav:"documents",render:Ha},{re:/^\/app\/payments\/?$/,title:"Payments",nav:"payments",render:Aa},{re:/^\/app\/budgets\/?$/,title:"Budgets & planning",nav:"budgets",render:Kt},{re:/^\/app\/payees\/?$/,title:"Payees",nav:"payees",render:ja},{re:/^\/app\/connections\/?$/,title:"Connections",nav:"connections",render:Ma},{re:/^\/app\/agent\/?$/,title:"Agent access",nav:"agent",render:Wt},{re:/^\/app\/activity\/?$/,title:"Activity",nav:"activity",render:qt},{re:/^\/app\/settings\/?$/,title:"Settings",nav:"settings",render:Et}],cs=[["overview","/app","home","Overview"],["chat","/app/chat","sparkle","AI CFO chat"],["documents","/app/documents","doc","Documents"],["payments","/app/payments","pay","Payments"],["budgets","/app/budgets","budget","Planning"],["payees","/app/payees","payees","Payees"],["agent","/app/agent","shield","Agent & access"]],Fa={agent:"agent",connections:"agent",activity:"agent"},ls=[["agent","/app/agent","Agent"],["connections","/app/connections","Connections"],["activity","/app/activity","Activity"]],Ra=(e="")=>`<button class="theme-toggle ${e}" type="button" data-theme-toggle aria-label="Toggle dark mode" aria-pressed="false">
     <svg class="sun" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
     <svg class="moon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>
-  </button>`,ma='<a class="logo" href="/app"><span class="mark" aria-hidden="true"><svg width="17" height="17" viewBox="0 0 64 64"><path d="M36.3 38.6C36.1 38.6 36.1 38.6 36.5 38.5C37.4 38.3 38.5 37.9 39.3 37.3C40.1 36.7 40.8 35.9 41.2 35.2C41.6 34.5 42 33.5 42.2 32.7C42.5 31.8 42.5 30.6 42.5 28.3C42.4 26.7 42.4 26.5 42.2 25.8C41.9 25.1 41.3 24.1 40.7 23.6C40.2 23.1 39.4 22.6 38.5 22.3C37.6 22 38.3 22 29.8 22C24.2 22 22.2 22 22.1 21.9C20.7 21.5 20 20.8 19.6 19.6C19.5 19.2 19.5 18.6 19.5 15.8C19.5 12.7 19.5 12.6 19.8 12.2C20.1 11.8 20.6 11.4 21.1 11.2C21.3 11.2 23.6 11.2 30 11.2C34.7 11.2 38.8 11.2 39.1 11.2C41.1 11.3 43.5 12.1 45.3 13.2C46.6 14 47.4 14.7 48.5 15.7C50.3 17.5 51.8 20 52.5 22.6C53 24.2 53.1 25.7 53 27.4C53 28.1 52.9 28.6 52.7 29.5C52.5 30.4 52 31.6 51.5 32.5C50.5 34.2 49 35.7 47.4 36.8C47 37 46 37.5 45.7 37.6C45.6 37.7 45.4 37.8 45.3 37.8C44.1 38.3 43 38.5 41.5 38.6C40.9 38.7 36.7 38.7 36.3 38.6Z" fill="#faf8f5"/><path d="M9.7 56.2C9.4 56.1 9.1 55.8 9 55.5C8.9 55.3 8.9 46.1 9 44.8C9 43.8 9.1 42.8 9.2 42.2C9.3 41.7 9.5 41 9.6 40.7C9.6 40.6 9.7 40.4 9.7 40.2C9.8 40 9.8 39.9 9.9 39.8C9.9 39.8 9.9 39.6 10 39.5C10 39.4 10.1 39.2 10.1 39.2C10.1 39.2 10.2 39 10.2 38.9C10.2 38.8 10.3 38.7 10.3 38.6C10.4 38.5 10.4 38.4 10.5 38.3C10.6 38.1 10.8 37.6 10.9 37.4C11.6 36.2 11.8 35.9 12.3 35.2C13.1 34 14.4 32.7 15.4 31.9C16.1 31.4 17 30.7 17.1 30.7C17.1 30.7 17.1 30.7 17.2 30.6C17.3 30.5 17.4 30.4 17.5 30.4C17.6 30.4 17.8 30.2 18 30.1C18.3 30 19.3 29.5 19.7 29.3C19.8 29.3 20 29.2 20.2 29.1C20.4 29 20.6 28.9 20.6 28.9C20.7 28.9 20.8 28.9 20.8 28.9C20.9 28.9 20.9 28.8 21 28.8C21.2 28.8 21.8 28.6 22.2 28.4C22.7 28.3 23.6 28.1 23.9 28.1C23.9 28.1 24.1 28.1 24.1 28.1C24.2 28.1 24.7 28 25.3 28C26.2 27.9 26.8 27.9 34.4 27.9L42.4 27.9L42.5 29C42.5 31.5 42.3 32.9 41.7 34.3C41.3 35 41.1 35.4 40.8 35.9C40.4 36.4 39.8 36.9 39.3 37.3C38.5 37.9 37.4 38.4 36.5 38.5C36.3 38.6 36.1 38.6 36.1 38.6C36 38.6 33.6 38.6 30.7 38.7C26.1 38.7 25.5 38.7 25.2 38.8C24.6 38.9 24.4 39 23.8 39.2C22.1 39.9 20.8 41.1 20.1 42.8C19.8 43.6 19.6 44.2 19.6 45C19.5 46.7 19.4 46.9 19.3 47.5C19.1 48.7 18.8 49.6 18.1 50.8C17.4 52 16.2 53.3 14.9 54.2C14.5 54.5 13.8 54.9 13.2 55.2C12 55.8 10.2 56.3 9.7 56.2Z" fill="#fd7b5d"/></svg></span>PayLorya<span class="tag">AI</span></a>';function Cn(){return`<div class="shell">
+  </button>`,Oa='<a class="logo" href="/app"><span class="mark" aria-hidden="true"><svg width="17" height="17" viewBox="0 0 64 64"><path d="M36.3 38.6C36.1 38.6 36.1 38.6 36.5 38.5C37.4 38.3 38.5 37.9 39.3 37.3C40.1 36.7 40.8 35.9 41.2 35.2C41.6 34.5 42 33.5 42.2 32.7C42.5 31.8 42.5 30.6 42.5 28.3C42.4 26.7 42.4 26.5 42.2 25.8C41.9 25.1 41.3 24.1 40.7 23.6C40.2 23.1 39.4 22.6 38.5 22.3C37.6 22 38.3 22 29.8 22C24.2 22 22.2 22 22.1 21.9C20.7 21.5 20 20.8 19.6 19.6C19.5 19.2 19.5 18.6 19.5 15.8C19.5 12.7 19.5 12.6 19.8 12.2C20.1 11.8 20.6 11.4 21.1 11.2C21.3 11.2 23.6 11.2 30 11.2C34.7 11.2 38.8 11.2 39.1 11.2C41.1 11.3 43.5 12.1 45.3 13.2C46.6 14 47.4 14.7 48.5 15.7C50.3 17.5 51.8 20 52.5 22.6C53 24.2 53.1 25.7 53 27.4C53 28.1 52.9 28.6 52.7 29.5C52.5 30.4 52 31.6 51.5 32.5C50.5 34.2 49 35.7 47.4 36.8C47 37 46 37.5 45.7 37.6C45.6 37.7 45.4 37.8 45.3 37.8C44.1 38.3 43 38.5 41.5 38.6C40.9 38.7 36.7 38.7 36.3 38.6Z" fill="#faf8f5"/><path d="M9.7 56.2C9.4 56.1 9.1 55.8 9 55.5C8.9 55.3 8.9 46.1 9 44.8C9 43.8 9.1 42.8 9.2 42.2C9.3 41.7 9.5 41 9.6 40.7C9.6 40.6 9.7 40.4 9.7 40.2C9.8 40 9.8 39.9 9.9 39.8C9.9 39.8 9.9 39.6 10 39.5C10 39.4 10.1 39.2 10.1 39.2C10.1 39.2 10.2 39 10.2 38.9C10.2 38.8 10.3 38.7 10.3 38.6C10.4 38.5 10.4 38.4 10.5 38.3C10.6 38.1 10.8 37.6 10.9 37.4C11.6 36.2 11.8 35.9 12.3 35.2C13.1 34 14.4 32.7 15.4 31.9C16.1 31.4 17 30.7 17.1 30.7C17.1 30.7 17.1 30.7 17.2 30.6C17.3 30.5 17.4 30.4 17.5 30.4C17.6 30.4 17.8 30.2 18 30.1C18.3 30 19.3 29.5 19.7 29.3C19.8 29.3 20 29.2 20.2 29.1C20.4 29 20.6 28.9 20.6 28.9C20.7 28.9 20.8 28.9 20.8 28.9C20.9 28.9 20.9 28.8 21 28.8C21.2 28.8 21.8 28.6 22.2 28.4C22.7 28.3 23.6 28.1 23.9 28.1C23.9 28.1 24.1 28.1 24.1 28.1C24.2 28.1 24.7 28 25.3 28C26.2 27.9 26.8 27.9 34.4 27.9L42.4 27.9L42.5 29C42.5 31.5 42.3 32.9 41.7 34.3C41.3 35 41.1 35.4 40.8 35.9C40.4 36.4 39.8 36.9 39.3 37.3C38.5 37.9 37.4 38.4 36.5 38.5C36.3 38.6 36.1 38.6 36.1 38.6C36 38.6 33.6 38.6 30.7 38.7C26.1 38.7 25.5 38.7 25.2 38.8C24.6 38.9 24.4 39 23.8 39.2C22.1 39.9 20.8 41.1 20.1 42.8C19.8 43.6 19.6 44.2 19.6 45C19.5 46.7 19.4 46.9 19.3 47.5C19.1 48.7 18.8 49.6 18.1 50.8C17.4 52 16.2 53.3 14.9 54.2C14.5 54.5 13.8 54.9 13.2 55.2C12 55.8 10.2 56.3 9.7 56.2Z" fill="#fd7b5d"/></svg></span>PayLorya<span class="tag">AI</span></a>';function ds(){return`<div class="shell">
   <aside class="side" id="side" aria-label="Main navigation">
-    <div class="side-top">${ma}<button class="icon-btn side-close" type="button" id="side-close" aria-label="Close menu">${p("x")}</button></div>
-    <a class="ws" href="/app/agent" id="ws"><span class="ws-mark" id="ws-mark"></span><span class="ws-text"><b id="ws-name"><span class="sk" style="width:110px;height:12px"></span></b><span id="ws-auto" class="ws-auto"></span></span>${p("chevron",15)}</a>
-    <nav class="side-nav">${$n.map(([e,t,a,n])=>`<a href="${t}" data-nav="${e}">${p(a,18)}<span>${n}</span>${e==="payments"?'<em class="badge" id="badge-approvals" hidden></em>':""}</a>`).join("")}</nav>
+    <div class="side-top">${Oa}<button class="icon-btn side-close" type="button" id="side-close" aria-label="Close menu">${u("x")}</button></div>
+    <a class="ws" href="/app/agent" id="ws"><span class="ws-mark" id="ws-mark"></span><span class="ws-text"><b id="ws-name"><span class="sk" style="width:110px;height:12px"></span></b><span id="ws-auto" class="ws-auto"></span></span>${u("chevron",15)}</a>
+    <nav class="side-nav">${cs.map(([e,t,a,n])=>`<a href="${t}" data-nav="${e}">${u(a,18)}<span>${n}</span>${e==="payments"?'<em class="badge" id="badge-approvals" hidden></em>':""}</a>`).join("")}</nav>
     <div class="side-foot">
-      <a href="/app/settings" data-nav="settings" class="side-settings">${p("settings",18)}<span>Settings</span></a>
+      <a href="/app/settings" data-nav="settings" class="side-settings">${u("settings",18)}<span>Settings</span></a>
       <div class="user-row">
         <button class="user-btn" type="button" id="user-btn" aria-haspopup="menu" aria-expanded="false"><span id="user-av">${te("\u2026")}</span><span class="user-text"><b id="user-name">&nbsp;</b><span id="user-email">&nbsp;</span></span></button>
-        ${ua()}
+        ${Ra()}
         <div class="menu" id="user-menu" role="menu" hidden>
-          <a href="/app/settings" role="menuitem">${p("settings",16)}Settings</a>
-          <a href="/app/agent" role="menuitem">${p("shield",16)}Agent & access</a>
-          <button type="button" role="menuitem" data-signout>${p("logout",16)}Sign out</button>
+          <a href="/app/settings" role="menuitem">${u("settings",16)}Settings</a>
+          <a href="/app/agent" role="menuitem">${u("shield",16)}Agent & access</a>
+          <button type="button" role="menuitem" data-signout>${u("logout",16)}Sign out</button>
         </div>
       </div>
     </div>
   </aside>
   <div class="scrim" id="scrim"></div>
   <div class="main-wrap">
-    <header class="topbar"><button class="icon-btn" type="button" id="menu-btn" aria-label="Open menu" aria-controls="side">${p("menu",20)}</button>${ma}<span class="topbar-right"><a class="icon-btn" href="/app/chat" aria-label="AI CFO chat">${p("sparkle",19)}</a>${ua()}</span></header>
+    <header class="topbar"><button class="icon-btn" type="button" id="menu-btn" aria-label="Open menu" aria-controls="side">${u("menu",20)}</button>${Oa}<span class="topbar-right"><a class="icon-btn" href="/app/chat" aria-label="AI CFO chat">${u("sparkle",19)}</a>${Ra()}</span></header>
     <nav class="subnav" id="subnav" aria-label="Agent and access" hidden>
-      <div class="tabs">${wn.map(([e,t,a])=>`<a href="${t}" data-sub="${e}">${a}</a>`).join("")}</div>
-      <p class="sub-trust"><span>${p("eye",14,2)}Claude reads.</span><span>${p("shield",14,2)}Code decides.</span><span>${p("check",14,2.4)}You approve.</span></p>
+      <div class="tabs">${ls.map(([e,t,a])=>`<a href="${t}" data-sub="${e}">${a}</a>`).join("")}</div>
+      <p class="sub-trust"><span>${u("eye",14,2)}Claude reads.</span><span>${u("shield",14,2)}Code decides.</span><span>${u("check",14,2.4)}You approve.</span></p>
     </nav>
     <main class="main" id="view" tabindex="-1"></main>
   </div>
 </div>
-<div class="toast" id="toast" role="status" aria-live="polite"></div>`}function Mn(e){let t=e.workspace;document.getElementById("ws-name").textContent=t.name,document.getElementById("ws-mark").textContent=(t.name.trim()[0]??"W").toUpperCase();let a=K[t.autonomy],n=document.getElementById("ws-auto");n.className=`ws-auto a-${t.autonomy}`,n.innerHTML=`<i></i>Agent: ${a.name}`,document.getElementById("user-name").textContent=e.user.name||e.user.email,document.getElementById("user-email").textContent=e.user.email,document.getElementById("user-av").innerHTML=te(e.user.name||e.user.email)}function xn(){let e=document.getElementById("badge-approvals");e&&(e.hidden=q.approvals===0,e.textContent=String(q.approvals),e.title=`${q.approvals} payment${q.approvals===1?"":"s"} waiting for approval`)}var Xe=0,ha=[];function He(){let e=location.pathname.replace(/\/+$/,"")||"/app",t=document.getElementById("view");for(let c of ha.splice(0))try{c()}catch{}let a=++Xe,n=null,i=bn.find(c=>n=c.re.exec(e==="/app"?"/app":e));document.body.classList.toggle("full",!!i?.full);let o=i?pa[i.nav]??i.nav:"";for(let c of document.querySelectorAll("[data-nav]"))c.dataset.nav===o?c.setAttribute("aria-current","page"):c.removeAttribute("aria-current");let l=!!i&&i.nav in pa,d=document.getElementById("subnav");d.hidden=!l,d.dataset.on=l?i.nav:"",document.body.classList.toggle("has-sub",l);for(let c of document.querySelectorAll("[data-sub]"))l&&c.dataset.sub===i?.nav?c.setAttribute("aria-current","page"):c.removeAttribute("aria-current");if(ze(),t.classList.remove("enter"),t.offsetWidth,t.classList.add("enter"),!i){document.title="Not found \xB7 PayLorya AI",t.innerHTML='<div class="notfound"><h1>Page not found</h1><p class="muted">This page does not exist in your dashboard.</p><a class="btn primary sm" href="/app">Go to overview</a></div>';return}document.title=`${i.title} \xB7 PayLorya AI`;let r={params:n?.slice(1).map(c=>c?decodeURIComponent(c):"")??[],query:new URLSearchParams(location.search),alive:()=>a===Xe,onCleanup:c=>{a===Xe?ha.push(c):c()},reload:()=>{a===Xe&&He()}};try{let c=i.render(t,r);c&&c.catch(u=>console.warn("[dashboard] page error",u))}catch(c){console.warn("[dashboard] page error",c)}}function ya(e,t={}){if(e===location.pathname+location.search&&!t.silent){He();return}t.replace||t.silent?history.replaceState(null,"",e):history.pushState(null,"",e),!t.silent&&(window.scrollTo({top:0}),He())}function kn(){document.body.classList.add("drawer"),document.getElementById("menu-btn")?.setAttribute("aria-expanded","true")}function ze(){document.body.classList.remove("drawer"),document.getElementById("menu-btn")?.setAttribute("aria-expanded","false")}function Ln(){document.addEventListener("click",e=>{let t=e.target,a=t.closest("a[href]"),n=document.getElementById("user-menu");if(!t.closest("#user-btn")&&!t.closest("#user-menu")&&(n.hidden=!0,document.getElementById("user-btn")?.setAttribute("aria-expanded","false")),t.closest("[data-signout]")){e.preventDefault(),Re();return}if(!a||e.defaultPrevented||e.button!==0||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey||a.target==="_blank"||a.hasAttribute("download"))return;let i=new URL(a.href,location.href);i.origin!==location.origin||!/^\/app(\/|$)/.test(i.pathname)||(e.preventDefault(),n.hidden=!0,ya(i.pathname+i.search))}),window.addEventListener("popstate",He),document.getElementById("menu-btn").addEventListener("click",kn),document.getElementById("side-close").addEventListener("click",ze),document.getElementById("scrim").addEventListener("click",ze),document.addEventListener("keydown",e=>{e.key==="Escape"&&(ze(),document.getElementById("user-menu").hidden=!0)}),document.getElementById("user-btn").addEventListener("click",()=>{let e=document.getElementById("user-menu");e.hidden=!e.hidden,document.getElementById("user-btn").setAttribute("aria-expanded",String(!e.hidden))})}async function En(){let e=document.getElementById("root")??document.body;e.innerHTML=Cn(),vt(),Ln(),Tt(ya),St(()=>{q.me&&Mn(q.me),xn()}),He(),Te();try{q.me=await U("/api/v1/me"),ie()}catch{}}En();
+<div class="toast" id="toast" role="status" aria-live="polite"></div>`}function us(e){let t=e.workspace;document.getElementById("ws-name").textContent=t.name,document.getElementById("ws-mark").textContent=(t.name.trim()[0]??"W").toUpperCase();let a=X[t.autonomy],n=document.getElementById("ws-auto");n.className=`ws-auto a-${t.autonomy}`,n.innerHTML=`<i></i>Agent: ${a.name}`,document.getElementById("user-name").textContent=e.user.name||e.user.email,document.getElementById("user-email").textContent=e.user.email,document.getElementById("user-av").innerHTML=te(e.user.name||e.user.email)}function ps(){let e=document.getElementById("badge-approvals");e&&(e.hidden=q.approvals===0,e.textContent=String(q.approvals),e.title=`${q.approvals} payment${q.approvals===1?"":"s"} waiting for approval`)}var Ze=0,_a=[];function Ue(){let e=location.pathname.replace(/\/+$/,"")||"/app",t=document.getElementById("view");for(let d of _a.splice(0))try{d()}catch{}let a=++Ze,n=null,r=is.find(d=>n=d.re.exec(e==="/app"?"/app":e));document.body.classList.toggle("full",!!r?.full);let o=r?Fa[r.nav]??r.nav:"";for(let d of document.querySelectorAll("[data-nav]"))d.dataset.nav===o?d.setAttribute("aria-current","page"):d.removeAttribute("aria-current");let i=!!r&&r.nav in Fa,l=document.getElementById("subnav");l.hidden=!i,l.dataset.on=i?r.nav:"",document.body.classList.toggle("has-sub",i);for(let d of document.querySelectorAll("[data-sub]"))i&&d.dataset.sub===r?.nav?d.setAttribute("aria-current","page"):d.removeAttribute("aria-current");if(Qe(),t.classList.remove("enter"),t.offsetWidth,t.classList.add("enter"),!r){document.title="Not found \xB7 PayLorya AI",t.innerHTML='<div class="notfound"><h1>Page not found</h1><p class="muted">This page does not exist in your dashboard.</p><a class="btn primary sm" href="/app">Go to overview</a></div>';return}document.title=`${r.title} \xB7 PayLorya AI`;let c={params:n?.slice(1).map(d=>d?decodeURIComponent(d):"")??[],query:new URLSearchParams(location.search),alive:()=>a===Ze,onCleanup:d=>{a===Ze?_a.push(d):d()},reload:()=>{a===Ze&&Ue()}};try{let d=r.render(t,c);d&&d.catch(p=>console.warn("[dashboard] page error",p))}catch(d){console.warn("[dashboard] page error",d)}}function Wa(e,t={}){if(e===location.pathname+location.search&&!t.silent){Ue();return}t.replace||t.silent?history.replaceState(null,"",e):history.pushState(null,"",e),!t.silent&&(window.scrollTo({top:0}),Ue())}function ms(){document.body.classList.add("drawer"),document.getElementById("menu-btn")?.setAttribute("aria-expanded","true")}function Qe(){document.body.classList.remove("drawer"),document.getElementById("menu-btn")?.setAttribute("aria-expanded","false")}function hs(){document.addEventListener("click",e=>{let t=e.target,a=t.closest("a[href]"),n=document.getElementById("user-menu");if(!t.closest("#user-btn")&&!t.closest("#user-menu")&&(n.hidden=!0,document.getElementById("user-btn")?.setAttribute("aria-expanded","false")),t.closest("[data-signout]")){e.preventDefault(),Oe();return}if(!a||e.defaultPrevented||e.button!==0||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey||a.target==="_blank"||a.hasAttribute("download"))return;let r=new URL(a.href,location.href);r.origin!==location.origin||!/^\/app(\/|$)/.test(r.pathname)||(e.preventDefault(),n.hidden=!0,Wa(r.pathname+r.search))}),window.addEventListener("popstate",Ue),document.getElementById("menu-btn").addEventListener("click",ms),document.getElementById("side-close").addEventListener("click",Qe),document.getElementById("scrim").addEventListener("click",Qe),document.addEventListener("keydown",e=>{e.key==="Escape"&&(Qe(),document.getElementById("user-menu").hidden=!0)}),document.getElementById("user-btn").addEventListener("click",()=>{let e=document.getElementById("user-menu");e.hidden=!e.hidden,document.getElementById("user-btn").setAttribute("aria-expanded",String(!e.hidden))})}async function fs(){let e=document.getElementById("root")??document.body;e.innerHTML=ds(),St(),hs(),Ft(Wa),Ot(()=>{q.me&&us(q.me),ps()}),Ue(),Se();try{q.me=await N("/api/v1/me"),ie()}catch{}}fs();
