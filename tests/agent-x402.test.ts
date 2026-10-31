@@ -366,9 +366,23 @@ describe("buyer agent over real x402 (stub signer + stub facilitator)", () => {
     const run = await s.run();
 
     expect(run.state).toBe("SETTLEMENT_UNKNOWN");
-    expect(lastNote(run)).toBe("HTTP 402");
+    expect(lastNote(run)).toBe("HTTP 402, invalid_exact_cardano_payload_amount_insufficient");
+    expect(run.settlement?.reason).toBe(run.error);
     expect(s.agent.spentLovelace).toBe(PRICE);
     expect(s.signer.calls).toHaveLength(1);
+    expect(s.events).toEqual(["verify"]);
+    expect(s.fac.settleCalls).toHaveLength(0);
+  });
+
+  it("verify rejected with an error status -> SETTLEMENT_UNKNOWN with the facilitator's reason and message", async () => {
+    const s = await startStack();
+    s.fac.verify = res =>
+      void res.status(400).json({ isValid: false, invalidReason: "invalid_exact_cardano_payload_input_not_available", invalidMessage: "input spent", payer: BUYER });
+    const run = await s.run();
+
+    expect(run.state).toBe("SETTLEMENT_UNKNOWN");
+    expect(run.error).toBe("HTTP 402, invalid_exact_cardano_payload_input_not_available: input spent");
+    expect(run.settlement?.reason).toBe(run.error);
     expect(s.events).toEqual(["verify"]);
     expect(s.fac.settleCalls).toHaveLength(0);
   });
