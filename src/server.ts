@@ -2,6 +2,7 @@ import express from "express";
 import { BuyerAgent } from "./agent.js";
 import { decisionRefusal } from "./approval.js";
 import { CashXChainClient, CXC_SANDBOX_API } from "./cashxchain.js";
+import { createCfo, mountCfo, type PaymentEngine } from "./cfo/index.js";
 import { loadConfig } from "./config.js";
 import { mountLocalFacilitator } from "./facilitator.js";
 import { sampleInvoices } from "./fixtures.js";
@@ -13,7 +14,11 @@ import { mountSeller } from "./seller.js";
 const config = loadConfig();
 const runs = new RunStore(config.MAX_RUNS);
 const limiter = new RunRateLimiter(config.RUNS_PER_MINUTE_PER_CLIENT, config.RUNS_PER_HOUR);
+// AI CFO payments get their own store: they never show up in the public demo inbox.
+const engine: PaymentEngine = { runs: new RunStore(config.MAX_RUNS) };
 const app = express();
+// Before express.json(): Better Auth reads the raw body, and the CFO API parses its own (larger) bodies.
+mountCfo(app, await createCfo(config, engine));
 app.use(express.json({ limit: "256kb" }));
 // "/app" and "/about" resolve to their .html pages.
 app.use(express.static("public", { extensions: ["html"] }));
@@ -24,6 +29,8 @@ mountSeller(app, config);
 // Real CashXChain sandbox payouts when the key is set; otherwise the agent's simulated stand-in.
 const fiat = config.CASHXCHAIN_API_KEY ? new CashXChainPayoutRoute(new CashXChainClient({ apiKey: config.CASHXCHAIN_API_KEY })) : undefined;
 const agent = config.x402Ready ? new BuyerAgent(config, runs, undefined, fiat ? { fiat } : {}) : undefined;
+engine.agent = agent;
+
 
 app.get(["/health", "/api/health"], (req, res) => {
   res.json({

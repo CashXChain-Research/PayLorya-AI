@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { VerifiedPayee } from "./routing.js";
 import type { Invoice, PaymentDraft, PaymentProof, PayoutResult, ReadinessReport, RouteDecision } from "./types.js";
 
 export type RunState =
@@ -31,6 +32,8 @@ export interface Run {
   draft?: PaymentDraft;
   /** The invoice payout after approval (status unknown: signed, outcome unclear, invoice locked). */
   payout?: PayoutResult;
+  /** Verified payees for this run (an AI CFO workspace's directory); unset: the demo directory. */
+  payees?: VerifiedPayee[];
   /**
    * Set on SETTLEMENT_UNKNOWN: what to look up on the explorer before anyone pays again.
    * `resolved` once chain evidence decided it: on_chain (paid, locked) or expired (never landed).

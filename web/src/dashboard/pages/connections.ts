@@ -1,0 +1,211 @@
+// Connections: wallets and accounts with balances, access level, refresh, remove; add from catalog.
+import { esc, short } from "../../shared/dom.js";
+import { del, get, patch, post } from "../api.js";
+import type { Ctx } from "../state.js";
+import type { Access, CatalogEntry, Connection, ConnectionCreate, ConnectionKind } from "../types.js";
+import { ago, balance, confirmDialog, copyText, dialog, empty, fieldError, icon, pageHead, sk, toast, usd, val } from "../ui.js";
+
+const KIND_ICON: Record<ConnectionKind, string> = {
+  cardano_agent_wallet: "bot",
+  cardano_wallet: "wallet",
+  evm_wallet: "globe",
+  cashxchain: "zap",
+  bank: "bank",
+};
+const NETWORK: Record<string, [string, string]> = {
+  "cardano:preprod": ["Cardano Preprod", "testnet"],
+  "cardano:mainnet": ["Cardano", ""],
+  ethereum: ["Ethereum", ""],
+  "cashxchain:sandbox": ["CashXChain", "sandbox"],
+  bank: ["Bank", ""],
+};
+const PLACEHOLDER: Partial<Record<ConnectionKind, string>> = { cardano_wallet: "addr_test1…", evm_wallet: "0x…" };
+
+function networkPill(n: string): string {
+  const [name, note] = NETWORK[n] ?? [n, ""];
+  return `<span class="net">${esc(name)}${note ? `<em>${esc(note)}</em>` : ""}</span>`;
+}
+
+function connCard(c: Connection, i: number): string {
+  const total = c.balances.reduce((a, b) => a + (b.usdMinor ?? 0), 0);
+  const hasUsd = c.balances.some(b => b.usdMinor != null);
+  return `<article class="card conn reveal ${c.status}" data-id="${esc(c.id)}" style="--d:${i * 40}ms">
+    <div class="conn-head">
+      <span class="conn-ic k-${c.kind}">${icon(KIND_ICON[c.kind] ?? "link", 20)}</span>
+      <div class="conn-t"><h3>${esc(c.label)}</h3>${networkPill(c.network)}</div>
+      <span class="pill ${c.status === "active" ? "t-ok" : c.status === "error" ? "t-bad" : "t-neutral"}">${c.status === "active" ? '<i class="live"></i>Active' : c.status === "error" ? "Error" : "Coming soon"}</span>
+    </div>
+    ${c.address ? `<div class="addr-row"><span class="mono" title="${esc(c.address)}">${esc(short(c.address))}</span><button type="button" class="icon-btn xs" data-copy="${esc(c.address)}" aria-label="Copy address">${icon("copy", 13)}</button></div>` : ""}
+    ${c.error ? `<div class="callout bad sm">${icon("alert", 14)}<span>${esc(c.error)}</span></div>` : ""}
+    <div class="conn-bal">
+      ${hasUsd ? `<b class="conn-total">${esc(usd(total))}</b><span class="muted small">indicative USD</span>` : ""}
+      <ul>${c.balances.length ? c.balances.map(b => `<li><span>${esc(b.asset)}</span><b>${esc(balance(b))}</b></li>`).join("") : `<li class="muted small">No balances reported</li>`}</ul>
+    </div>
+    <div class="conn-access">
+      <span class="label-sm">Agent access</span>
+      <div class="seg${c.supports.write ? "" : " disabled"}" role="radiogroup" aria-label="Access for ${esc(c.label)}">
+        <button type="button" role="radio" aria-checked="${c.access === "read"}" data-access="read" ${c.supports.write ? "" : "disabled"}>${icon("eye", 14)}Read-only</button>
+        <button type="button" role="radio" aria-checked="${c.access === "read_write"}" data-access="read_write" ${c.supports.write ? "" : "disabled"}>${icon("pay", 14)}Read &amp; write</button>
+      </div>
+      ${c.supports.write ? "" : `<span class="fine">Watch-only: this connection cannot send payments.</span>`}
+    </div>
+    <div class="conn-foot"><span class="muted small">Added ${esc(ago(c.createdAt))}</span>
+      <span><button type="button" class="icon-btn" data-rename aria-label="Rename">${icon("edit", 16)}</button><button type="button" class="icon-btn" data-refresh aria-label="Refresh balances" title="Refresh balances">${icon("refresh", 16)}</button><button type="button" class="icon-btn danger-h" data-remove aria-label="Remove connection" title="Remove">${icon("trash", 16)}</button></span></div>
+  </article>`;
+}
+
+async function addDialog(entry: CatalogEntry): Promise<Connection | null> {
+  let made: Connection | null = null;
+  await dialog({
+    title: `Connect ${entry.name}`,
+    submit: "Connect",
+    body: `<p class="dlg-text">${esc(entry.description)}</p>
+      <div class="field"><label for="c-label">Name <span class="opt-l">optional</span></label><input id="c-label" name="label" placeholder="${esc(entry.name)}" autocomplete="off"></div>
+      ${entry.needsAddress ? `<div class="field"><label for="c-addr">Address</label><input id="c-addr" name="address" class="mono" placeholder="${esc(PLACEHOLDER[entry.kind] ?? "Address")}" autocomplete="off" spellcheck="false"></div>` : ""}
+      <div class="field"><span class="lbl">Agent access</span>
+        <div class="radio-cards">
+          <label><input type="radio" name="access" value="read" checked><span>${icon("eye", 16)}<b>Read-only</b><em>See balances and history</em></span></label>
+          <label class="${entry.supports.write ? "" : "off"}"><input type="radio" name="access" value="read_write" ${entry.supports.write ? "" : "disabled"}><span>${icon("pay", 16)}<b>Read &amp; write</b><em>${entry.supports.write ? "May also send payments, within your policy" : "Not supported by this connection"}</em></span></label>
+        </div>
+      </div>
+      ${entry.kind === "cardano_agent_wallet" || entry.kind === "cardano_wallet" ? `<p class="fine">${icon("info", 13)} Cardano Preprod is a test network. Balances are tADA with no real value.</p>` : ""}
+      ${entry.kind === "cashxchain" ? `<p class="fine">${icon("info", 13)} CashXChain sandbox: a test ledger, no real money moves.</p>` : ""}`,
+    onSubmit: async form => {
+      const body: ConnectionCreate = { kind: entry.kind, access: (val(form, "access") || "read") as Access };
+      const label = val(form, "label");
+      if (label) body.label = label;
+      if (entry.needsAddress) {
+        const address = val(form, "address");
+        if (!address) return fieldError(form, "address", "Paste the wallet address.");
+        if (entry.kind === "cardano_wallet" && !/^addr_test1[0-9a-z]{20,}$/.test(address)) return fieldError(form, "address", "Use a Cardano Preprod address (addr_test1…).");
+        if (entry.kind === "evm_wallet" && !/^0x[0-9a-fA-F]{40}$/.test(address)) return fieldError(form, "address", "Use an EVM address (0x followed by 40 hex characters).");
+        body.address = address;
+      }
+      made = await post<Connection>("/api/v1/connections", body);
+      toast(`${made.label} connected`, "ok");
+      return true;
+    },
+  });
+  return made;
+}
+
+export async function renderConnections(view: HTMLElement, ctx: Ctx): Promise<void> {
+  let conns: Connection[] = [];
+  let catalog: CatalogEntry[] = [];
+  view.innerHTML = `${pageHead("Connections", "Wallets and accounts your AI CFO can see, and the ones it may pay from.", `<a class="btn primary sm" href="#add" id="c-add-top">${icon("plus", 16, 2.4)}Add connection</a>`)}
+    <section class="conn-grid" id="c-grid">${Array.from({ length: 3 }, () => `<div class="card">${sk("50%", 18)}<div style="height:14px"></div>${sk("30%", 12)}<div style="height:28px"></div>${sk("60%", 26)}<div style="height:22px"></div>${sk("100%", 38, 12)}</div>`).join("")}</section>
+    <section class="catalog" id="add"><div class="section-h"><h2>Add a connection</h2><p class="muted">Read-only by default. Grant write access only where you want the agent to be able to pay from.</p></div><div class="cat-grid" id="c-cat"></div></section>`;
+  const grid = view.querySelector<HTMLElement>("#c-grid")!;
+  const catEl = view.querySelector<HTMLElement>("#c-cat")!;
+
+  const paint = () => {
+    grid.innerHTML = conns.length
+      ? conns.map(connCard).join("")
+      : `<div class="card wide-empty">${empty({ icon: "link", title: "No connections yet", text: "Connect your Cardano agent wallet, a watch-only wallet or your CashXChain sandbox account below. Your AI CFO starts reading balances right away." })}</div>`;
+  };
+  const paintCatalog = () => {
+    catEl.innerHTML = catalog
+      .map(
+        c => `<button type="button" class="cat-item${c.available ? "" : " soon"}" data-kind="${esc(c.kind)}" ${c.available ? "" : "disabled"}>
+        <span class="conn-ic k-${c.kind}">${icon(KIND_ICON[c.kind] ?? "link", 20)}</span>
+        <span class="cat-t"><b>${esc(c.name)}</b><span>${esc(c.description)}</span></span>
+        <span class="cat-f">${c.available ? `<span class="caps">${c.supports.write ? "Read &amp; write" : "Read-only"}</span><span class="cat-go">${icon("plus", 16, 2.4)}</span>` : `<span class="pill t-neutral">Coming soon</span>`}</span>
+      </button>`,
+      )
+      .join("");
+  };
+  const replace = (c: Connection) => {
+    conns = conns.map(x => (x.id === c.id ? c : x));
+    const el = grid.querySelector(`[data-id="${CSS.escape(c.id)}"]`);
+    if (el) {
+      const tmp = document.createElement("div");
+      tmp.innerHTML = connCard(c, 0);
+      const n = tmp.firstElementChild as HTMLElement;
+      n.classList.remove("reveal");
+      el.replaceWith(n);
+    }
+  };
+
+  view.querySelector("#c-add-top")!.addEventListener("click", e => {
+    e.preventDefault();
+    view.querySelector("#add")!.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+  catEl.addEventListener("click", async e => {
+    const b = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-kind]");
+    const entry = b && catalog.find(c => c.kind === b.dataset.kind);
+    if (!entry || !entry.available) return;
+    const c = await addDialog(entry);
+    if (c && ctx.alive()) {
+      conns.push(c);
+      paint();
+      grid.querySelector(`[data-id="${CSS.escape(c.id)}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  });
+  grid.addEventListener("click", async e => {
+    const t = e.target as HTMLElement;
+    const cp = t.closest<HTMLElement>("[data-copy]");
+    if (cp) return void copyText(cp.dataset.copy!);
+    const card = t.closest<HTMLElement>(".conn");
+    const c = card && conns.find(x => x.id === card.dataset.id);
+    if (!c || !card) return;
+    const path = `/api/v1/connections/${encodeURIComponent(c.id)}`;
+    const acc = t.closest<HTMLButtonElement>("[data-access]");
+    if (acc && !acc.disabled) {
+      const access = acc.dataset.access as Access;
+      if (access === c.access) return;
+      if (access === "read_write" && !(await confirmDialog("Allow payments from this connection?", `With read & write access the agent can send payments from “${c.label}”, always within your agent access policy and limits.`, "Allow read & write"))) return;
+      try {
+        replace(await patch<Connection>(path, { access }));
+        toast(access === "read" ? `${c.label} is now read-only` : `${c.label} can now be used for payments`, "ok");
+      } catch {
+        // toast shown
+      }
+      return;
+    }
+    if (t.closest("[data-refresh]")) {
+      const btn = t.closest<HTMLButtonElement>("[data-refresh]")!;
+      btn.classList.add("spinning");
+      btn.disabled = true;
+      try {
+        replace(await post<Connection>(`${path}/refresh`));
+        toast("Balances refreshed", "ok");
+      } catch {
+        btn.classList.remove("spinning");
+        btn.disabled = false;
+      }
+      return;
+    }
+    if (t.closest("[data-rename]")) {
+      await dialog({
+        title: "Rename connection",
+        submit: "Save",
+        body: `<div class="field"><label for="r-label">Name</label><input id="r-label" name="label" value="${esc(c.label)}" autocomplete="off"></div>`,
+        onSubmit: async form => {
+          const label = val(form, "label");
+          if (!label) return fieldError(form, "label", "Enter a name.");
+          replace(await patch<Connection>(path, { label }));
+          return true;
+        },
+      });
+      return;
+    }
+    if (t.closest("[data-remove]")) {
+      if (!(await confirmDialog(`Remove ${c.label}?`, "Your AI CFO will stop reading this connection and can no longer pay from it. Nothing on-chain or in your account changes.", "Remove", true))) return;
+      try {
+        await del(path);
+        conns = conns.filter(x => x.id !== c.id);
+        paint();
+        toast("Connection removed", "ok");
+      } catch {
+        // toast shown
+      }
+    }
+  });
+
+  const [cs, cat] = await Promise.all([get<Connection[]>("/api/v1/connections"), get<CatalogEntry[]>("/api/v1/connections/catalog", true).catch(() => [])]);
+  if (!ctx.alive()) return;
+  conns = cs;
+  catalog = cat.sort((a, b) => Number(b.available) - Number(a.available));
+  paint();
+  paintCatalog();
+}
