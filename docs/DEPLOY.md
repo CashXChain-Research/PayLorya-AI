@@ -3,6 +3,15 @@
 The Node app runs in one Cloudflare Container. A Worker (`cloudflare/worker.ts`) routes every request
 to the single named instance `"main"`, because runs and the spend ledger live in memory.
 
+Static files are not routed there: `assets` in `wrangler.jsonc` uploads `public/` with each deploy, and
+Cloudflare's edge serves every request that matches a file (HTML, CSS, JS, fonts, images; compressed,
+with ETags) without touching the Worker or the container. `/login` is served from `login.html`
+(`html_handling: auto-trailing-slash`). Requests that match no file go to the Worker and the container.
+`run_worker_first` sends some paths to the Worker even when a file matches: `/app` and `/app/*` (the
+server's login redirect, although `public/app.html` exists) and the API prefixes. A new server route
+whose path also exists as a file in `public/` must be added there, or the edge serves the file instead
+(`tests/edge-assets.test.ts` checks the current ones).
+
 Verified against `wrangler` 4.156.0 and `@cloudflare/containers` 0.3.7 (installed source and current
 Cloudflare docs, 2026-10-30). `wrangler deploy --dry-run` passes with this config.
 
@@ -115,6 +124,8 @@ other than a `cxc_sk_sandbox_` / `cxc_rk_sandbox_` key.
 - `sleepAfter = "24h"`: after 24 h without requests the container stops; demo runs (in memory) reset,
   AI CFO data does not. A running `basic` instance costs about $0.01 per hour beyond included usage.
 - Before judging: one warm-up request to `/api/health`, then no redeploys and no secret changes.
+  Static pages load from the edge even while the container starts; `/app` and the APIs wait for it.
+  Requests for static files do not count as container activity for `sleepAfter`.
 
 ## AI CFO data (D1 + R2)
 
