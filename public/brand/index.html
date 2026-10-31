@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Brand · PayFlow AI</title>
+<script src="/assets/theme-init.js"></script>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles/base.css">
+<style>
+  body { background: var(--bg); color: var(--ink); font-family: var(--font); margin: 0; }
+  main { max-width: 900px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { font-size: 28px; margin: 0 0 6px; }
+  h2 { font-size: 16px; margin: 32px 0 12px; }
+  .lead { color: var(--ink-2); margin: 0 0 8px; line-height: 1.5; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+  .tile { border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden; background: var(--surface); }
+  .art { display: grid; place-items: center; padding: 28px 20px; min-height: 150px; }
+  .art img { max-width: 100%; max-height: 120px; }
+  .light { background: #ffffff; } .dark { background: #121315; } .sand { background: #faf7f2; } .graphite { background: #1f2328; }
+  .meta { padding: 12px 16px; border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .meta b { flex: 1 1 100%; font-size: 14px; }
+  .meta a { border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; color: var(--ink); text-decoration: none; font-size: 13px; background: var(--surface-2); }
+  .colors { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+  .sw { border: 1px solid var(--line); border-radius: var(--r-md); overflow: hidden; background: var(--surface); }
+  .sw i { display: block; height: 56px; }
+  .sw span { display: block; padding: 8px 12px; font-size: 13px; }
+  .sw code { font-family: var(--mono); color: var(--ink-2); }
+  ul.rules { color: var(--ink-2); line-height: 1.7; padding-left: 20px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>PayFlow AI brand</h1>
+  <p class="lead">Logo files for decks, Devfolio and social. Calm and refined: graphite with a coral accent, set in Manrope. The wordmark is outlined from Manrope ExtraBold, so the SVGs look the same everywhere, without the font.</p>
+
+  <h2>Logos</h2>
+  <div class="grid">
+    <div class="tile"><div class="art light"><img src="payflow-logo.svg" alt="PayFlow AI logo"></div><div class="meta"><b>Horizontal, on light</b><a href="payflow-logo.svg" download>SVG</a><a href="payflow-logo.png" download>PNG</a></div></div>
+    <div class="tile"><div class="art dark"><img src="payflow-logo-on-dark.svg" alt="PayFlow AI logo on dark"></div><div class="meta"><b>Horizontal, on dark</b><a href="payflow-logo-on-dark.svg" download>SVG</a><a href="payflow-logo-on-dark.png" download>PNG</a></div></div>
+    <div class="tile"><div class="art sand"><img src="payflow-logo-stacked.svg" alt="PayFlow AI stacked logo"></div><div class="meta"><b>Stacked, on light</b><a href="payflow-logo-stacked.svg" download>SVG</a><a href="payflow-logo-stacked.png" download>PNG</a></div></div>
+    <div class="tile"><div class="art graphite"><img src="payflow-logo-stacked-on-dark.svg" alt="PayFlow AI stacked logo on navy"></div><div class="meta"><b>Stacked, on dark</b><a href="payflow-logo-stacked-on-dark.svg" download>SVG</a><a href="payflow-logo-stacked-on-dark.png" download>PNG</a></div></div>
+    <div class="tile"><div class="art light"><img src="payflow-mark.svg" alt="PayFlow AI mark" style="width:96px;height:96px"></div><div class="meta"><b>Mark (app icon, avatar, favicon)</b><a href="payflow-mark.svg" download>SVG</a><a href="payflow-mark-512.png" download>PNG 512</a><a href="payflow-mark-1024.png" download>PNG 1024</a></div></div>
+  </div>
+
+  <h2>Colors</h2>
+  <div class="colors">
+    <div class="sw"><i style="background:#1f2328"></i><span>Graphite <code>#1F2328</code> (primary, text, logo tile)</span></div>
+    <div class="sw"><i style="background:#e8553a"></i><span>Coral <code>#E8553A</code> (the dot, large accents)</span></div>
+    <div class="sw"><i style="background:#c2410c"></i><span>Deep coral <code>#C2410C</code> (links and small text on light)</span></div>
+    <div class="sw"><i style="background:#ff8a6b"></i><span>Light coral <code>#FF8A6B</code> (accents on dark)</span></div>
+    <div class="sw"><i style="background:#faf7f2"></i><span>Sand <code>#FAF7F2</code> (page background)</span></div>
+    <div class="sw"><i style="background:#121315"></i><span>Night <code>#121315</code> (dark mode)</span></div>
+  </div>
+
+  <h2>Use</h2>
+  <ul class="rules">
+    <li>Keep clear space around the logo of at least the size of the coral dot, twice over.</li>
+    <li>Smallest size: mark 16 px, horizontal logo 24 px high. Typeface: Manrope (Google Fonts), 400 to 800.</li>
+    <li>Do not recolor, stretch, rotate or add effects. On photos, use the on-dark version on a dark area.</li>
+    <li>Payments run on CashXChain rails; name CashXChain as the rail, not as the product.</li>
+  </ul>
+</main>
+</body>
+</html>

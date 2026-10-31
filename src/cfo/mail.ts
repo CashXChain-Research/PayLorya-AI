@@ -14,13 +14,13 @@ export const PRODUCT = "PayFlow AI";
  * ignore CSS variables, so the values live here once; change them together with base.css.
  */
 export const MAIL_THEME = {
-  primary: "#000066",
-  accent: "#005577",
-  ink: "#111111",
-  muted: "#555555",
-  page: "#f4f4f6",
+  primary: "#1f2328",
+  accent: "#c2410c",
+  ink: "#1f2328",
+  muted: "#5f6368",
+  page: "#faf7f2",
   card: "#ffffff",
-  font: "-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif",
+  font: "Manrope,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif",
 };
 const RESEND_API = "https://api.resend.com/emails";
 
