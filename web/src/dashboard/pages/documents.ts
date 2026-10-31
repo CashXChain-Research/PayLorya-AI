@@ -10,6 +10,8 @@ import {
   confirmDialog,
   date,
   dateTime,
+  daysUntil,
+  docIcon,
   dueLabel,
   empty,
   fileIcon,
@@ -48,7 +50,7 @@ function statusCell(d: DocumentSummary): string {
 function row(d: DocumentSummary): string {
   const due = d.dueDate && d.kind === "invoice" ? dueLabel(d.dueDate) : null;
   return `<tr data-id="${esc(d.id)}" tabindex="0">
-    <td class="c-doc"><div class="c-doc-in"><span class="doc-ic ${d.status}">${icon(fileIcon(d.mimeType), 17)}</span><div><b>${esc(d.title || d.filename)}</b><span>${esc(d.title ? d.filename : bytes(d.size))}${d.source === "chat" ? " · from chat" : ""}</span></div></div></td>
+    <td class="c-doc"><div class="c-doc-in"><span class="doc-ic ${d.status} k-${esc(d.kind ?? "none")}">${icon(docIcon(d), 17)}</span><div><b>${esc(d.title || d.filename)}</b><span>${esc(d.title ? d.filename : bytes(d.size))}${d.source === "chat" ? " · from chat" : ""}</span></div></div></td>
     <td class="c-kind">${d.kind ? `<span class="kind k-${d.kind}">${esc(KIND_LABEL[d.kind] ?? d.kind)}</span>` : d.status === "processing" ? sk("60px", 12) : '<span class="muted">—</span>'}</td>
     <td class="c-cp">${esc(d.counterparty || "—")}</td>
     <td class="c-amt num">${d.amountMinor != null ? esc(amount(d.amountMinor, d.currency)) : '<span class="muted">—</span>'}</td>
@@ -86,12 +88,52 @@ export async function renderDocuments(view: HTMLElement, ctx: Ctx): Promise<void
   <section class="card list-card">
     <div class="list-head">
       <div class="chips" id="kinds"></div>
-      <label class="search">${icon("search", 16)}<input id="doc-q" placeholder="Search documents" aria-label="Search documents"></label>
+    </div>
+    <div class="filters" id="doc-filters" role="search">
+      <label class="search">${icon("search", 15)}<input id="doc-q" type="search" autocomplete="off" placeholder="Search documents" aria-label="Search documents"></label>
+      <select class="fsel" id="df-cat" aria-label="Category"><option value="">All categories</option></select>
+      <select class="fsel" id="df-due" aria-label="Due date"><option value="">Any due date</option><option value="overdue">Overdue</option><option value="14">Due in 14 days</option><option value="none">No due date</option></select>
+      <select class="fsel" id="df-period" aria-label="Uploaded"><option value="">Uploaded any time</option><option value="month">This month</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option></select>
+      <select class="fsel" id="df-src" aria-label="Source"><option value="">All sources</option><option value="upload">Uploaded</option><option value="chat">From chat</option></select>
+      <button type="button" class="link-sm" id="df-clear" hidden>Clear filters</button>
+      <span class="pf-count" id="df-count" aria-live="polite"></span>
     </div>
     <div class="tbl-wrap" id="doc-table"><div class="pad">${skLines(6)}</div></div>
   </section>`;
 
   const tableEl = view.querySelector<HTMLElement>("#doc-table")!;
+  // Filters next to the kind chips and search: category, due date, upload period, source.
+  const fsel = {
+    cat: view.querySelector<HTMLSelectElement>("#df-cat")!,
+    due: view.querySelector<HTMLSelectElement>("#df-due")!,
+    period: view.querySelector<HTMLSelectElement>("#df-period")!,
+    src: view.querySelector<HTMLSelectElement>("#df-src")!,
+  };
+  const filtersOn = () => Object.values(fsel).some(el => el.value);
+  const passes = (d: DocumentSummary): boolean => {
+    if (fsel.cat.value && d.category !== fsel.cat.value) return false;
+    if (fsel.src.value && d.source !== fsel.src.value) return false;
+    const due = fsel.due.value;
+    if (due) {
+      const n = daysUntil(d.dueDate);
+      if (due === "none" ? n != null : n == null || (due === "overdue" ? n >= 0 : n < 0 || n > Number(due))) return false;
+    }
+    const period = fsel.period.value;
+    if (period === "month" && !d.createdAt.startsWith(new Date().toISOString().slice(0, 7))) return false;
+    if (/^\d+$/.test(period) && Date.now() - Date.parse(d.createdAt) > Number(period) * 86_400_000) return false;
+    return true;
+  };
+  let catKey = "";
+  /** Category options follow the documents; the chosen one stays while it still exists. */
+  const syncCategories = () => {
+    const cats = [...new Set(docs.map(d => d.category).filter((c): c is string => Boolean(c)))].sort((a, b) => a.localeCompare(b));
+    const key = cats.join("\u0000");
+    if (key === catKey) return;
+    catKey = key;
+    const keep = fsel.cat.value;
+    fsel.cat.innerHTML = `<option value="">All categories</option>${cats.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join("")}`;
+    fsel.cat.value = cats.includes(keep) ? keep : "";
+  };
   const kindsEl = view.querySelector<HTMLElement>("#kinds")!;
   const queueEl = view.querySelector<HTMLElement>("#queue")!;
 
@@ -107,17 +149,27 @@ export async function renderDocuments(view: HTMLElement, ctx: Ctx): Promise<void
         .join("") +
       (issues ? `<button data-k="pending" class="${kind === "pending" ? "on" : ""}">Processing &amp; failed <em>${issues}</em></button>` : "");
     const needle = q.toLowerCase();
-    const rows = docs.filter(
+    syncCategories();
+    for (const el of Object.values(fsel)) el.classList.toggle("on", Boolean(el.value));
+    const base = docs.filter(
       d =>
         (kind === "all" || (kind === "pending" ? d.status !== "processed" : d.kind === kind)) &&
         (!needle || [d.title, d.filename, d.counterparty, d.category].some(x => x?.toLowerCase().includes(needle))),
     );
+    const rows = base.filter(passes);
+    view.querySelector<HTMLElement>("#df-clear")!.hidden = !filtersOn();
+    view.querySelector("#df-count")!.textContent = filtersOn() ? `${rows.length} of ${base.length}` : "";
     if (!docs.length) {
       tableEl.innerHTML = empty({ icon: "doc", title: "No documents yet", text: "Upload your first invoices, receipts or bank statements above. Your AI CFO reads them and keeps your books, budgets and forecast current." });
       return;
     }
     if (!rows.length) {
-      tableEl.innerHTML = empty({ icon: "search", title: "No matches", text: "Try another filter or search term." });
+      tableEl.innerHTML = empty({
+        icon: "search",
+        title: "No matches",
+        text: "Try another filter or search term.",
+        ...(filtersOn() ? { action: `<button class="btn ghost sm" type="button" data-clear-filters>Clear filters</button>` } : {}),
+      });
       return;
     }
     tableEl.innerHTML = `<table class="tbl docs"><thead><tr><th>Document</th><th class="c-kind">Kind</th><th class="c-cp">Counterparty</th><th class="c-amt num">Amount</th><th class="c-due">Due</th><th class="c-cat">Category</th><th class="c-st">Status</th></tr></thead><tbody>${rows.map(row).join("")}</tbody></table>`;
@@ -271,6 +323,12 @@ export async function renderDocuments(view: HTMLElement, ctx: Ctx): Promise<void
     const b = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-k]");
     if (!b) return;
     kind = b.dataset.k!;
+    paint();
+  });
+  view.querySelector<HTMLElement>("#doc-filters")!.addEventListener("input", () => paint());
+  view.addEventListener("click", e => {
+    if (!(e.target as HTMLElement).closest("#df-clear, [data-clear-filters]")) return;
+    for (const el of Object.values(fsel)) el.value = "";
     paint();
   });
   view.querySelector<HTMLInputElement>("#doc-q")!.addEventListener("input", e => {

@@ -477,8 +477,8 @@ a.today-item:hover { background: var(--surface-2); }
 .pay-paid .pp-wait { color: var(--warn); font-weight: 500; }
 
 /* Filters: search, rail, requested by, period */
-.pay-filters { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 0 10px 14px; }
-.pay-filters .search { width: 260px; }
+.filters { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 0 10px 14px; }
+.filters .search { width: 260px; }
 .fsel {
   appearance: none; border: 1.5px solid transparent; border-radius: 999px; padding: 7px 30px 7px 13px; font: inherit; font-size: 13px; font-weight: 500;
   color: var(--ink-2); cursor: pointer; outline: none; transition: background-color .2s, color .2s, box-shadow .2s;
@@ -490,7 +490,7 @@ a.today-item:hover { background: var(--surface-2); }
 .fsel:focus-visible { border-color: var(--accent-line); box-shadow: 0 0 0 4px var(--accent-soft); }
 .fsel.on { background-color: var(--accent-soft); color: var(--accent); font-weight: 600; }
 .pf-count { margin-left: auto; font-size: 12.5px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
-.pay-filters [hidden] { display: none; }
+.filters [hidden] { display: none; }
 .pay-main:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
 .pay-who { min-width: 0; }
 .pay-who b, .pay-who span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -580,10 +580,27 @@ a.today-item:hover { background: var(--surface-2); }
 .c-doc b, .c-doc span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 320px; }
 .c-doc b { font-weight: 600; }
 .c-doc span { font-size: 12px; color: var(--ink-3); }
-.doc-ic { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: var(--brand-soft); color: var(--brand); flex: none; }
+/* Document icon tiles: one icon and tone per kind; unread files stay neutral. */
+.doc-ic { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: var(--field); color: var(--ink-2); flex: none; }
+.doc-ic.k-invoice, .doc-ic.k-payroll { background: var(--accent-soft); color: var(--accent); }
+.doc-ic.k-receipt, .doc-ic.k-tax { background: var(--warn-soft); color: var(--warn); }
+.doc-ic.k-bank_statement, .doc-ic.k-contract { background: var(--brand-soft); color: var(--brand); }
 .doc-ic.failed { background: var(--danger-soft); color: var(--danger); }
 .doc-ic.processing { animation: breathe 1.6s ease-in-out infinite; }
 .c-cp { color: var(--ink-2); max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Documents table: fixed layout, so the document column takes what is left and truncates and the
+   Status column always fits inside the card. */
+.tbl.docs { table-layout: fixed; min-width: 600px; }
+.tbl.docs th.c-kind { width: 120px; }
+.tbl.docs th.c-cp { width: 16%; }
+.tbl.docs th.c-amt { width: 108px; }
+.tbl.docs th.c-due { width: 96px; }
+.tbl.docs th.c-cat { width: 168px; }
+.tbl.docs th.c-st { width: 112px; }
+.tbl.docs .c-doc { min-width: 0; }
+.tbl.docs .c-doc b, .tbl.docs .c-doc span { max-width: none; }
+.tbl.docs .c-cp { max-width: none; }
+.tbl.docs .cat { max-width: 100%; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
 .c-due { white-space: nowrap; }
 .c-due em { display: block; font-style: normal; font-size: 11.5px; font-weight: 600; background: none; padding: 0; }
 .c-due em.t-bad { color: var(--danger); background: none; }
@@ -678,6 +695,10 @@ a.today-item:hover { background: var(--surface-2); }
 .conn-ic { width: 42px; height: 42px; border-radius: 13px; display: grid; place-items: center; background: var(--brand-soft); color: var(--brand); flex: none; }
 .conn-ic.k-cardano_agent_wallet, .conn-ic.k-cardano_wallet { background: var(--accent-soft); color: var(--accent); }
 .conn-ic.k-bank, .conn-ic.k-evm_wallet { background: var(--field); color: var(--ink-2); }
+/* The CashXChain logo sits on white, as in its official (BIMI) file. */
+.conn-ic.k-cashxchain, .cxc-chip { background: #fff; box-shadow: inset 0 0 0 1px var(--line); }
+.cxc-logo, .cxc-chip img { display: block; }
+.cxc-chip { width: 22px; height: 22px; border-radius: 7px; display: grid; place-items: center; flex: none; }
 .conn-t { flex: 1; min-width: 0; display: grid; gap: 3px; }
 .conn-t h3 { margin: 0; font-size: 16px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .net { font-size: 12.5px; color: var(--ink-2); display: inline-flex; gap: 6px; align-items: center; }
@@ -917,6 +938,7 @@ a.file-chip:hover { box-shadow: var(--shadow); }
 @media (max-width: 1240px) {
   .pay-main, .pay-cols { grid-template-columns: 36px minmax(0, 1fr) 112px 120px 74px 190px; }
   .pay-by, .pay-rail, .pay-cols .pc-by, .pay-cols .pc-rail { display: none; }
+  .tbl.docs .c-cat { display: none; }
   .ov-grid.three { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .ov-grid.three > :last-child { grid-column: 1 / -1; }
 }
@@ -1016,16 +1038,16 @@ a.file-chip:hover { box-shadow: var(--shadow); }
   .page-head { margin-bottom: 18px; }
   .page-actions .btn.sm { padding: 9px 13px; font-size: 13.5px; }
   .list-head .search { width: 100%; }
-  .pay-filters { padding: 0 6px 12px; }
-  .pay-filters .search { width: 100%; }
-  .pay-filters .fsel { flex: 1 1 0; min-width: 0; }
+  .filters { padding: 0 6px 12px; }
+  .filters .search { width: 100%; }
+  .filters .fsel { flex: 1 1 calc(50% - 4px); min-width: 0; }
   .pf-count { margin-left: 0; }
   .list-head { padding: 6px 6px 10px; }
   .tabs { width: 100%; }
   .tabs button { flex: 1; justify-content: center; padding: 8px 8px; }
   .c-due, .c-st { display: none; }
   .c-doc { min-width: 0; }
-  .tbl.docs { table-layout: fixed; }
+  .tbl.docs { table-layout: fixed; min-width: 0; }
   .tbl.docs th.c-amt { width: 104px; }
   .c-doc b, .c-doc span { max-width: none; }
   .tbl td, .tbl th { padding: 10px 8px; }
