@@ -1,0 +1,15 @@
+Date,Description,Counterparty,Amount,Currency,Balance
+2026-10-01,Opening balance,,,EUR,48210.55
+2026-10-01,Office rent October,Werkraum Immobilien GmbH,-2400.00,EUR,45810.55
+2026-10-02,Customer payment INV-C-0931,Alpenblick Hotels AG,12500.00,EUR,58310.55
+2026-10-03,Cloud hosting September,Hetzner Online GmbH,-186.40,EUR,58124.15
+2026-10-06,Google Workspace October,Google Cloud EMEA Ltd,-86.40,EUR,58037.75
+2026-10-09,"Freelance design, invoice 2026-118",Studio Lindqvist,-1850.00,EUR,56187.75
+2026-10-13,Customer payment INV-C-0934,Nordsee Logistik GmbH,7800.00,EUR,63987.75
+2026-10-15,"Business travel, train Munich-Berlin",Deutsche Bahn AG,-219.80,EUR,63767.95
+2026-10-17,"Slack Pro, 12 seats",Slack Technologies,-104.50,EUR,63663.45
+2026-10-20,Insurance Q4,Allianz Versicherungs-AG,-940.00,EUR,62723.45
+2026-10-24,Customer payment INV-C-0940,Alpenblick Hotels AG,4300.00,EUR,67023.45
+2026-10-27,Accounting services October,Kanzlei Weiß Steuerberatung,-650.00,EUR,66373.45
+2026-10-30,Salaries October,Payroll run 2026-10,-18400.00,EUR,47973.45
+2026-10-31,Bank fees October,Commerzbank AG,-24.90,EUR,47948.55

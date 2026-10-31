@@ -26,7 +26,7 @@ export const CODE_MINUTES = 10;
  * confirms its email with a code first (/api/auth/email-otp/verify-email), and a code-only account
  * can add one later (setPassword). Without a mailer: email + password only, as before.
  */
-export function createAuth(sql: Sql, opts: { baseUrl: string; secret?: string; mailer?: Mailer }) {
+export function createAuth(sql: Sql, opts: { baseUrl: string; trustedOrigins?: string[]; secret?: string; mailer?: Mailer }) {
   const mailer = opts.mailer;
   const secret = opts.secret ?? randomBytes(32).toString("hex");
   if (!opts.secret) console.warn("BETTER_AUTH_SECRET not set: using a random secret, sessions end on restart");
@@ -34,7 +34,7 @@ export function createAuth(sql: Sql, opts: { baseUrl: string; secret?: string; m
     database: { dialect: sqlDialect(sql), type: "sqlite" },
     secret,
     baseURL: opts.baseUrl,
-    trustedOrigins: [opts.baseUrl],
+    trustedOrigins: [opts.baseUrl, ...(opts.trustedOrigins ?? [])],
     emailAndPassword: { enabled: true, minPasswordLength: 8, autoSignIn: true, requireEmailVerification: Boolean(mailer) },
     emailVerification: { sendOnSignUp: Boolean(mailer), sendOnSignIn: Boolean(mailer), autoSignInAfterVerification: true },
     plugins: [

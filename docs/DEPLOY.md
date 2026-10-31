@@ -3,6 +3,15 @@
 The Node app runs in one Cloudflare Container. A Worker (`cloudflare/worker.ts`) routes every request
 to the single named instance `"main"`, because runs and the spend ledger live in memory.
 
+Static files are not routed there: `assets` in `wrangler.jsonc` uploads `public/` with each deploy, and
+Cloudflare's edge serves every request that matches a file (HTML, CSS, JS, fonts, images; compressed,
+with ETags) without touching the Worker or the container. `/login` is served from `login.html`
+(`html_handling: auto-trailing-slash`). Requests that match no file go to the Worker and the container.
+`run_worker_first` sends some paths to the Worker even when a file matches: `/app` and `/app/*` (the
+server's login redirect, although `public/app.html` exists) and the API prefixes. A new server route
+whose path also exists as a file in `public/` must be added there, or the edge serves the file instead
+(`tests/edge-assets.test.ts` checks the current ones).
+
 Verified against `wrangler` 4.156.0 and `@cloudflare/containers` 0.3.7 (installed source and current
 Cloudflare docs, 2026-10-30). `wrangler deploy --dry-run` passes with this config.
 
@@ -58,9 +67,14 @@ npx wrangler secret put APPROVE_TOKEN        # required for approve/reject (UI a
 npx wrangler deploy
 ```
 
-Live URL: **https://cxc-agentpay.cashxchain.workers.dev** (CashXChain account, pinned via `account_id`
-in `wrangler.jsonc`). It is set as `vars.PUBLIC_BASE_URL`. If the URL changes, update it there and run
-`npx wrangler deploy` again.
+Live URL: **https://paylorya.valentin.is** (CashXChain account, pinned via `account_id` in
+`wrangler.jsonc`). It is set as `vars.PUBLIC_BASE_URL`; `vars.AUTH_TRUSTED_ORIGINS` keeps sign-in working on
+https://cxc-agentpay.cashxchain.workers.dev too. If the URL changes, update it there and run `npx wrangler deploy` again.
+
+The domain is a Cloudflare for SaaS custom hostname on the `cashxchain.ai` zone (valentin.is stays in its own
+account): `paylorya.valentin.is` CNAME → `paylorya-origin.cashxchain.ai` (fallback origin, `AAAA 100::`, proxied),
+plus the Worker route `paylorya.valentin.is/*` → `cxc-agentpay` on `cashxchain.ai`. Without that route Cloudflare
+answers 522; zone-wide redirect rules on `cashxchain.ai` must exclude the hostname.
 
 Alternative to `wrangler secret put`: after the first deploy, add the secrets in the dashboard under
 Workers & Pages → `cxc-agentpay` → Settings → Variables and Secrets, type **Secret**. Secrets survive
@@ -115,6 +129,8 @@ other than a `cxc_sk_sandbox_` / `cxc_rk_sandbox_` key.
 - `sleepAfter = "24h"`: after 24 h without requests the container stops; demo runs (in memory) reset,
   AI CFO data does not. A running `basic` instance costs about $0.01 per hour beyond included usage.
 - Before judging: one warm-up request to `/api/health`, then no redeploys and no secret changes.
+  Static pages load from the edge even while the container starts; `/app` and the APIs wait for it.
+  Requests for static files do not count as container activity for `sleepAfter`.
 
 ## AI CFO data (D1 + R2)
 
