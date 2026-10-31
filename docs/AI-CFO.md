@@ -6,11 +6,30 @@ The product built on top of the hackathon payment engine. One app, one domain:
 | --- | --- |
 | `/` | Marketing site |
 | `/signup`, `/login` | Accounts (Better Auth, email + password) |
+| `/verify` | Email confirmation: the 6-digit code mailed through Resend (only with `RESEND_API_KEY`) |
 | `/app/*` | Dashboard: overview, AI CFO chat, documents, payments, budgets, payees, connections, agent access, activity, settings |
 | `/demo`, `/about.html` | The hackathon demo of the invoice agent, unchanged |
 | `/api/auth/*` | Better Auth |
 | `/api/v1/*` | Dashboard API, session required. Contract: `web/src/dashboard/types.ts` |
 | `/api/runs`, `/v1/payment-readiness` | Demo API and the x402-paid readiness API, unchanged |
+
+## Email confirmation (Resend)
+
+With `RESEND_API_KEY` set (`src/cfo/auth.ts`, `src/cfo/mail.ts`), sign-up creates the account but no
+session. Better Auth's `emailOTP` plugin mails a 6-digit code through Resend
+(`POST https://api.resend.com/emails`, sender `RESEND_FROM`, product name PayFlow AI). The sign-up
+page then opens `/verify` (the address travels in `sessionStorage`, not the URL; a direct visit asks
+for it). `POST /api/auth/email-otp/verify-email` confirms the address and signs the user in, then
+the page continues to `?next` or `/app`.
+
+- Codes: 6 digits, valid 10 minutes, at most 5 wrong tries, stored hashed. "Send a new code" calls
+  `/api/auth/email-otp/send-verification-otp`; a new code voids the old one. Better Auth limits
+  these endpoints to 3 per minute.
+- Signing in while unconfirmed answers 403 `EMAIL_NOT_VERIFIED`, mails a fresh code, and the login
+  page opens `/verify`. Accounts created before the key was set confirm once this way.
+- Codes never create accounts (`disableSignUp`); new accounts come only from the sign-up form.
+- A Resend error is logged and does not fail the sign-up; the user asks for a new code.
+- Without `RESEND_API_KEY`, nothing changes: sign-up signs in straight away.
 
 ## What a customer can do
 
