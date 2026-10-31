@@ -42,6 +42,8 @@ export function createAuth(sql: Sql, opts: {
     secret,
     baseURL: opts.baseUrl,
     trustedOrigins: [opts.baseUrl, ...(opts.trustedOrigins ?? [])],
+    // Better Auth skips the Origin check when NODE_ENV is "test"; keep it on so tests see production.
+    advanced: { disableOriginCheck: false },
     // Google accounts with a verified email are linked to an existing account with the same email.
     ...(opts.google ? { socialProviders: { google: { ...opts.google, prompt: "select_account" as const } } } : {}),
     emailAndPassword: { enabled: true, minPasswordLength: 8, autoSignIn: true, requireEmailVerification: Boolean(mailer) },

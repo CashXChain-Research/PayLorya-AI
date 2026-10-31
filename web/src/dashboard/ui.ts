@@ -257,8 +257,20 @@ export function dialog(opts: DialogOptions): Promise<boolean> {
       d.remove();
       resolve(result);
     });
+    // Close on a backdrop click only when the press also started on the backdrop, outside the box.
+    // A bare "target === dialog" also fires when a select's option list or a text selection ends
+    // outside the form, which closed the dialog in the middle of choosing.
+    const outside = (e: MouseEvent) => {
+      const r = d.getBoundingClientRect();
+      return e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom;
+    };
+    let pressedOutside = false;
+    d.addEventListener("pointerdown", e => {
+      pressedOutside = e.target === d && outside(e);
+    });
     d.addEventListener("click", e => {
-      if (e.target === d) close();
+      if (pressedOutside && e.target === d && outside(e)) close();
+      pressedOutside = false;
     });
     for (const b of d.querySelectorAll("[data-close]")) b.addEventListener("click", close);
     form.addEventListener("submit", async e => {
@@ -281,9 +293,13 @@ export function dialog(opts: DialogOptions): Promise<boolean> {
       }
     });
     d.showModal();
+    // showModal focuses the close button; onOpen may focus a field of its own (e.g. a new payee's
+    // name). Only fall back to the first field when onOpen did not.
+    const before = document.activeElement;
     opts.onOpen?.(form, close);
-    const first = form.querySelector<HTMLElement>("input:not([type=hidden]):not([disabled]), select, textarea");
-    first?.focus();
+    if (document.activeElement === before) {
+      form.querySelector<HTMLElement>("input:not([type=hidden]):not([disabled]), select, textarea")?.focus();
+    }
   });
 }
 export function confirmDialog(title: string, message: string, submit = "Confirm", danger = false): Promise<boolean> {

@@ -27,8 +27,8 @@ export async function renderSettings(view: HTMLElement, ctx: Ctx): Promise<void>
     </form>
     <section class="card">
       <div class="card-head"><h2>Account</h2></div>
-      <div class="acct">${avatar(me.user.name || me.user.email, "lg")}<div><b>${esc(me.user.name || "—")}</b><span>${esc(me.user.email)}</span></div></div>
-      <dl class="kv"><dt>User ID</dt><dd class="mono">${esc(me.user.id)}</dd></dl>
+      <div class="acct">${avatar(me.user.name || me.user.email, "lg")}<div class="acct-text"><b>${esc(me.user.name || "—")}</b><span>${esc(me.user.email)}</span></div></div>
+      <dl class="kv acct-kv"><dt>User ID</dt><dd class="mono">${esc(me.user.id)}</dd></dl>
       <div class="form-foot"><span></span><button class="btn ghost sm" type="button" id="s-out">${icon("logout", 16)}Sign out</button></div>
     </section>
     ${passwordCard(me)}
