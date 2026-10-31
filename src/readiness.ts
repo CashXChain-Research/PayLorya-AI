@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
+import { CxcApiError, type CashXChainClient, type CxcCorridor } from "./cashxchain.js";
 import { findCorridor, simulatedQuote } from "./fixtures.js";
-import type { Invoice, ReadinessCheck, ReadinessReport, Verdict } from "./types.js";
+import { accountFor, corridorFieldsFor, missingFields, pickSourceAccount, toDecimal } from "./payout.js";
+import type { CxcRouteQuote, DataSource, Invoice, ReadinessCheck, ReadinessReport, RouteQuote, Verdict } from "./types.js";
 
 // IBAN lengths per country (ISO 13616 registry) for the countries we accept.
 const IBAN_LENGTH: Record<string, number> = {
@@ -53,6 +55,7 @@ export function invoiceFingerprint(inv: Invoice): string {
 export class ReadinessLedger {
   private byFingerprint = new Map<string, string>();
   private byIdempotencyKey = new Map<string, ReadinessReport>();
+  private inFlight = new Map<string, Promise<ReadinessReport>>();
 
   cached(idempotencyKey: string): ReadinessReport | undefined {
     return this.byIdempotencyKey.get(idempotencyKey);
@@ -62,16 +65,45 @@ export class ReadinessLedger {
     return this.byFingerprint.get(fingerprint);
   }
 
+  /** First key that checked this invoice; `idempotencyKey` becomes it if none did yet. */
+  claim(fingerprint: string, idempotencyKey: string): string {
+    const first = this.byFingerprint.get(fingerprint);
+    if (first) return first;
+    this.byFingerprint.set(fingerprint, idempotencyKey);
+    return idempotencyKey;
+  }
+
   record(idempotencyKey: string, report: ReadinessReport): void {
     if (!this.byFingerprint.has(report.invoiceFingerprint)) {
       this.byFingerprint.set(report.invoiceFingerprint, idempotencyKey);
     }
     this.byIdempotencyKey.set(idempotencyKey, report);
   }
+
+  /** Cached report, or the build already running under this key, or a new build. */
+  once(idempotencyKey: string, build: () => Promise<ReadinessReport>): Promise<ReadinessReport> {
+    const cached = this.cached(idempotencyKey);
+    if (cached) return Promise.resolve(cached);
+    let pending = this.inFlight.get(idempotencyKey);
+    if (!pending) {
+      pending = build().finally(() => this.inFlight.delete(idempotencyKey));
+      this.inFlight.set(idempotencyKey, pending);
+    }
+    return pending;
+  }
 }
 
 export interface ReadinessOptions {
   amountCeilingMinor: number;
+}
+
+/** Where corridor, required_fields and the quote came from. */
+interface Routing {
+  corridor: ReadinessCheck;
+  requiredFields: ReadinessCheck;
+  routeQuote?: RouteQuote;
+  cxcQuote?: CxcRouteQuote;
+  source: DataSource;
 }
 
 export function buildReadinessReport(
@@ -82,31 +114,45 @@ export function buildReadinessReport(
 ): ReadinessReport {
   const cached = ledger.cached(idempotencyKey);
   if (cached) return cached;
-
   const fingerprint = invoiceFingerprint(invoice);
-  const checks: ReadinessCheck[] = [];
-  const corridor = findCorridor(invoice.destinationCountry, invoice.currency);
+  const firstKey = ledger.claim(fingerprint, idempotencyKey);
+  return finishReport(invoice, idempotencyKey, ledger, opts, fingerprint, firstKey, fixtureRouting(invoice));
+}
+
+/**
+ * Same report, with corridor, required_fields and quote from the CashXChain sandbox. Any CashXChain
+ * failure other than `corridor_unsupported` falls back to the demo fixtures for the affected checks;
+ * it never rejects for one. One build per Idempotency-Key: a retry gets the same report, no new calls.
+ */
+export function buildCxcReadinessReport(
+  invoice: Invoice,
+  idempotencyKey: string,
+  ledger: ReadinessLedger,
+  opts: ReadinessOptions,
+  cxc: CashXChainClient,
+): Promise<ReadinessReport> {
+  return ledger.once(idempotencyKey, async () => {
+    const fingerprint = invoiceFingerprint(invoice);
+    // Claimed before awaiting CashXChain, so concurrent keys for one invoice keep arrival order.
+    const firstKey = ledger.claim(fingerprint, idempotencyKey);
+    const routing = await cxcRouting(invoice, cxc);
+    return finishReport(invoice, idempotencyKey, ledger, opts, fingerprint, firstKey, routing);
+  });
+}
+
+function finishReport(
+  invoice: Invoice,
+  idempotencyKey: string,
+  ledger: ReadinessLedger,
+  opts: ReadinessOptions,
+  fingerprint: string,
+  firstKey: string,
+  routing: Routing,
+): ReadinessReport {
+  const checks: ReadinessCheck[] = [routing.corridor, routing.requiredFields, accountCheck(invoice)];
 
   checks.push(
-    corridor
-      ? { id: "corridor", status: "pass", message: `${invoice.destinationCountry}/${invoice.currency} via ${corridor.rail}`, source: "demo-fixture" }
-      : { id: "corridor", status: "fail", message: `No demo corridor for ${invoice.destinationCountry}/${invoice.currency}`, source: "demo-fixture" },
-  );
-
-  const missing = (corridor?.requiredFields ?? []).filter(f => !invoice[f]);
-  checks.push(
-    !corridor
-      ? { id: "required_fields", status: "skip", message: "No corridor, no field rules", source: "demo-fixture" }
-      : missing.length
-        ? { id: "required_fields", status: "fail", message: `Missing: ${missing.join(", ")}`, source: "demo-fixture" }
-        : { id: "required_fields", status: "pass", message: `Present: ${corridor.requiredFields.join(", ")}`, source: "demo-fixture" },
-  );
-
-  checks.push(accountCheck(invoice));
-
-  const firstKey = ledger.firstKeyFor(fingerprint);
-  checks.push(
-    firstKey && firstKey !== idempotencyKey
+    firstKey !== idempotencyKey
       ? { id: "duplicate", status: "fail", message: "Same supplier, invoice id, currency and amount already checked", source: "deterministic" }
       : { id: "duplicate", status: "pass", message: "No earlier request for this invoice", source: "deterministic" },
   );
@@ -122,15 +168,113 @@ export function buildReadinessReport(
     invoiceFingerprint: fingerprint,
     verdict: verdictFor(checks),
     checks,
-    routeQuote: corridor ? simulatedQuote(invoice, corridor) : undefined,
-    source: "demo-fixture",
+    routeQuote: routing.routeQuote,
+    ...(routing.cxcQuote ? { cxcQuote: routing.cxcQuote } : {}),
+    source: routing.source,
     payoutExecuted: false,
-    disclaimer:
-      "Data-quality and routing readiness only. Not an AML, sanctions or KYB decision. Route and fees are simulated. A human must approve any payout.",
+    disclaimer: disclaimerFor(routing),
     generatedAt: new Date().toISOString(),
   };
   ledger.record(idempotencyKey, report);
   return report;
+}
+
+function fixtureRouting(invoice: Invoice): Routing {
+  const corridor = findCorridor(invoice.destinationCountry, invoice.currency);
+  const missing = (corridor?.requiredFields ?? []).filter(f => !invoice[f]);
+  return {
+    corridor: corridor
+      ? { id: "corridor", status: "pass", message: `${invoice.destinationCountry}/${invoice.currency} via ${corridor.rail}`, source: "demo-fixture" }
+      : { id: "corridor", status: "fail", message: `No demo corridor for ${invoice.destinationCountry}/${invoice.currency}`, source: "demo-fixture" },
+    requiredFields: !corridor
+      ? { id: "required_fields", status: "skip", message: "No corridor, no field rules", source: "demo-fixture" }
+      : missing.length
+        ? { id: "required_fields", status: "fail", message: `Missing: ${missing.join(", ")}`, source: "demo-fixture" }
+        : { id: "required_fields", status: "pass", message: `Present: ${corridor.requiredFields.join(", ")}`, source: "demo-fixture" },
+    routeQuote: corridor ? simulatedQuote(invoice, corridor) : undefined,
+    source: "demo-fixture",
+  };
+}
+
+/** Read-only calls (corridor, accounts, quote). Creates no beneficiary, moves nothing. */
+async function cxcRouting(invoice: Invoice, cxc: CashXChainClient): Promise<Routing> {
+  const { currency, destinationCountry: country } = invoice;
+  try {
+    const [corridorRes, accountsRes] = await Promise.allSettled([cxc.corridor(currency, country, "business"), cxc.listAccounts()]);
+    if (corridorRes.status === "rejected") {
+      const error: unknown = corridorRes.reason;
+      if (!(error instanceof CxcApiError && error.code === "corridor_unsupported")) return fixtureRouting(invoice);
+      return {
+        corridor: { id: "corridor", status: "fail", message: `No CashXChain corridor for ${country}/${currency} (corridor_unsupported)`, source: "cxc-sandbox" },
+        requiredFields: { id: "required_fields", status: "skip", message: "No corridor, no field rules", source: "cxc-sandbox" },
+        source: "cxc-sandbox",
+      };
+    }
+    const corridor = corridorRes.value;
+    const rails = corridor.rails.join(", ") || "no rails listed";
+    const routing: Routing = {
+      corridor: { id: "corridor", status: "pass", message: `${country}/${currency} via ${rails}`, source: "cxc-sandbox" },
+      requiredFields: cxcFieldsCheck(invoice, corridor),
+      source: "cxc-sandbox",
+    };
+
+    const account = accountsRes.status === "fulfilled" ? pickSourceAccount(accountsRes.value, currency) : undefined;
+    const cxcQuote = account ? await cxcQuoteFor(invoice, account.id, corridor, cxc) : undefined;
+    return cxcQuote ? { ...routing, cxcQuote } : { ...routing, routeQuote: fixtureRouting(invoice).routeQuote };
+  } catch {
+    return fixtureRouting(invoice); // malformed CashXChain answer
+  }
+}
+
+function cxcFieldsCheck(invoice: Invoice, corridor: CxcCorridor): ReadinessCheck {
+  const account = accountFor(invoice, corridor.accepted_schemes);
+  if (!account) {
+    const schemes = corridor.accepted_schemes.join(" or ");
+    return {
+      id: "required_fields",
+      status: "fail",
+      message: `${invoice.currency}/${invoice.destinationCountry} takes ${schemes}; the invoice has no matching account details`,
+      source: "cxc-sandbox",
+    };
+  }
+  const fields = corridorFieldsFor(invoice, corridor);
+  const missing = missingFields(corridor, account, fields);
+  const present = [account.scheme, ...Object.keys(fields)].join(", ");
+  return missing.length
+    ? { id: "required_fields", status: "fail", message: `Missing: ${missing.join(", ")}`, source: "cxc-sandbox" }
+    : { id: "required_fields", status: "pass", message: `Present: ${present}`, source: "cxc-sandbox" };
+}
+
+async function cxcQuoteFor(invoice: Invoice, sourceAccountId: string, corridor: CxcCorridor, cxc: CashXChainClient): Promise<CxcRouteQuote | undefined> {
+  try {
+    const amount = toDecimal(invoice.amountMinor, invoice.currency);
+    const q = await cxc.quote({ source_account_id: sourceAccountId, amount, currency: invoice.currency });
+    return {
+      source: "cxc-sandbox",
+      label: "CashXChain sandbox quote",
+      rails: corridor.rails,
+      payoutCurrency: q.currency,
+      payoutAmount: q.amount,
+      sourceCurrency: q.source_currency,
+      sourceAmount: q.source_amount,
+      fee: q.fee,
+      rate: q.rate,
+    };
+  } catch {
+    return undefined; // demo-fixture quote instead
+  }
+}
+
+function disclaimerFor(routing: Routing): string {
+  const data =
+    routing.source !== "cxc-sandbox"
+      ? "Route and fees are simulated."
+      : routing.cxcQuote
+        ? "Corridor, required fields and quote come from the CashXChain sandbox (sandbox pricing; nothing was paid)."
+        : routing.routeQuote
+          ? "Corridor and required fields come from the CashXChain sandbox; route and fees are simulated."
+          : "Corridor and required fields come from the CashXChain sandbox.";
+  return `Data-quality and routing readiness only. Not an AML, sanctions or KYB decision. ${data} A human must approve any payout.`;
 }
 
 function accountCheck(inv: Invoice): ReadinessCheck {

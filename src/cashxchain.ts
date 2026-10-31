@@ -159,8 +159,8 @@ export class CashXChainClient {
     return this.call("POST", `/v1/banking/beneficiaries/${encodeURIComponent(beneficiaryId)}/verify`);
   }
 
-  /** Prices a payout. Moves nothing, takes no key. */
-  quote(input: Omit<CxcPayoutInput, "reference">): Promise<CxcQuote> {
+  /** Prices a payout. Moves nothing, takes no key. `beneficiary_id` is optional. */
+  quote(input: Omit<CxcPayoutInput, "reference" | "beneficiary_id"> & { beneficiary_id?: string }): Promise<CxcQuote> {
     return this.call("POST", "/v1/banking/payouts/quote", input);
   }
 

@@ -2,8 +2,9 @@ import type { Express, Request, Response } from "express";
 import { paymentMiddleware, x402ResourceServer } from "@x402/express";
 import { HTTPFacilitatorClient } from "@x402/core/server";
 import { ExactCardanoScheme } from "@x402/cardano/exact/server";
+import type { CashXChainClient } from "./cashxchain.js";
 import { CARDANO_NETWORK, type Config } from "./config.js";
-import { buildReadinessReport, ReadinessLedger } from "./readiness.js";
+import { buildCxcReadinessReport, buildReadinessReport, ReadinessLedger } from "./readiness.js";
 import { InvoiceSchema } from "./types.js";
 
 export const READINESS_PATH = "/v1/payment-readiness";
@@ -11,8 +12,9 @@ export const READINESS_PATH = "/v1/payment-readiness";
 /**
  * Seller role: the CxC Payment Readiness API. Any agent can call it; each response costs
  * PRICE_LOVELACE on Cardano Preprod via x402 (`exact` scheme, `authorization` flow).
+ * With `cxc`, corridor, required fields and quote come from the CashXChain sandbox.
  */
-export function mountSeller(app: Express, config: Config): void {
+export function mountSeller(app: Express, config: Config, cxc?: CashXChainClient): void {
   const ledger = new ReadinessLedger();
 
   if (!config.SELLER_ADDRESS) {
@@ -49,7 +51,7 @@ export function mountSeller(app: Express, config: Config): void {
 
   // Runs after x402 verify and before settle; the middleware withholds this body if
   // settlement fails. Must stay idempotent per Idempotency-Key (handler may be retried).
-  app.post(READINESS_PATH, (req: Request, res: Response) => {
+  app.post(READINESS_PATH, async (req: Request, res: Response) => {
     const idempotencyKey = req.header("idempotency-key");
     if (!idempotencyKey) {
       res.status(400).json({ error: "Idempotency-Key header required" });
@@ -60,9 +62,11 @@ export function mountSeller(app: Express, config: Config): void {
       res.status(422).json({ error: "invalid invoice", issues: parsed.error.issues });
       return;
     }
-    const report = buildReadinessReport(parsed.data, idempotencyKey, ledger, {
-      amountCeilingMinor: config.DEMO_AMOUNT_CEILING_MINOR,
-    });
+    const opts = { amountCeilingMinor: config.DEMO_AMOUNT_CEILING_MINOR };
+    // The CashXChain build never rejects for a CashXChain error: it falls back to the fixtures.
+    const report = cxc
+      ? await buildCxcReadinessReport(parsed.data, idempotencyKey, ledger, opts, cxc)
+      : buildReadinessReport(parsed.data, idempotencyKey, ledger, opts);
     res.json(report);
   });
 }

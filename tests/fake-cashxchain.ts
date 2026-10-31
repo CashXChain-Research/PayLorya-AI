@@ -43,6 +43,8 @@ export function createFakeCxc() {
     createStatus: "settled" as CxcPayoutStatus,
     /** Statuses GET /payouts/{id} walks through, one per call; the last one sticks. */
     getStatuses: [] as CxcPayoutStatus[],
+    /** Answer every request with this (e.g. a 503 outage) until cleared. */
+    down: undefined as Omit<Failure, "record"> | undefined,
     seen: [] as Seen[],
   };
 
@@ -57,6 +59,7 @@ export function createFakeCxc() {
       body: req.body,
     });
     if (req.header("authorization") !== `Bearer ${FAKE_KEY}`) return envelope(res, 401, "unauthorized", "unauthorized");
+    if (state.down) return envelope(res, state.down.status, state.down.error, state.down.message);
     next();
   });
 

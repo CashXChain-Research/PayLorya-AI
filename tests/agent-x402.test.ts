@@ -196,14 +196,16 @@ async function startStack(opts: { seller?: Env; buyer?: Env; cashxchain?: boolea
     };
     next();
   });
+  // One client for the seller's readiness checks and the payout desk, as in server.ts.
+  const cxc = opts.cashxchain ? createFakeCxc() : undefined;
+  const cxcClient = cxc ? new CashXChainClient({ apiKey: FAKE_KEY, baseUrl: (await listen(cxc.app)).url }) : undefined;
   const { url: sellerUrl } = await listen(app);
-  mountSeller(app, loadConfig(env(fac.url, opts.seller)));
+  mountSeller(app, loadConfig(env(fac.url, opts.seller)), cxcClient);
 
   const config = loadConfig(env(fac.url, { PUBLIC_BASE_URL: sellerUrl, ...opts.buyer }));
   const runs = new RunStore();
   const signer = stubSigner();
-  const cxc = opts.cashxchain ? createFakeCxc() : undefined;
-  const payouts = cxc ? new PayoutDesk(new CashXChainClient({ apiKey: FAKE_KEY, baseUrl: (await listen(cxc.app)).url }), runs) : undefined;
+  const payouts = cxcClient ? new PayoutDesk(cxcClient, runs) : undefined;
   const agent = new BuyerAgent(config, runs, signer, payouts);
   const run = async (inv: Invoice = invoice): Promise<Run> => {
     const r = runs.create(JSON.stringify(inv));
@@ -517,6 +519,12 @@ describe("x402 report -> CashXChain sandbox payout", () => {
       cashxchain: { environment: "sandbox", sourceAccountId: "mockacct_fake_eur", amount: "12480.00", currency: "EUR", scheme: "iban" },
     });
     expect(run.draft?.blockedReason).toBeUndefined();
+    // The paid report itself was checked and priced on the CashXChain sandbox.
+    expect(run.report).toMatchObject({
+      source: "cxc-sandbox",
+      cxcQuote: { source: "cxc-sandbox", rails: ["sepa", "sepa_instant"], payoutAmount: "12480.00", payoutCurrency: "EUR" },
+    });
+    expect(run.report?.routeQuote).toBeUndefined();
     expect(s.cxc!.payoutCount()).toBe(0);
 
     expect(s.payouts!.approve(run)).toEqual({ ok: true });
@@ -536,6 +544,25 @@ describe("x402 report -> CashXChain sandbox payout", () => {
     expect(lastNote(run)).toBe("CashXChain: payee-name check: no_match");
     expect(run.report?.verdict).toBe("ready_for_review");
     expect(run.draft).toBeUndefined();
+  });
+
+  it("a field the CashXChain corridor requires is missing -> paid report needs_info, nothing prepared", async () => {
+    const s = await startStack({ cashxchain: true });
+    // USD/US requires account_type; the invoice does not carry one.
+    const run = await s.run({
+      id: "A-5531",
+      supplier: "Lakeside Robotics Inc.",
+      destinationCountry: "US",
+      currency: "USD",
+      amountMinor: 42_500,
+      routingNumber: "021000021",
+      accountNumber: "000123456789",
+    });
+
+    expect(states(run).slice(-2)).toEqual(["PAID", "NEEDS_INFO"]);
+    expect(run.report?.verdict).toBe("needs_info");
+    expect(run.report?.checks.find(c => c.id === "required_fields")).toMatchObject({ status: "fail", source: "cxc-sandbox" });
+    expect(s.cxc!.state.seen.some(c => c.path.startsWith("/v1/banking/beneficiaries"))).toBe(false);
   });
 
   it("CashXChain unreachable: draft stays, not executable, with the reason", async () => {
@@ -589,5 +616,23 @@ describe("seller x402 contract (direct x402 client)", () => {
     expect(other.verdict).toBe("blocked");
     expect(duplicateCheck(other)).toBe("fail");
     expect(s.signer.calls).toHaveLength(3);
+  });
+
+  it("with CashXChain: the paid retry under the same key returns the cached report, no new CashXChain calls", async () => {
+    const s = await startStack({ cashxchain: true });
+    s.fac.settle = (res, call) => (call === 1 ? settleFailed("exact_cardano_settlement_failed") : settleOk)(res, call);
+    const pay = payDirect(s.sellerUrl, s.signer);
+
+    expect((await pay("key-1")).status).toBe(402);
+    const calls = s.cxc!.state.seen.length;
+    expect(calls).toBe(3); // corridor, accounts, quote
+
+    const retried = await pay("key-1");
+    expect(retried.status).toBe(200);
+    const report = (await retried.json()) as ReadinessReport;
+    expect(report).toEqual(s.handled[0]);
+    expect(report).toMatchObject({ verdict: "ready_for_review", source: "cxc-sandbox", cxcQuote: { label: "CashXChain sandbox quote" } });
+    expect(s.cxc!.state.seen).toHaveLength(calls);
+    expect(s.handled).toHaveLength(2);
   });
 });

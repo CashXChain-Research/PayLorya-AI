@@ -14,10 +14,13 @@ const app = express();
 app.use(express.json({ limit: "256kb" }));
 app.use(express.static("public"));
 
-if (config.LOCAL_FACILITATOR) mountLocalFacilitator(app, config);
-mountSeller(app, config);
+// One sandbox client for the paid readiness checks and the supplier payouts.
+const cxc = config.CASHXCHAIN_API_KEY ? new CashXChainClient({ apiKey: config.CASHXCHAIN_API_KEY }) : undefined;
 
-const payouts = config.CASHXCHAIN_API_KEY ? new PayoutDesk(new CashXChainClient({ apiKey: config.CASHXCHAIN_API_KEY }), runs) : undefined;
+if (config.LOCAL_FACILITATOR) mountLocalFacilitator(app, config);
+mountSeller(app, config, cxc);
+
+const payouts = cxc ? new PayoutDesk(cxc, runs) : undefined;
 const agent = config.x402Ready ? new BuyerAgent(config, runs, undefined, payouts) : undefined;
 
 app.get(["/health", "/api/health"], (_req, res) => {
